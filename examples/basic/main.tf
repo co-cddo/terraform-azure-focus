@@ -1,3 +1,8 @@
+provider "azurerm" {
+  resource_providers_to_register = ["Microsoft.CostManagementExports"]
+  features {}
+}
+
 module "example" {
   name                                = "terraform-azurerm-cost-forwarding"
   source                              = "../../" # Using local module path
