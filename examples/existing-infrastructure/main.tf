@@ -114,5 +114,5 @@ module "cost_forwarding" {
   resource_group_name                 = var.resource_group_name
   deploy_from_external_network        = local.deploy_from_external_network
 
-  depends_on = [ azurerm_subnet.default, azurerm_subnet.functionapp ]
+  depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
 }
