@@ -1,5 +1,5 @@
 provider "azurerm" {
-  resource_providers_to_register = ["Microsoft.CostManagementExports"]
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
   features {}
 }
 

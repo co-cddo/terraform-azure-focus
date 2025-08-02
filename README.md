@@ -132,7 +132,7 @@ This example assumes you have an existing virtual network with two subnets, one 
 
 ```hcl
 provider "azurerm" {
-  resource_providers_to_register = ["Microsoft.CostManagementExports"]
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
   features {}
 }
 
@@ -151,13 +151,18 @@ module "example" {
   # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network        = false
 }
+
+output "aws_app_client_id" {
+  description = "The aws app client id"
+  value       = module.example.aws_app_client_id
+}
 ```
 
 Greenfield test deployment example:
 
 ```hcl
 provider "azurerm" {
-  resource_providers_to_register = ["Microsoft.CostManagementExports"]
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
   features {}
 }
 
@@ -273,6 +278,11 @@ module "cost_forwarding" {
   deploy_from_external_network        = local.deploy_from_external_network
 
   depends_on = [ azurerm_subnet.default, azurerm_subnet.functionapp ]
+}
+
+output "aws_app_client_id" {
+  description = "The aws app client id"
+  value       = module.cost_forwarding.aws_app_client_id
 }
 ```
 
