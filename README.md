@@ -108,10 +108,6 @@ graph TB
     class PE1,PE2,DNS,VNET,SUBNET1,SUBNET2 network
 ```
 
-Azure Resource Topology Diagram:
-
-![Azure Resource Topology Diagram](./images/infra.png)
-
 ### Data Flow
 
 1. **Cost Export**: Azure Cost Management exports daily FOCUS-format cost data to Azure Storage
@@ -127,6 +123,8 @@ Azure Resource Topology Diagram:
 - **Zero Trust**: No public network access (except during deployment if `deploy_from_external_network=true`)
 - **Managed Identity**: Azure resources authenticate using system-assigned managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
+
+![Azure Resource Topology Diagram](./images/infra.png)
 
 ## Usage
 
