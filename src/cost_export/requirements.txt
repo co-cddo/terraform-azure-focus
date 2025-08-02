@@ -1,0 +1,6 @@
+azure-functions
+pyarrow
+pandas
+azure-identity
+boto3
+s3fs
