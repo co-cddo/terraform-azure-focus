@@ -128,14 +128,143 @@ graph TB
 
 ## Usage
 
-Add example usage here
+This example assumes you have an existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments:
 
 ```hcl
 module "example" {
-  source  = "appvia/<NAME>/azure"
-  version = "0.0.1"
+  name                                = "terraform-azurerm-cost-forwarding"
+  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=8279591b86feac01ae8c677aadd8af6ad9232b47" # release v0.0.1
+  aws_target_file_path                = "s3://<your-s3-bucket>/<your-path>/"
+  aws_role_arn                        = "arn:aws:iam::<aws-account-id>:role/<your-cost-export-role>"
+  report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
+  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
+  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
+  virtual_network_name                = "existing-vnet"
+  virtual_network_resource_group_name = "existing-infra"
+  location                            = "uksouth"
+  resource_group_name                 = "rg-cost-export"
+  # This assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
+  deploy_from_external_network        = false
+}
+```
 
-  # insert variables here
+Greenfield deployment example:
+
+```hcl
+variable "aws_target_file_path" {
+  description = "AWS S3 path for cost export"
+  type        = string
+}
+
+variable "aws_role_arn" {
+  description = "AWS IAM role ARN for cross-account access"
+  type        = string
+}
+
+variable "report_scope" {
+  description = "Azure billing scope for cost reporting"
+  type        = string
+}
+
+variable "existing_resource_group_name" {
+  description = "Name of the existing resource group containing the VNet"
+  type        = string
+  default     = "existing-infra"
+}
+
+variable "existing_vnet_name" {
+  description = "Name of the existing virtual network"
+  type        = string
+  default     = "existing-vnet"
+}
+
+variable "default_subnet_name" {
+  description = "Name of the existing default subnet"
+  type        = string
+  default     = "default"
+}
+
+variable "functionapp_subnet_name" {
+  description = "Name of the existing function app subnet"
+  type        = string
+  default     = "functionapp"
+}
+
+variable "location" {
+  description = "Azure region for the cost forwarding resources"
+  type        = string
+  default     = "uksouth"
+}
+
+variable "resource_group_name" {
+  description = "Name of the resource group to create for cost forwarding resources"
+  type        = string
+  default     = "rg-cost-export"
+}
+
+variable "deploy_from_external_network" {
+  description = "Whether to deploy from external network"
+  type        = bool
+  # This assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
+  default     = false
+}
+
+# Create the resource group for existing infrastructure
+resource "azurerm_resource_group" "existing" {
+  name     = var.existing_resource_group_name
+  location = var.location
+}
+
+# Create the virtual network
+resource "azurerm_virtual_network" "existing" {
+  name                = var.existing_vnet_name
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.existing.location
+  resource_group_name = azurerm_resource_group.existing.name
+}
+
+# Create the default subnet
+resource "azurerm_subnet" "default" {
+  name                 = var.default_subnet_name
+  resource_group_name  = azurerm_resource_group.existing.name
+  virtual_network_name = azurerm_virtual_network.existing.name
+  address_prefixes     = ["10.0.0.0/24"]
+}
+
+# Create the function app subnet with delegation
+resource "azurerm_subnet" "functionapp" {
+  name                 = var.functionapp_subnet_name
+  resource_group_name  = azurerm_resource_group.existing.name
+  virtual_network_name = azurerm_virtual_network.existing.name
+  address_prefixes     = ["10.0.1.0/24"]
+
+  delegation {
+    name = "Microsoft.App.environments"
+
+    service_delegation {
+      name    = "Microsoft.App/environments"
+      actions = ["Microsoft.Network/virtualNetworks/subnets/action"]
+    }
+  }
+}
+
+# Call the cost forwarding module using the created resources
+module "cost_forwarding" {
+  source = "../../"
+
+  name                                = "terraform-azurerm-cost-forwarding"
+  aws_target_file_path                = var.aws_target_file_path
+  aws_role_arn                        = var.aws_role_arn
+  report_scope                        = var.report_scope
+  subnet_id                           = azurerm_subnet.default.id
+  function_app_subnet_id              = azurerm_subnet.functionapp.id
+  virtual_network_name                = azurerm_virtual_network.existing.name
+  virtual_network_resource_group_name = azurerm_resource_group.existing.name
+  location                            = var.location
+  resource_group_name                 = var.resource_group_name
+  deploy_from_external_network        = var.deploy_from_external_network
+
+  depends_on = [ azurerm_subnet.default, azurerm_subnet.functionapp ]
 }
 ```
 
