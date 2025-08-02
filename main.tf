@@ -262,8 +262,7 @@ resource "azapi_resource" "daily_cost_export" {
   }
 }
 
-# Get current subscription and VNet
-data "azurerm_subscription" "current" {}
+# Get current client config
 data "azurerm_client_config" "current" {}
 data "azurerm_virtual_network" "existing" {
   name                = var.virtual_network_name

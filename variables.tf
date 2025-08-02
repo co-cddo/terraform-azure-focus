@@ -10,11 +10,6 @@ variable "location" {
   default     = "uksouth"
 }
 
-variable "environment" {
-  description = "Environment name for the resources"
-  type        = string
-  default     = "prod"
-}
 
 variable "resource_group_name" {
   description = "Name of the resource group"
