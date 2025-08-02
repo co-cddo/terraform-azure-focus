@@ -137,8 +137,9 @@ provider "azurerm" {
 }
 
 module "example" {
+  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=33e484a0ac416c413a0273b9359abf4f77c5b06a" # release v0.0.3
+
   name                                = "terraform-azurerm-cost-forwarding"
-  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=20e97b77949824307985be00dbb1def7b0c11a4c" # release v0.0.2
   aws_target_file_path                = "s3://<your-s3-bucket>/<your-path>/"
   aws_role_arn                        = "arn:aws:iam::<aws-account-id>:role/<your-cost-export-role>"
   report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
@@ -263,7 +264,7 @@ resource "azurerm_subnet" "functionapp" {
 
 # Call the cost forwarding module using the created resources
 module "cost_forwarding" {
-  source = "../../"
+  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=33e484a0ac416c413a0273b9359abf4f77c5b06a" # release v0.0.3
 
   name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = var.aws_target_file_path
