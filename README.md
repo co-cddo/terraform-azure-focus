@@ -108,6 +108,10 @@ graph TB
     class PE1,PE2,DNS,VNET,SUBNET1,SUBNET2 network
 ```
 
+Azure Resource Topology Diagram:
+
+[azure diagram](./images/infra.png)
+
 ### Data Flow
 
 1. **Cost Export**: Azure Cost Management exports daily FOCUS-format cost data to Azure Storage
