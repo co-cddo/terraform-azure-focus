@@ -110,7 +110,7 @@ graph TB
 
 Azure Resource Topology Diagram:
 
-[azure diagram](./images/infra.png)
+![Azure Resource Topology Diagram](./images/infra.png)
 
 ### Data Flow
 
