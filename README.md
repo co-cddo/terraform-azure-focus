@@ -4,12 +4,12 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | n/a |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.0 |
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | >= 1.7.0 |
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | > 2.0 |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | > 4.0 |
-| <a name="provider_null"></a> [null](#provider\_null) | n/a |
-| <a name="provider_random"></a> [random](#provider\_random) | n/a |
+| <a name="provider_null"></a> [null](#provider\_null) | >= 3.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | >= 3.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | >= 0.7.0 |
 
 ## Inputs
@@ -24,7 +24,6 @@
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the resource group where the existing virtual network is located | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
-| <a name="input_environment"></a> [environment](#input\_environment) | Environment name for the resources | `string` | `"prod"` | no |
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the storage account | `string` | `"costexport"` | no |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the resource group | `string` | `"rg-cost-export"` | no |
