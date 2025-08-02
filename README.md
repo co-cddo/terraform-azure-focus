@@ -15,6 +15,9 @@
 
 A Terraform module to export Azure cost data and forward to AWS.
 
+> [!NOTE]  
+> There is currently an [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------) with publishing Function App code on the Flex Consumption Plan using a managed identity. We have had to revert to using the storage account connection string for now. More details can be found [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f) (behind a paywall, sadly).
+
 ## Architecture
 
 This module creates a fully integrated solution for exporting Azure cost data and forwarding it to AWS S3. The following diagram illustrates the data flow and component architecture:
