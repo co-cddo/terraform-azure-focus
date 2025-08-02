@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://www.appvia.io/"><img src="./docs/banner.jpg" alt="Appvia Banner"/></a><br/><p align="right"> </a> <a href="https://github.com/appvia/terraform-azure-module-template/releases/latest"><img src="https://img.shields.io/github/release/appvia/terraform-azure-module-template.svg?style=for-the-badge&color=006400" alt="Latest Release"/></a> <a href="https://appvia-community.slack.com/join/shared_invite/zt-1s7i7xy85-T155drryqU56emm09ojMVA#/shared-invite/email"><img src="https://img.shields.io/badge/Slack-Join%20Community-purple?style=for-the-badge&logo=slack" alt="Slack Community"/></a> <a href="https://github.com/appvia/terraform-azure-module-template/graphs/contributors"><img src="https://img.shields.io/github/contributors/appvia/terraform-azure-module-template.svg?style=for-the-badge&color=FF8C00" alt="Contributors"/></a>
+<a href="https://www.appvia.io/"><img src="./docs/banner.jpg" alt="Appvia Banner"/></a><br/><p align="right"> </a> <a href="https://github.com/appvia/terraform-azurerm-cost-forwarding/releases/latest"><img src="https://img.shields.io/github/release/appvia/terraform-azurerm-cost-forwarding.svg?style=for-the-badge&color=006400" alt="Latest Release"/></a> <a href="https://appvia-community.slack.com/join/shared_invite/zt-1s7i7xy85-T155drryqU56emm09ojMVA#/shared-invite/email"><img src="https://img.shields.io/badge/Slack-Join%20Community-purple?style=for-the-badge&logo=slack" alt="Slack Community"/></a> <a href="https://github.com/appvia/terraform-azurerm-cost-forwarding/graphs/contributors"><img src="https://img.shields.io/github/contributors/appvia/terraform-azurerm-cost-forwarding.svg?style=for-the-badge&color=FF8C00" alt="Contributors"/></a>
 
 <!-- markdownlint-restore -->
 <!--
@@ -131,6 +131,11 @@ graph TB
 This example assumes you have an existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments:
 
 ```hcl
+provider "azurerm" {
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  features {}
+}
+
 module "example" {
   name                                = "terraform-azurerm-cost-forwarding"
   source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=20e97b77949824307985be00dbb1def7b0c11a4c" # release v0.0.2
@@ -143,14 +148,29 @@ module "example" {
   virtual_network_resource_group_name = "existing-infra"
   location                            = "uksouth"
   resource_group_name                 = "rg-cost-export"
-  # This assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
+  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network        = false
+}
+
+output "aws_app_client_id" {
+  description = "The aws app client id"
+  value       = module.example.aws_app_client_id
 }
 ```
 
-Greenfield deployment example:
+Greenfield test deployment example:
 
 ```hcl
+provider "azurerm" {
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  features {}
+}
+
+locals {
+  # Setting to true enables 'public' access to the Function App for the duration of the deployment. This is not recommended for production.
+  deploy_from_external_network = true
+}
+
 variable "aws_target_file_path" {
   description = "AWS S3 path for cost export"
   type        = string
@@ -200,13 +220,6 @@ variable "resource_group_name" {
   description = "Name of the resource group to create for cost forwarding resources"
   type        = string
   default     = "rg-cost-export"
-}
-
-variable "deploy_from_external_network" {
-  description = "Whether to deploy from external network"
-  type        = bool
-  # This assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
-  default     = false
 }
 
 # Create the resource group for existing infrastructure
@@ -262,9 +275,14 @@ module "cost_forwarding" {
   virtual_network_resource_group_name = azurerm_resource_group.existing.name
   location                            = var.location
   resource_group_name                 = var.resource_group_name
-  deploy_from_external_network        = var.deploy_from_external_network
+  deploy_from_external_network        = local.deploy_from_external_network
 
   depends_on = [ azurerm_subnet.default, azurerm_subnet.functionapp ]
+}
+
+output "aws_app_client_id" {
+  description = "The aws app client id"
+  value       = module.cost_forwarding.aws_app_client_id
 }
 ```
 
