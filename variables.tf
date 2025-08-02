@@ -1,20 +1,11 @@
-variable "name" {
-  description = "Name of the storage account"
-  type        = string
-  default     = "costexport"
-}
-
 variable "location" {
   description = "The Azure region where resources will be created"
   type        = string
-  default     = "uksouth"
 }
 
-
 variable "resource_group_name" {
-  description = "Name of the resource group"
+  description = "Name of the new resource group"
   type        = string
-  default     = "rg-cost-export"
 }
 
 variable "virtual_network_name" {
@@ -23,7 +14,7 @@ variable "virtual_network_name" {
 }
 
 variable "virtual_network_resource_group_name" {
-  description = "Name of the resource group where the existing virtual network is located"
+  description = "Name of the existing resource group where the virtual network is located"
   type        = string
 }
 
@@ -47,13 +38,25 @@ variable "aws_role_arn" {
   type        = string
 }
 
+variable "aws_target_file_path" {
+  description = "S3 target file path Eg 's3://s3bucketname/folder/'"
+  type        = string
+}
+
+variable "deploy_from_external_network" {
+  description = "If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments"
+  type        = bool
+  default     = false
+}
+
+variable "name" {
+  description = "Name of the storage account"
+  type        = string
+  default     = "costexport"
+}
+
 variable "aws_region" {
   description = "AWS region for the S3 bucket"
   type        = string
   default     = "eu-west-2"
-}
-
-variable "aws_target_file_path" {
-  description = "S3 target file path Eg 's3://s3bucketname/folder/'"
-  type        = string
 }
