@@ -1,7 +1,9 @@
 #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
 
 locals {
-  publish_code_command = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"
+  publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"
+  # publish_code_command        = var.deploy_from_external_network ? "sleep 240 && ${local.publish_code_command_common} && az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP --scm && az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP && az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled" : local.publish_code_command_common
+  publish_code_command = var.deploy_from_external_network ? "sleep 240 && ${local.publish_code_command_common} && az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled" : local.publish_code_command_common
   identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/AWS-Federation-App-${var.name}"
 }
 
@@ -97,7 +99,6 @@ resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# Private Endpoint
 resource "azurerm_private_endpoint" "deployment" {
   name                = "pe-storage-cost-export-deployment"
   location            = azurerm_resource_group.cost_export.location
@@ -108,6 +109,24 @@ resource "azurerm_private_endpoint" "deployment" {
     name                           = "psc-storage-cost-export-deployment"
     private_connection_resource_id = azurerm_storage_account.deployment.id
     subresource_names              = ["blob"]
+    is_manual_connection           = false
+  }
+
+  lifecycle {
+    ignore_changes = [private_dns_zone_group]
+  }
+}
+
+resource "azurerm_private_endpoint" "function_app" {
+  name                = "pe-func-cost-export"
+  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = azurerm_resource_group.cost_export.name
+  subnet_id           = var.subnet_id
+
+  private_service_connection {
+    name                           = "psc-func-cost-export"
+    private_connection_resource_id = azurerm_function_app_flex_consumption.cost_export.id
+    subresource_names              = ["sites"]
     is_manual_connection           = false
   }
 
@@ -149,16 +168,17 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   # https://medium.com/p/99ff43c1557f
   # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------
   #storage_authentication_type = "SystemAssignedIdentity"
-  storage_authentication_type = "StorageAccountConnectionString"
-  storage_access_key          = azurerm_storage_account.deployment.primary_access_key
-  storage_container_endpoint  = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
-  service_plan_id             = azurerm_service_plan.cost_export.id
-  runtime_name                = "python"
-  runtime_version             = "3.12"
-  maximum_instance_count      = 50
-  instance_memory_in_mb       = 2048
-  https_only                  = true
-  virtual_network_subnet_id   = var.function_app_subnet_id
+  storage_authentication_type   = "StorageAccountConnectionString"
+  storage_access_key            = azurerm_storage_account.deployment.primary_access_key
+  storage_container_endpoint    = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
+  service_plan_id               = azurerm_service_plan.cost_export.id
+  runtime_name                  = "python"
+  runtime_version               = "3.12"
+  maximum_instance_count        = 50
+  instance_memory_in_mb         = 2048
+  https_only                    = true
+  virtual_network_subnet_id     = var.function_app_subnet_id
+  public_network_access_enabled = var.deploy_from_external_network
 
   identity {
     type = "SystemAssigned"
@@ -167,6 +187,28 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   site_config {
     application_insights_connection_string = azurerm_application_insights.this.connection_string
     application_insights_key               = azurerm_application_insights.this.instrumentation_key
+
+    # TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
+    # dynamic "ip_restriction" {
+    #   for_each = var.deploy_from_external_network ? [1] : []
+    #   content {
+    #     ip_address = "${trimspace(data.http.current_ip[0].response_body)}/32"
+    #     name       = "AllowCurrentIP"
+    #     priority   = 100
+    #     action     = "Allow"
+    #   }
+    # }
+
+    # # TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
+    # dynamic "scm_ip_restriction" {
+    #   for_each = var.deploy_from_external_network ? [1] : []
+    #   content {
+    #     ip_address = "${trimspace(data.http.current_ip[0].response_body)}/32"
+    #     name       = "AllowCurrentIP"
+    #     priority   = 100
+    #     action     = "Allow"
+    #   }
+    # }
   }
 
   app_settings = {
@@ -174,11 +216,11 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "CONTAINER_NAME"            = azapi_resource.cost_export.name
     "AzureWebJobsStorage"       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"  = "EnableWorkerIndexing"
-    # "ENTRA_APP_CLIENT_ID"                = azuread_application.aws_app.client_id
-    # "ENTRA_APP_URN"                      = local.identifier_uri
-    "AWS_ROLE_ARN"   = var.aws_role_arn
-    "AWS_REGION"     = var.aws_region
-    "S3_TARGET_PATH" = var.aws_target_file_path
+    "ENTRA_APP_CLIENT_ID"       = azuread_application.aws_app.client_id
+    "ENTRA_APP_URN"             = local.identifier_uri
+    "AWS_ROLE_ARN"              = var.aws_role_arn
+    "AWS_REGION"                = var.aws_region
+    "S3_TARGET_PATH"            = var.aws_target_file_path
   }
 }
 
@@ -209,16 +251,34 @@ resource "null_resource" "publish_function_code" {
     publish_code_command = local.publish_code_command
   }
 
-  #  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deploy_sa_contributor, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment]
-  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment]
+  #depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deploy_sa_contributor, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment]
+  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
 }
+
+# resource "null_resource" "cleanup_external_access" {
+#   count = var.deploy_from_external_network ? 1 : 0
+
+#   provisioner "local-exec" {
+#     command = <<-EOT
+#       az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP --scm
+#       az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP
+#       az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled
+#     EOT
+#   }
+
+#   triggers = {
+#     function_app_id = azurerm_function_app_flex_consumption.cost_export.id
+#   }
+
+#   depends_on = [null_resource.publish_function_code]
+# }
 
 resource "time_static" "recurrence" {}
 
 # Cost Export Configuration
 resource "azapi_resource" "daily_cost_export" {
   type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
-  name      = "fopcus-daily-cost-export"
+  name      = "focus-daily-cost-export"
   parent_id = var.report_scope
   location  = var.location
   identity {
@@ -269,6 +329,12 @@ data "azurerm_virtual_network" "existing" {
   resource_group_name = var.virtual_network_resource_group_name
 }
 
+# Get current public IP for external deployment
+# data "http" "current_ip" {
+#   count = var.deploy_from_external_network ? 1 : 0
+#   url   = "https://api.ipify.org?format=text"
+# }
+
 # Private DNS Zones for storage services
 resource "azurerm_private_dns_zone" "blob" {
   name                = "privatelink.blob.core.windows.net"
@@ -282,6 +348,11 @@ resource "azurerm_private_dns_zone" "file" {
 
 resource "azurerm_private_dns_zone" "table" {
   name                = "privatelink.table.core.windows.net"
+  resource_group_name = azurerm_resource_group.cost_export.name
+}
+
+resource "azurerm_private_dns_zone" "sites" {
+  name                = "privatelink.azurewebsites.net"
   resource_group_name = azurerm_resource_group.cost_export.name
 }
 
@@ -306,6 +377,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "table" {
   virtual_network_id    = data.azurerm_virtual_network.existing.id
 }
 
+resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
+  name                  = "sites-dns-link"
+  resource_group_name   = azurerm_resource_group.cost_export.name
+  private_dns_zone_name = azurerm_private_dns_zone.sites.name
+  virtual_network_id    = data.azurerm_virtual_network.existing.id
+}
+
 # Link private endpoints to DNS zone
 resource "azurerm_private_dns_a_record" "storage" {
   name                = azurerm_storage_account.cost_export.name
@@ -321,6 +399,14 @@ resource "azurerm_private_dns_a_record" "deployment" {
   resource_group_name = azurerm_resource_group.cost_export.name
   ttl                 = 300
   records             = [azurerm_private_endpoint.deployment.private_service_connection[0].private_ip_address]
+}
+
+resource "azurerm_private_dns_a_record" "function_app" {
+  name                = azurerm_function_app_flex_consumption.cost_export.name
+  zone_name           = azurerm_private_dns_zone.sites.name
+  resource_group_name = azurerm_resource_group.cost_export.name
+  ttl                 = 300
+  records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
 }
 
 resource "random_uuid" "app_uuid" {}
