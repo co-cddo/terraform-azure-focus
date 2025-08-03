@@ -100,7 +100,7 @@ resource "azurerm_subnet" "functionapp" {
 
 # Call the cost forwarding module using the created resources
 module "cost_forwarding" {
-  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=33e484a0ac416c413a0273b9359abf4f77c5b06a" # release v0.0.3
+  source = "../../"
 
   name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = var.aws_target_file_path
@@ -114,5 +114,5 @@ module "cost_forwarding" {
   resource_group_name                 = var.resource_group_name
   deploy_from_external_network        = local.deploy_from_external_network
 
-  depends_on = [ azurerm_subnet.default, azurerm_subnet.functionapp ]
+  depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
 }

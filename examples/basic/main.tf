@@ -4,7 +4,7 @@ provider "azurerm" {
 }
 
 module "example" {
-  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=33e484a0ac416c413a0273b9359abf4f77c5b06a" # release v0.0.3
+  source = "../../"
 
   name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = "s3://<your-s3-bucket>/<your-path>/"
