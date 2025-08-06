@@ -4,3 +4,4 @@ pandas
 azure-identity
 boto3
 s3fs
+azure-storage-blob
