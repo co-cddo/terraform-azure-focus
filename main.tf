@@ -15,17 +15,22 @@ resource "azurerm_resource_group" "cost_export" {
 
 # Storage Account
 resource "azurerm_storage_account" "cost_export" {
-  name                          = "stcostexport${random_string.unique.result}"
-  resource_group_name           = azurerm_resource_group.cost_export.name
-  location                      = azurerm_resource_group.cost_export.location
-  account_tier                  = "Standard"
-  account_replication_type      = "LRS"
-  is_hns_enabled                = true
-  public_network_access_enabled = false
+  name                     = "stcostexport${random_string.unique.result}"
+  resource_group_name      = azurerm_resource_group.cost_export.name
+  location                 = azurerm_resource_group.cost_export.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  is_hns_enabled           = true
 
+  # public_network_access_enabled = false
+  public_network_access_enabled = true
+
+  # network_rules {
+  #   default_action = "Deny"
+  #   bypass         = ["AzureServices"]
+  # }
   network_rules {
-    default_action = "Deny"
-    bypass         = ["AzureServices"]
+    default_action = "Allow"
   }
 }
 
@@ -41,37 +46,42 @@ resource "azapi_resource" "cost_export" {
   }
 }
 
-# Private Endpoint
-resource "azurerm_private_endpoint" "storage" {
-  name                = "pe-storage-cost-export"
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
-  subnet_id           = var.subnet_id
-
-  private_service_connection {
-    name                           = "psc-storage-cost-export"
-    private_connection_resource_id = azurerm_storage_account.cost_export.id
-    subresource_names              = ["blob"]
-    is_manual_connection           = false
-  }
-
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
-  }
-}
+# COMMENTED OUT: Private Endpoint for storage account
+# resource "azurerm_private_endpoint" "storage" {
+#   name                = "pe-storage-cost-export"
+#   location            = azurerm_resource_group.cost_export.location
+#   resource_group_name = azurerm_resource_group.cost_export.name
+#   subnet_id           = var.subnet_id
+#
+#   private_service_connection {
+#     name                           = "psc-storage-cost-export"
+#     private_connection_resource_id = azurerm_storage_account.cost_export.id
+#     subresource_names              = ["blob"]
+#     is_manual_connection           = false
+#   }
+#
+#   lifecycle {
+#     ignore_changes = [private_dns_zone_group]
+#   }
+# }
 
 resource "azurerm_storage_account" "deployment" {
-  name                          = "stcostexdply${random_string.unique.result}"
-  resource_group_name           = azurerm_resource_group.cost_export.name
-  location                      = azurerm_resource_group.cost_export.location
-  account_tier                  = "Standard"
-  account_replication_type      = "LRS"
-  is_hns_enabled                = true
-  public_network_access_enabled = false
+  name                     = "stcostexdply${random_string.unique.result}"
+  resource_group_name      = azurerm_resource_group.cost_export.name
+  location                 = azurerm_resource_group.cost_export.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  is_hns_enabled           = true
 
+  # public_network_access_enabled = false
+  public_network_access_enabled = true
+
+  # network_rules {
+  #   default_action = "Deny"
+  #   bypass         = ["AzureServices"]
+  # }
   network_rules {
-    default_action = "Deny"
-    bypass         = ["AzureServices"]
+    default_action = "Allow"
   }
 }
 
@@ -99,41 +109,43 @@ resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-resource "azurerm_private_endpoint" "deployment" {
-  name                = "pe-storage-cost-export-deployment"
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
-  subnet_id           = var.subnet_id
+# COMMENTED OUT: Private Endpoint for deployment storage account
+# resource "azurerm_private_endpoint" "deployment" {
+#   name                = "pe-storage-cost-export-deployment"
+#   location            = azurerm_resource_group.cost_export.location
+#   resource_group_name = azurerm_resource_group.cost_export.name
+#   subnet_id           = var.subnet_id
+#
+#   private_service_connection {
+#     name                           = "psc-storage-cost-export-deployment"
+#     private_connection_resource_id = azurerm_storage_account.deployment.id
+#     subresource_names              = ["blob"]
+#     is_manual_connection           = false
+#   }
+#
+#   lifecycle {
+#     ignore_changes = [private_dns_zone_group]
+#   }
+# }
 
-  private_service_connection {
-    name                           = "psc-storage-cost-export-deployment"
-    private_connection_resource_id = azurerm_storage_account.deployment.id
-    subresource_names              = ["blob"]
-    is_manual_connection           = false
-  }
-
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
-  }
-}
-
-resource "azurerm_private_endpoint" "function_app" {
-  name                = "pe-func-cost-export"
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
-  subnet_id           = var.subnet_id
-
-  private_service_connection {
-    name                           = "psc-func-cost-export"
-    private_connection_resource_id = azurerm_function_app_flex_consumption.cost_export.id
-    subresource_names              = ["sites"]
-    is_manual_connection           = false
-  }
-
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
-  }
-}
+# COMMENTED OUT: Private Endpoint for function app
+# resource "azurerm_private_endpoint" "function_app" {
+#   name                = "pe-func-cost-export"
+#   location            = azurerm_resource_group.cost_export.location
+#   resource_group_name = azurerm_resource_group.cost_export.name
+#   subnet_id           = var.subnet_id
+#
+#   private_service_connection {
+#     name                           = "psc-func-cost-export"
+#     private_connection_resource_id = azurerm_function_app_flex_consumption.cost_export.id
+#     subresource_names              = ["sites"]
+#     is_manual_connection           = false
+#   }
+#
+#   lifecycle {
+#     ignore_changes = [private_dns_zone_group]
+#   }
+# }
 
 # Random string for unique storage account name
 resource "random_string" "unique" {
@@ -168,16 +180,17 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   # https://medium.com/p/99ff43c1557f
   # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------
   #storage_authentication_type = "SystemAssignedIdentity"
-  storage_authentication_type   = "StorageAccountConnectionString"
-  storage_access_key            = azurerm_storage_account.deployment.primary_access_key
-  storage_container_endpoint    = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
-  service_plan_id               = azurerm_service_plan.cost_export.id
-  runtime_name                  = "python"
-  runtime_version               = "3.12"
-  maximum_instance_count        = 50
-  instance_memory_in_mb         = 2048
-  https_only                    = true
-  virtual_network_subnet_id     = var.function_app_subnet_id
+  storage_authentication_type = "StorageAccountConnectionString"
+  storage_access_key          = azurerm_storage_account.deployment.primary_access_key
+  storage_container_endpoint  = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
+  service_plan_id             = azurerm_service_plan.cost_export.id
+  runtime_name                = "python"
+  runtime_version             = "3.12"
+  maximum_instance_count      = 50
+  instance_memory_in_mb       = 2048
+  https_only                  = true
+  # COMMENTED OUT: VNet integration for function app
+  # virtual_network_subnet_id     = var.function_app_subnet_id
   public_network_access_enabled = var.deploy_from_external_network
 
   identity {
@@ -212,15 +225,16 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 
   app_settings = {
-    "STORAGE_CONNECTION_STRING" = azurerm_storage_account.cost_export.primary_connection_string
-    "CONTAINER_NAME"            = azapi_resource.cost_export.name
-    "AzureWebJobsStorage"       = azurerm_storage_account.deployment.primary_connection_string
-    "AzureWebJobsFeatureFlags"  = "EnableWorkerIndexing"
-    "ENTRA_APP_CLIENT_ID"       = azuread_application.aws_app.client_id
-    "ENTRA_APP_URN"             = local.identifier_uri
-    "AWS_ROLE_ARN"              = var.aws_role_arn
-    "AWS_REGION"                = var.aws_region
-    "S3_TARGET_PATH"            = var.aws_target_file_path
+    "STORAGE_CONNECTION_STRING"        = azurerm_storage_account.cost_export.primary_connection_string
+    "CONTAINER_NAME"                   = azapi_resource.cost_export.name
+    "AzureWebJobsStorage"              = azurerm_storage_account.deployment.primary_connection_string
+    "AzureWebJobsInputCostDataStorage" = azurerm_storage_account.cost_export.primary_connection_string
+    "AzureWebJobsFeatureFlags"         = "EnableWorkerIndexing"
+    "ENTRA_APP_CLIENT_ID"              = azuread_application.aws_app.client_id
+    "ENTRA_APP_URN"                    = local.identifier_uri
+    "AWS_ROLE_ARN"                     = var.aws_role_arn
+    "AWS_REGION"                       = var.aws_region
+    "S3_TARGET_PATH"                   = var.aws_target_file_path
   }
 }
 
@@ -251,8 +265,9 @@ resource "null_resource" "publish_function_code" {
     publish_code_command = local.publish_code_command
   }
 
-  #depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deploy_sa_contributor, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment]
-  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+  # COMMENTED OUT: Dependencies on private endpoints
+  # depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor]
 }
 
 # resource "null_resource" "cleanup_external_access" {
@@ -324,10 +339,11 @@ resource "azapi_resource" "daily_cost_export" {
 
 # Get current client config
 data "azurerm_client_config" "current" {}
-data "azurerm_virtual_network" "existing" {
-  name                = var.virtual_network_name
-  resource_group_name = var.virtual_network_resource_group_name
-}
+# COMMENTED OUT: Virtual network data source (not needed without private networking)
+# data "azurerm_virtual_network" "existing" {
+#   name                = var.virtual_network_name
+#   resource_group_name = var.virtual_network_resource_group_name
+# }
 
 # Get current public IP for external deployment
 # data "http" "current_ip" {
@@ -335,79 +351,80 @@ data "azurerm_virtual_network" "existing" {
 #   url   = "https://api.ipify.org?format=text"
 # }
 
-# Private DNS Zones for storage services
-resource "azurerm_private_dns_zone" "blob" {
-  name                = "privatelink.blob.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
-}
+# COMMENTED OUT: Private DNS Zones for storage services
+# resource "azurerm_private_dns_zone" "blob" {
+#   name                = "privatelink.blob.core.windows.net"
+#   resource_group_name = azurerm_resource_group.cost_export.name
+# }
+#
+# resource "azurerm_private_dns_zone" "file" {
+#   name                = "privatelink.file.core.windows.net"
+#   resource_group_name = azurerm_resource_group.cost_export.name
+# }
+#
+# resource "azurerm_private_dns_zone" "table" {
+#   name                = "privatelink.table.core.windows.net"
+#   resource_group_name = azurerm_resource_group.cost_export.name
+# }
+#
+# resource "azurerm_private_dns_zone" "sites" {
+#   name                = "privatelink.azurewebsites.net"
+#   resource_group_name = azurerm_resource_group.cost_export.name
+# }
 
-resource "azurerm_private_dns_zone" "file" {
-  name                = "privatelink.file.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
-}
+# COMMENTED OUT: Private DNS Zone virtual network links
+# resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
+#   name                  = "blob-dns-link"
+#   resource_group_name   = azurerm_resource_group.cost_export.name
+#   private_dns_zone_name = azurerm_private_dns_zone.blob.name
+#   virtual_network_id    = data.azurerm_virtual_network.existing.id
+# }
+#
+# resource "azurerm_private_dns_zone_virtual_network_link" "file" {
+#   name                  = "file-dns-link"
+#   resource_group_name   = azurerm_resource_group.cost_export.name
+#   private_dns_zone_name = azurerm_private_dns_zone.file.name
+#   virtual_network_id    = data.azurerm_virtual_network.existing.id
+# }
+#
+# resource "azurerm_private_dns_zone_virtual_network_link" "table" {
+#   name                  = "table-dns-link"
+#   resource_group_name   = azurerm_resource_group.cost_export.name
+#   private_dns_zone_name = azurerm_private_dns_zone.table.name
+#   virtual_network_id    = data.azurerm_virtual_network.existing.id
+# }
+#
+# resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
+#   name                  = "sites-dns-link"
+#   resource_group_name   = azurerm_resource_group.cost_export.name
+#   private_dns_zone_name = azurerm_private_dns_zone.sites.name
+#   virtual_network_id    = data.azurerm_virtual_network.existing.id
+# }
 
-resource "azurerm_private_dns_zone" "table" {
-  name                = "privatelink.table.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
-}
-
-resource "azurerm_private_dns_zone" "sites" {
-  name                = "privatelink.azurewebsites.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
-  name                  = "blob-dns-link"
-  resource_group_name   = azurerm_resource_group.cost_export.name
-  private_dns_zone_name = azurerm_private_dns_zone.blob.name
-  virtual_network_id    = data.azurerm_virtual_network.existing.id
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "file" {
-  name                  = "file-dns-link"
-  resource_group_name   = azurerm_resource_group.cost_export.name
-  private_dns_zone_name = azurerm_private_dns_zone.file.name
-  virtual_network_id    = data.azurerm_virtual_network.existing.id
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "table" {
-  name                  = "table-dns-link"
-  resource_group_name   = azurerm_resource_group.cost_export.name
-  private_dns_zone_name = azurerm_private_dns_zone.table.name
-  virtual_network_id    = data.azurerm_virtual_network.existing.id
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
-  name                  = "sites-dns-link"
-  resource_group_name   = azurerm_resource_group.cost_export.name
-  private_dns_zone_name = azurerm_private_dns_zone.sites.name
-  virtual_network_id    = data.azurerm_virtual_network.existing.id
-}
-
-# Link private endpoints to DNS zone
-resource "azurerm_private_dns_a_record" "storage" {
-  name                = azurerm_storage_account.cost_export.name
-  zone_name           = azurerm_private_dns_zone.blob.name
-  resource_group_name = azurerm_resource_group.cost_export.name
-  ttl                 = 300
-  records             = [azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address]
-}
-
-resource "azurerm_private_dns_a_record" "deployment" {
-  name                = azurerm_storage_account.deployment.name
-  zone_name           = azurerm_private_dns_zone.blob.name
-  resource_group_name = azurerm_resource_group.cost_export.name
-  ttl                 = 300
-  records             = [azurerm_private_endpoint.deployment.private_service_connection[0].private_ip_address]
-}
-
-resource "azurerm_private_dns_a_record" "function_app" {
-  name                = azurerm_function_app_flex_consumption.cost_export.name
-  zone_name           = azurerm_private_dns_zone.sites.name
-  resource_group_name = azurerm_resource_group.cost_export.name
-  ttl                 = 300
-  records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
-}
+# COMMENTED OUT: Private DNS A records linking private endpoints to DNS zones
+# resource "azurerm_private_dns_a_record" "storage" {
+#   name                = azurerm_storage_account.cost_export.name
+#   zone_name           = azurerm_private_dns_zone.blob.name
+#   resource_group_name = azurerm_resource_group.cost_export.name
+#   ttl                 = 300
+#   records             = [azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address]
+# }
+#
+# resource "azurerm_private_dns_a_record" "deployment" {
+#   name                = azurerm_storage_account.deployment.name
+#   zone_name           = azurerm_private_dns_zone.blob.name
+#   resource_group_name = azurerm_resource_group.cost_export.name
+#   ttl                 = 300
+#   records             = [azurerm_private_endpoint.deployment.private_service_connection[0].private_ip_address]
+# }
+#
+# resource "azurerm_private_dns_a_record" "function_app" {
+#   name                = azurerm_function_app_flex_consumption.cost_export.name
+#   zone_name           = azurerm_private_dns_zone.sites.name
+#   resource_group_name = azurerm_resource_group.cost_export.name
+#   ttl                 = 300
+#   records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
+# }
 
 resource "random_uuid" "app_uuid" {}
 

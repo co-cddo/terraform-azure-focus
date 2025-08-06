@@ -9,7 +9,7 @@ locals {
 }
 
 variable "aws_target_file_path" {
-  description = "AWS S3 path for cost export"
+  description = "AWS S3 path for cost export e.g. <your-s3-bucket>/<your-path>"
   type        = string
 }
 
