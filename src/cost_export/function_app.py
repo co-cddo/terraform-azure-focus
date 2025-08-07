@@ -21,15 +21,14 @@ container_name = os.environ.get("CONTAINER_NAME")
  
 app = func.FunctionApp()
  
-@app.schedule(schedule="0 0 9 * * *", arg_name="timer", run_on_startup=False, use_monitor=False)
-def daily_cost_export_processor(timer: func.TimerRequest) -> None:
-    """Timer trigger function that runs daily at 9:00 AM UTC to process parquet files"""
+@app.function_name(name="CostExportProcessor")
+@app.queue_trigger(arg_name="msg", queue_name="costdata", connection="StorageAccountManagedIdentity")
+def cost_export_processor(msg: func.QueueMessage) -> None:
+    """Queue trigger function that processes parquet files when messages are received"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
 
-    if timer.past_due:
-        logging.info('The timer is past due!')
-
-    logging.info(f'Daily cost export processor executed at: {utc_timestamp}')
+    logging.info(f'Cost export processor triggered at: {utc_timestamp}')
+    logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
     
     try:
         # Initialize blob service client
@@ -61,12 +60,49 @@ def daily_cost_export_processor(timer: func.TimerRequest) -> None:
                     
                     ### Any deployment specific requirements can be implemented here ###
                     table = table.drop_columns("ResourceName")
+                    table = table.drop_columns("BillingAccountId")
+                    table = table.drop_columns("BillingAccountName")
+                    table = table.drop_columns("BillingAccountType")
+                    table = table.drop_columns("ChargeDescription")
+                    table = table.drop_columns("CommitmentDiscountName")
+                    table = table.drop_columns("RegionId")
+                    table = table.drop_columns("ResourceId")
+                    table = table.drop_columns("SubAccountId")
+                    table = table.drop_columns("SubAccountName")
+                    table = table.drop_columns("SubAccountType")
+                    table = table.drop_columns("Tags")
+                    
+                    # Drop any columns that start with "x_"
+                    columns_to_drop = [col for col in table.column_names if col.startswith("x_")]
+                    if columns_to_drop:
+                        table = table.drop_columns(columns_to_drop)
                     ### End of deployment specific requirements ###
                     
-                    # Write to S3
-                    s3_path = f"{target_file_path.rstrip('/')}/{blob.name}"
-                    pq.write_to_dataset(table, root_path=s3_path, filesystem=s3, compression='snappy')
-                    logging.info(f"Successfully uploaded {blob.name} to S3")
+                    # Transform S3 path
+                    # Example: /7a770e35-b455-4df2-a276-b07408438d9a/gds-focus-v1/focus-daily-cost-export/20250801-20250831/part_0_0001.parquet
+                    # Becomes: /7a770e35-b455-4df2-a276-b07408438d9a/gds-focus-v1/billing_period=20250801/part_0_0001.parquet
+                    path_parts = blob.name.split('/')
+                    modified_parts = []
+                    
+                    for part in path_parts:
+                        if part == "focus-daily-cost-export":
+                            # Skip this part entirely
+                            continue
+                        elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
+                            # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
+                            billing_period = part.split("-")[0]
+                            modified_parts.append(f"billing_period={billing_period}")
+                        elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
+                            # Skip GUID directories (format: 8-4-4-4-12 characters)
+                            logging.info(f"Skipping GUID directory: {part}")
+                            continue
+                        else:
+                            modified_parts.append(part)
+                    
+                    modified_path = '/'.join(modified_parts)
+                    s3_path = f"{target_file_path.rstrip('/')}/{modified_path}"
+                    pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
+                    logging.info(f"Successfully uploaded {blob.name} to S3 at path: {s3_path}")
                     
                     # Delete source file after successful upload
                     blob_client.delete_blob()

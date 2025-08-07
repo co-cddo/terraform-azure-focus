@@ -42,6 +42,12 @@ resource "azapi_resource" "cost_export" {
   }
 }
 
+resource "azapi_resource" "cost_data_queue" {
+  type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
+  name      = "costdata"
+  parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
+}
+
 # Private Endpoint for storage account
 resource "azurerm_private_endpoint" "storage" {
   name                = "pe-storage-cost-export"
@@ -53,6 +59,25 @@ resource "azurerm_private_endpoint" "storage" {
     name                           = "psc-storage-cost-export"
     private_connection_resource_id = azurerm_storage_account.cost_export.id
     subresource_names              = ["blob"]
+    is_manual_connection           = false
+  }
+
+  lifecycle {
+    ignore_changes = [private_dns_zone_group]
+  }
+}
+
+# Private Endpoint for storage account queue services
+resource "azurerm_private_endpoint" "storage_queue" {
+  name                = "pe-storage-queue-cost-export"
+  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = azurerm_resource_group.cost_export.name
+  subnet_id           = var.subnet_id
+
+  private_service_connection {
+    name                           = "psc-storage-queue-cost-export"
+    private_connection_resource_id = azurerm_storage_account.cost_export.id
+    subresource_names              = ["queue"]
     is_manual_connection           = false
   }
 
@@ -99,6 +124,12 @@ resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
   scope                = azurerm_storage_account.deployment.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_role_assignment" "grant_func_queue_contributor" {
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
 }
 
 # Private Endpoint for deployment storage account
@@ -216,16 +247,17 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 
   app_settings = {
-    "STORAGE_CONNECTION_STRING"        = azurerm_storage_account.cost_export.primary_connection_string
-    "CONTAINER_NAME"                   = azapi_resource.cost_export.name
-    "AzureWebJobsStorage"              = azurerm_storage_account.deployment.primary_connection_string
-    "AzureWebJobsInputCostDataStorage" = azurerm_storage_account.cost_export.primary_connection_string
-    "AzureWebJobsFeatureFlags"         = "EnableWorkerIndexing"
-    "ENTRA_APP_CLIENT_ID"              = azuread_application.aws_app.client_id
-    "ENTRA_APP_URN"                    = local.identifier_uri
-    "AWS_ROLE_ARN"                     = var.aws_role_arn
-    "AWS_REGION"                       = var.aws_region
-    "S3_TARGET_PATH"                   = var.aws_target_file_path
+    "STORAGE_CONNECTION_STRING" = azurerm_storage_account.cost_export.primary_connection_string
+    "CONTAINER_NAME"            = azapi_resource.cost_export.name
+    "AzureWebJobsStorage"       = azurerm_storage_account.deployment.primary_connection_string
+    # "AzureWebJobsInputCostDataStorage"             = azurerm_storage_account.cost_export.primary_connection_string
+    "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
+    "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
+    "ENTRA_APP_CLIENT_ID"                       = azuread_application.aws_app.client_id
+    "ENTRA_APP_URN"                             = local.identifier_uri
+    "AWS_ROLE_ARN"                              = var.aws_role_arn
+    "AWS_REGION"                                = var.aws_region
+    "S3_TARGET_PATH"                            = var.aws_target_file_path
   }
 }
 
@@ -296,7 +328,7 @@ resource "azapi_resource" "daily_cost_export" {
         type = "FocusCost"
         dataSet = {
           configuration = {
-            dataVersion = "1.0"
+            dataVersion = "${var.focus_dataset_version}"
           }
           granularity = "Daily"
         }
@@ -316,7 +348,7 @@ resource "azapi_resource" "daily_cost_export" {
           type       = "AzureBlob"
           resourceId = azurerm_storage_account.cost_export.id
           container : azapi_resource.cost_export.name
-          rootFolderPath : "exports"
+          rootFolderPath : "gds-focus-v${substr(var.focus_dataset_version, 0, 1)}"
         }
       }
       partitionData         = true
@@ -356,6 +388,11 @@ resource "azurerm_private_dns_zone" "table" {
   resource_group_name = azurerm_resource_group.cost_export.name
 }
 
+resource "azurerm_private_dns_zone" "queue" {
+  name                = "privatelink.queue.core.windows.net"
+  resource_group_name = azurerm_resource_group.cost_export.name
+}
+
 resource "azurerm_private_dns_zone" "sites" {
   name                = "privatelink.azurewebsites.net"
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -383,6 +420,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "table" {
   virtual_network_id    = data.azurerm_virtual_network.existing.id
 }
 
+resource "azurerm_private_dns_zone_virtual_network_link" "queue" {
+  name                  = "queue-dns-link"
+  resource_group_name   = azurerm_resource_group.cost_export.name
+  private_dns_zone_name = azurerm_private_dns_zone.queue.name
+  virtual_network_id    = data.azurerm_virtual_network.existing.id
+}
+
 resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
   name                  = "sites-dns-link"
   resource_group_name   = azurerm_resource_group.cost_export.name
@@ -397,6 +441,14 @@ resource "azurerm_private_dns_a_record" "storage" {
   resource_group_name = azurerm_resource_group.cost_export.name
   ttl                 = 300
   records             = [azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address]
+}
+
+resource "azurerm_private_dns_a_record" "storage_queue" {
+  name                = azurerm_storage_account.cost_export.name
+  zone_name           = azurerm_private_dns_zone.queue.name
+  resource_group_name = azurerm_resource_group.cost_export.name
+  ttl                 = 300
+  records             = [azurerm_private_endpoint.storage_queue.private_service_connection[0].private_ip_address]
 }
 
 resource "azurerm_private_dns_a_record" "deployment" {
@@ -448,4 +500,55 @@ resource "azuread_app_role_assignment" "aws_app" {
   principal_object_id = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
   resource_object_id  = azuread_service_principal.aws_app.object_id
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
+}
+
+# Event Grid System Topic for Storage Account
+resource "azurerm_eventgrid_system_topic" "storage_events" {
+  name                   = "evgt-storage-${random_string.unique.result}"
+  resource_group_name    = azurerm_resource_group.cost_export.name
+  location               = azurerm_resource_group.cost_export.location
+  source_arm_resource_id = azurerm_storage_account.cost_export.id
+  topic_type             = "Microsoft.Storage.StorageAccounts"
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+# Role assignment for Event Grid system topic to send messages to storage queue
+resource "azurerm_role_assignment" "event_grid_queue_sender" {
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Storage Queue Data Message Sender"
+  principal_id         = azurerm_eventgrid_system_topic.storage_events.identity[0].principal_id
+}
+
+# Event Grid Subscription for blob created events
+resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
+  name                  = "evgs-blob-created-${random_string.unique.result}"
+  scope                 = azurerm_storage_account.cost_export.id
+  event_delivery_schema = "EventGridSchema"
+
+  included_event_types = [
+    "Microsoft.Storage.BlobCreated"
+  ]
+
+  subject_filter {
+    subject_begins_with = "/blobServices/default/containers/${azapi_resource.cost_export.name}/blobs/gds-focus-v${substr(var.focus_dataset_version, 0, 1)}/focus-daily-cost-export/"
+    subject_ends_with   = ".parquet"
+  }
+
+  storage_queue_endpoint {
+    storage_account_id                    = azurerm_storage_account.cost_export.id
+    queue_name                            = azapi_resource.cost_data_queue.name
+    queue_message_time_to_live_in_seconds = 604800
+  }
+
+  delivery_identity {
+    type = "SystemAssigned"
+  }
+
+  depends_on = [
+    azurerm_role_assignment.event_grid_queue_sender,
+    azapi_resource.cost_data_queue
+  ]
 }

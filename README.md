@@ -1,7 +1,5 @@
 <!-- markdownlint-disable -->
 
-<a href="https://www.appvia.io/"><img src="./docs/banner.jpg" alt="Appvia Banner"/></a><br/><p align="right"> </a> <a href="https://github.com/appvia/terraform-azurerm-cost-forwarding/releases/latest"><img src="https://img.shields.io/github/release/appvia/terraform-azurerm-cost-forwarding.svg?style=for-the-badge&color=006400" alt="Latest Release"/></a> <a href="https://appvia-community.slack.com/join/shared_invite/zt-1s7i7xy85-T155drryqU56emm09ojMVA#/shared-invite/email"><img src="https://img.shields.io/badge/Slack-Join%20Community-purple?style=for-the-badge&logo=slack" alt="Slack Community"/></a> <a href="https://github.com/appvia/terraform-azurerm-cost-forwarding/graphs/contributors"><img src="https://img.shields.io/github/contributors/appvia/terraform-azurerm-cost-forwarding.svg?style=for-the-badge&color=FF8C00" alt="Contributors"/></a>
-
 <!-- markdownlint-restore -->
 <!--
   ***** CAUTION: DO NOT EDIT ABOVE THIS LINE ******
@@ -323,6 +321,7 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the existing resource group where the virtual network is located | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
+| <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_name"></a> [name](#input\_name) | Name of the storage account | `string` | `"costexport"` | no |
 
 ## Outputs
