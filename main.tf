@@ -2,18 +2,20 @@
 
 locals {
   publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"
-  # publish_code_command        = var.deploy_from_external_network ? "sleep 240 && ${local.publish_code_command_common} && az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP --scm && az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP && az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled" : local.publish_code_command_common
-  publish_code_command = var.deploy_from_external_network ? "sleep 240 && ${local.publish_code_command_common} && az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled" : local.publish_code_command_common
-  identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/AWS-Federation-App-${var.name}"
+  publish_code_command        = var.deploy_from_external_network ? "sleep 240 && ${local.publish_code_command_common} && az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled" : local.publish_code_command_common
+  identifier_uri              = "api://${data.azurerm_client_config.current.tenant_id}/AWS-Federation-App-${var.name}"
+  focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)
+  # FOCUS directory name should only contain major version number for the data set
+  focus_directory_name       = "gds-focus-v${local.focus_dataset_major_version}"
+  carbon_directory_name      = "gds-carbon-v1"
+  utilization_directory_name = "gds-recommendations-v1"
 }
 
-# Resource Group
 resource "azurerm_resource_group" "cost_export" {
   name     = var.resource_group_name
   location = var.location
 }
 
-# Storage Account
 resource "azurerm_storage_account" "cost_export" {
   name                     = "stcostexport${random_string.unique.result}"
   resource_group_name      = azurerm_resource_group.cost_export.name
@@ -48,7 +50,6 @@ resource "azapi_resource" "cost_data_queue" {
   parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
 }
 
-# Private Endpoint for storage account
 resource "azurerm_private_endpoint" "storage" {
   name                = "pe-storage-cost-export"
   location            = azurerm_resource_group.cost_export.location
@@ -67,7 +68,6 @@ resource "azurerm_private_endpoint" "storage" {
   }
 }
 
-# Private Endpoint for storage account queue services
 resource "azurerm_private_endpoint" "storage_queue" {
   name                = "pe-storage-queue-cost-export"
   location            = azurerm_resource_group.cost_export.location
@@ -114,12 +114,6 @@ resource "azapi_resource" "deployment" {
   }
 }
 
-# resource "azurerm_role_assignment" "grant_deploy_sa_contributor" {
-#   scope                = azurerm_storage_account.deployment.id
-#   role_definition_name = "Storage Blob Data Contributor"
-#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-# }
-
 resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
   scope                = azurerm_storage_account.deployment.id
   role_definition_name = "Storage Blob Data Contributor"
@@ -132,7 +126,6 @@ resource "azurerm_role_assignment" "grant_func_queue_contributor" {
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
 }
 
-# Private Endpoint for deployment storage account
 resource "azurerm_private_endpoint" "deployment" {
   name                = "pe-storage-cost-export-deployment"
   location            = azurerm_resource_group.cost_export.location
@@ -151,7 +144,6 @@ resource "azurerm_private_endpoint" "deployment" {
   }
 }
 
-# Private Endpoint for function app
 resource "azurerm_private_endpoint" "function_app" {
   name                = "pe-func-cost-export"
   location            = azurerm_resource_group.cost_export.location
@@ -170,14 +162,12 @@ resource "azurerm_private_endpoint" "function_app" {
   }
 }
 
-# Random string for unique storage account name
 resource "random_string" "unique" {
   length  = 8
   special = false
   upper   = false
 }
 
-# Function App Service Plan
 resource "azurerm_service_plan" "cost_export" {
   name                = "asp-cost-export"
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -192,7 +182,6 @@ data "archive_file" "function" {
   output_path = "${path.module}/cost_export.zip"
 }
 
-# Function App
 resource "azurerm_function_app_flex_consumption" "cost_export" {
   name                = "func-cost-export-${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -247,17 +236,20 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 
   app_settings = {
-    "STORAGE_CONNECTION_STRING" = azurerm_storage_account.cost_export.primary_connection_string
-    "CONTAINER_NAME"            = azapi_resource.cost_export.name
-    "AzureWebJobsStorage"       = azurerm_storage_account.deployment.primary_connection_string
-    # "AzureWebJobsInputCostDataStorage"             = azurerm_storage_account.cost_export.primary_connection_string
+    "STORAGE_CONNECTION_STRING"                 = azurerm_storage_account.cost_export.primary_connection_string
+    "CONTAINER_NAME"                            = azapi_resource.cost_export.name
+    "UTILIZATION_CONTAINER_NAME"                = azapi_resource.utilization_container.name
+    "CARBON_CONTAINER_NAME"                     = azapi_resource.carbon_container.name
+    "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
     "ENTRA_APP_CLIENT_ID"                       = azuread_application.aws_app.client_id
     "ENTRA_APP_URN"                             = local.identifier_uri
     "AWS_ROLE_ARN"                              = var.aws_role_arn
     "AWS_REGION"                                = var.aws_region
-    "S3_TARGET_PATH"                            = var.aws_target_file_path
+    "S3_FOCUS_PATH"                             = var.aws_target_file_path
+    "S3_UTILIZATION_PATH"                       = var.aws_target_file_path
+    "S3_CARBON_PATH"                            = var.aws_target_file_path
   }
 }
 
@@ -291,27 +283,8 @@ resource "null_resource" "publish_function_code" {
   depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
 }
 
-# resource "null_resource" "cleanup_external_access" {
-#   count = var.deploy_from_external_network ? 1 : 0
-
-#   provisioner "local-exec" {
-#     command = <<-EOT
-#       az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP --scm
-#       az functionapp config access-restriction remove --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --rule-name AllowCurrentIP
-#       az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled
-#     EOT
-#   }
-
-#   triggers = {
-#     function_app_id = azurerm_function_app_flex_consumption.cost_export.id
-#   }
-
-#   depends_on = [null_resource.publish_function_code]
-# }
-
 resource "time_static" "recurrence" {}
 
-# Cost Export Configuration
 resource "azapi_resource" "daily_cost_export" {
   type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
   name      = "focus-daily-cost-export"
@@ -348,7 +321,7 @@ resource "azapi_resource" "daily_cost_export" {
           type       = "AzureBlob"
           resourceId = azurerm_storage_account.cost_export.id
           container : azapi_resource.cost_export.name
-          rootFolderPath : "gds-focus-v${substr(var.focus_dataset_version, 0, 1)}"
+          rootFolderPath : local.focus_directory_name
         }
       }
       partitionData         = true
@@ -358,9 +331,8 @@ resource "azapi_resource" "daily_cost_export" {
   }
 }
 
-# Get current client config
 data "azurerm_client_config" "current" {}
-# Virtual network data source
+
 data "azurerm_virtual_network" "existing" {
   name                = var.virtual_network_name
   resource_group_name = var.virtual_network_resource_group_name
@@ -372,7 +344,6 @@ data "azurerm_virtual_network" "existing" {
 #   url   = "https://api.ipify.org?format=text"
 # }
 
-# Private DNS Zones for storage services
 resource "azurerm_private_dns_zone" "blob" {
   name                = "privatelink.blob.core.windows.net"
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -398,7 +369,6 @@ resource "azurerm_private_dns_zone" "sites" {
   resource_group_name = azurerm_resource_group.cost_export.name
 }
 
-# Private DNS Zone virtual network links
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   name                  = "blob-dns-link"
   resource_group_name   = azurerm_resource_group.cost_export.name
@@ -434,7 +404,6 @@ resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
   virtual_network_id    = data.azurerm_virtual_network.existing.id
 }
 
-# Private DNS A records linking private endpoints to DNS zones
 resource "azurerm_private_dns_a_record" "storage" {
   name                = azurerm_storage_account.cost_export.name
   zone_name           = azurerm_private_dns_zone.blob.name
@@ -502,7 +471,6 @@ resource "azuread_app_role_assignment" "aws_app" {
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
-# Event Grid System Topic for Storage Account
 resource "azurerm_eventgrid_system_topic" "storage_events" {
   name                   = "evgt-storage-${random_string.unique.result}"
   resource_group_name    = azurerm_resource_group.cost_export.name
@@ -515,14 +483,12 @@ resource "azurerm_eventgrid_system_topic" "storage_events" {
   }
 }
 
-# Role assignment for Event Grid system topic to send messages to storage queue
 resource "azurerm_role_assignment" "event_grid_queue_sender" {
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Message Sender"
   principal_id         = azurerm_eventgrid_system_topic.storage_events.identity[0].principal_id
 }
 
-# Event Grid Subscription for blob created events
 resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
   name                  = "evgs-blob-created-${random_string.unique.result}"
   scope                 = azurerm_storage_account.cost_export.id
@@ -533,7 +499,7 @@ resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
   ]
 
   subject_filter {
-    subject_begins_with = "/blobServices/default/containers/${azapi_resource.cost_export.name}/blobs/gds-focus-v${substr(var.focus_dataset_version, 0, 1)}/focus-daily-cost-export/"
+    subject_begins_with = "/blobServices/default/containers/${azapi_resource.cost_export.name}/blobs/${local.focus_directory_name}/"
     subject_ends_with   = ".parquet"
   }
 
@@ -550,5 +516,187 @@ resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
   depends_on = [
     azurerm_role_assignment.event_grid_queue_sender,
     azapi_resource.cost_data_queue
+  ]
+}
+
+resource "azapi_resource" "utilization_export" {
+  type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
+  name      = "utilization-export"
+  parent_id = var.report_scope
+  location  = var.location
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    properties = {
+      exportDescription = "Resource Utilization Export"
+      definition = {
+        type = "Usage"
+        dataSet = {
+          granularity = "Daily"
+        }
+        timeframe = "MonthToDate"
+      }
+      schedule = {
+        status     = "Active"
+        recurrence = "Daily"
+        recurrencePeriod = {
+          from = time_static.recurrence.id
+          to   = timeadd(time_static.recurrence.id, "${24 * 365 * 5}h")
+        }
+      }
+      format = "Csv"
+      deliveryInfo = {
+        destination = {
+          type           = "AzureBlob"
+          resourceId     = azurerm_storage_account.cost_export.id
+          container      = azapi_resource.utilization_container.name
+          rootFolderPath = local.utilization_directory_name
+        }
+      }
+      partitionData         = true
+      dataOverwriteBehavior = "OverwritePreviousReport"
+      compressionMode       = "gzip"
+    }
+  }
+}
+
+resource "azapi_resource" "utilization_container" {
+  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01"
+  name      = "utilization-exports"
+  parent_id = "${azurerm_storage_account.cost_export.id}/blobServices/default"
+  body = {
+    properties = {
+      metadata     = {}
+      publicAccess = "None"
+    }
+  }
+}
+
+resource "azapi_resource" "carbon_export" {
+  type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
+  name      = "carbon-emissions-export"
+  parent_id = var.report_scope
+  location  = var.location
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    properties = {
+      exportDescription = "Carbon Emissions Export"
+      definition = {
+        type = "AmortizedCost"
+        dataSet = {
+          granularity = "Daily"
+        }
+        timeframe = "MonthToDate"
+      }
+      schedule = {
+        status     = "Active"
+        recurrence = "Daily"
+        recurrencePeriod = {
+          from = time_static.recurrence.id
+          to   = timeadd(time_static.recurrence.id, "${24 * 365 * 5}h")
+        }
+      }
+      format = "Csv"
+      deliveryInfo = {
+        destination = {
+          type           = "AzureBlob"
+          resourceId     = azurerm_storage_account.cost_export.id
+          container      = azapi_resource.carbon_container.name
+          rootFolderPath = local.carbon_directory_name
+        }
+      }
+      partitionData         = true
+      dataOverwriteBehavior = "OverwritePreviousReport"
+      compressionMode       = "gzip"
+    }
+  }
+}
+
+resource "azapi_resource" "carbon_container" {
+  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01"
+  name      = "carbon-exports"
+  parent_id = "${azurerm_storage_account.cost_export.id}/blobServices/default"
+  body = {
+    properties = {
+      metadata     = {}
+      publicAccess = "None"
+    }
+  }
+}
+
+resource "azapi_resource" "utilization_data_queue" {
+  type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
+  name      = "utilizationdata"
+  parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
+}
+
+resource "azapi_resource" "carbon_data_queue" {
+  type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
+  name      = "carbondata"
+  parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
+}
+
+resource "azurerm_eventgrid_event_subscription" "utilization_blob_created" {
+  name                  = "evgs-utilization-${random_string.unique.result}"
+  scope                 = azurerm_storage_account.cost_export.id
+  event_delivery_schema = "EventGridSchema"
+
+  included_event_types = [
+    "Microsoft.Storage.BlobCreated"
+  ]
+
+  subject_filter {
+    subject_begins_with = "/blobServices/default/containers/${azapi_resource.utilization_container.name}/blobs/${local.utilization_directory_name}/"
+    subject_ends_with   = ".csv.gz"
+  }
+
+  storage_queue_endpoint {
+    storage_account_id                    = azurerm_storage_account.cost_export.id
+    queue_name                            = azapi_resource.utilization_data_queue.name
+    queue_message_time_to_live_in_seconds = 604800
+  }
+
+  delivery_identity {
+    type = "SystemAssigned"
+  }
+
+  depends_on = [
+    azurerm_role_assignment.event_grid_queue_sender,
+    azapi_resource.utilization_data_queue
+  ]
+}
+
+resource "azurerm_eventgrid_event_subscription" "carbon_blob_created" {
+  name                  = "evgs-carbon-${random_string.unique.result}"
+  scope                 = azurerm_storage_account.cost_export.id
+  event_delivery_schema = "EventGridSchema"
+
+  included_event_types = [
+    "Microsoft.Storage.BlobCreated"
+  ]
+
+  subject_filter {
+    subject_begins_with = "/blobServices/default/containers/${azapi_resource.carbon_container.name}/blobs/${local.carbon_directory_name}/"
+    subject_ends_with   = ".csv.gz"
+  }
+
+  storage_queue_endpoint {
+    storage_account_id                    = azurerm_storage_account.cost_export.id
+    queue_name                            = azapi_resource.carbon_data_queue.name
+    queue_message_time_to_live_in_seconds = 604800
+  }
+
+  delivery_identity {
+    type = "SystemAssigned"
+  }
+
+  depends_on = [
+    azurerm_role_assignment.event_grid_queue_sender,
+    azapi_resource.carbon_data_queue
   ]
 }

@@ -14,10 +14,14 @@ from datetime import datetime, timezone
 client_id = os.environ.get("ENTRA_APP_CLIENT_ID")  # Example: "00000000-0000-0000-0000-000000000000"
 urn = os.environ.get("ENTRA_APP_URN")  # Example: "api://AWS-Federation-App"
 arn = os.environ.get("AWS_ROLE_ARN")  # Example: "arn:aws:iam::000000000000:role/aad_s3"
-target_file_path = os.environ.get("S3_TARGET_PATH")  # Example: "s3://s3bucketname/test/"
+s3_focus_path = os.environ.get("S3_FOCUS_PATH")  # Example: "s3://s3bucketname/test/"
 aws_region = os.environ.get("AWS_REGION")  # Example: "eu-west-2"
 storage_connection_string = os.environ.get("STORAGE_CONNECTION_STRING")
 container_name = os.environ.get("CONTAINER_NAME")
+utilization_container_name = os.environ.get("UTILIZATION_CONTAINER_NAME")
+carbon_container_name = os.environ.get("CARBON_CONTAINER_NAME")
+s3_utilization_path = os.environ.get("S3_UTILIZATION_PATH")
+s3_carbon_path = os.environ.get("S3_CARBON_PATH")
  
 app = func.FunctionApp()
  
@@ -100,13 +104,13 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                             modified_parts.append(part)
                     
                     modified_path = '/'.join(modified_parts)
-                    s3_path = f"{target_file_path.rstrip('/')}/{modified_path}"
-                    pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
-                    logging.info(f"Successfully uploaded {blob.name} to S3 at path: {s3_path}")
+                    s3_path = f"{s3_focus_path.rstrip('/')}/{modified_path}"
+                    # pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
+                    logging.info(f"(would) Successfully uploaded {blob.name} to S3 at path: {s3_path}")
                     
                     # Delete source file after successful upload
-                    blob_client.delete_blob()
-                    logging.info(f"Successfully deleted source file: {blob.name}")
+                    # blob_client.delete_blob()
+                    logging.info(f"(would) Successfully deleted source file: {blob.name}")
                     
                     processed_files.append(blob.name)
                     
@@ -148,3 +152,171 @@ def getS3FileSystem():
         session_token=aws_session_token,
         region=aws_region
     )
+
+@app.function_name(name="UtilizationExportProcessor")
+@app.queue_trigger(arg_name="msg", queue_name="utilizationdata", connection="StorageAccountManagedIdentity")
+def utilization_export_processor(msg: func.QueueMessage) -> None:
+    """Queue trigger function that processes utilization CSV files when messages are received"""
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+
+    logging.info(f'Utilization export processor triggered at: {utc_timestamp}')
+    logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
+    
+    try:
+        # Initialize blob service client
+        blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
+        container_client = blob_service_client.get_container_client(utilization_container_name)
+        
+        # Get S3 filesystem
+        s3 = getS3FileSystem()
+        
+        # Find and process all CSV files
+        processed_files = []
+        failed_files = []
+        
+        # List all blobs in container recursively
+        blobs = container_client.list_blobs()
+        
+        for blob in blobs:
+            if blob.name.endswith('.csv.gz'):
+                try:
+                    logging.info(f"Processing utilization CSV.GZ file: {blob.name}")
+                    
+                    # Download blob content
+                    blob_client = container_client.get_blob_client(blob.name)
+                    blob_data = blob_client.download_blob().readall()
+                    
+                    # Transform S3 path
+                    # Example blob.name: utilization-data/utilization-export/20250801-20250831/f2d6918d-67e2-4a1e-b5f6-9a69f1a87160/part_0_0001.csv.gz
+                    # Final S3 path: {aws_target_file_path}/gds-recommendations-v1/billing_period=20250801/part_0_0001.csv.gz
+                    path_parts = blob.name.split('/')
+                    modified_parts = []
+                    
+                    for part in path_parts:
+                        if part == "utilization-data" or part == "utilization-export":
+                            # Skip these parts entirely
+                            continue
+                        elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
+                            # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
+                            billing_period = part.split("-")[0]
+                            modified_parts.append(f"billing_period={billing_period}")
+                        elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
+                            # Skip GUID directories (format: 8-4-4-4-12 characters)
+                            logging.info(f"Skipping GUID directory: {part}")
+                            continue
+                        else:
+                            modified_parts.append(part)
+                    
+                    modified_path = '/'.join(modified_parts)
+                    s3_path = f"{s3_utilization_path.rstrip('/')}/{modified_path}"
+                    
+                    # Upload to S3
+                    # s3.open_output_stream(s3_path).write(blob_data)
+                    logging.info(f"(would) Successfully uploaded {blob.name} to S3 at path: {s3_path}")
+                    
+                    # Delete source file after successful upload
+                    # blob_client.delete_blob()
+                    logging.info(f"(would) Successfully deleted source file: {blob.name}")
+                    
+                    processed_files.append(blob.name)
+                    
+                except Exception as e:
+                    logging.error(f"Failed to process {blob.name}: {str(e)}")
+                    failed_files.append({"file": blob.name, "error": str(e)})
+                    continue
+        
+        # Summary logging
+        logging.info(f"Utilization processing complete. Successfully processed: {len(processed_files)} files")
+        if failed_files:
+            logging.warning(f"Failed to process: {len(failed_files)} files - {failed_files}")
+        
+        if not processed_files and not failed_files:
+            logging.info("No utilization CSV.GZ files found to process")
+            
+    except Exception as e:
+        logging.error(f"Error in utilization export processor: {str(e)}")
+        raise
+
+@app.function_name(name="CarbonExportProcessor")
+@app.queue_trigger(arg_name="msg", queue_name="carbondata", connection="StorageAccountManagedIdentity")
+def carbon_export_processor(msg: func.QueueMessage) -> None:
+    """Queue trigger function that processes carbon CSV files when messages are received"""
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+
+    logging.info(f'Carbon export processor triggered at: {utc_timestamp}')
+    logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
+    
+    try:
+        # Initialize blob service client
+        blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
+        container_client = blob_service_client.get_container_client(carbon_container_name)
+        
+        # Get S3 filesystem
+        s3 = getS3FileSystem()
+        
+        # Find and process all CSV files
+        processed_files = []
+        failed_files = []
+        
+        # List all blobs in container recursively
+        blobs = container_client.list_blobs()
+        
+        for blob in blobs:
+            if blob.name.endswith('.csv.gz'):
+                try:
+                    logging.info(f"Processing carbon CSV.GZ file: {blob.name}")
+                    
+                    # Download blob content
+                    blob_client = container_client.get_blob_client(blob.name)
+                    blob_data = blob_client.download_blob().readall()
+                    
+                    # Transform S3 path
+                    # Example blob.name: carbon-data/carbon-emissions-export/20250801-20250831/ac4b31c7-cea6-428c-a733-13e10e8a2e5b/part_0_0001.csv.gz
+                    # Final S3 path: {aws_target_file_path}/gds-carbon-v1/billing_period=20250801/part_0_0001.csv.gz
+                    path_parts = blob.name.split('/')
+                    modified_parts = []
+                    
+                    for part in path_parts:
+                        if part == "carbon-data" or part == "carbon-emissions-export":
+                            # Skip these parts entirely
+                            continue
+                        elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
+                            # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
+                            billing_period = part.split("-")[0]
+                            modified_parts.append(f"billing_period={billing_period}")
+                        elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
+                            # Skip GUID directories (format: 8-4-4-4-12 characters)
+                            logging.info(f"Skipping GUID directory: {part}")
+                            continue
+                        else:
+                            modified_parts.append(part)
+                    
+                    modified_path = '/'.join(modified_parts)
+                    s3_path = f"{s3_carbon_path.rstrip('/')}/{modified_path}"
+                    
+                    # Upload to S3
+                    # s3.open_output_stream(s3_path).write(blob_data)
+                    logging.info(f"(would) Successfully uploaded {blob.name} to S3 at path: {s3_path}")
+                    
+                    # Delete source file after successful upload
+                    # blob_client.delete_blob()
+                    logging.info(f"(would) Successfully deleted source file: {blob.name}")
+                    
+                    processed_files.append(blob.name)
+                    
+                except Exception as e:
+                    logging.error(f"Failed to process {blob.name}: {str(e)}")
+                    failed_files.append({"file": blob.name, "error": str(e)})
+                    continue
+        
+        # Summary logging
+        logging.info(f"Carbon processing complete. Successfully processed: {len(processed_files)} files")
+        if failed_files:
+            logging.warning(f"Failed to process: {len(failed_files)} files - {failed_files}")
+        
+        if not processed_files and not failed_files:
+            logging.info("No carbon CSV.GZ files found to process")
+            
+    except Exception as e:
+        logging.error(f"Error in carbon export processor: {str(e)}")
+        raise
