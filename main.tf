@@ -303,7 +303,7 @@ resource "azapi_resource" "daily_cost_export" {
         type = "FocusCost"
         dataSet = {
           configuration = {
-            dataVersion = "${var.focus_dataset_version}"
+            dataVersion = var.focus_dataset_version
           }
           granularity = "Daily"
         }
