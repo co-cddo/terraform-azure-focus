@@ -24,11 +24,11 @@ output "utilization_container_name" {
 }
 
 output "carbon_export_name" {
-  description = "The name of the carbon optimization export"
-  value       = azapi_resource.carbon_export.name
+  description = "The name of the carbon optimization export (timer-triggered function)"
+  value       = "CarbonEmissionsExporter"
 }
 
 output "carbon_container_name" {
-  description = "The storage container name for carbon data"
-  value       = azapi_resource.carbon_container.name
+  description = "The storage container name for carbon data (not used - carbon data goes directly to S3)"
+  value       = null
 }

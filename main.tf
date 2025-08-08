@@ -239,7 +239,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "STORAGE_CONNECTION_STRING"                 = azurerm_storage_account.cost_export.primary_connection_string
     "CONTAINER_NAME"                            = azapi_resource.cost_export.name
     "UTILIZATION_CONTAINER_NAME"                = azapi_resource.utilization_container.name
-    "CARBON_CONTAINER_NAME"                     = azapi_resource.carbon_container.name
     "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
@@ -250,6 +249,9 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "S3_FOCUS_PATH"                             = var.aws_target_file_path
     "S3_UTILIZATION_PATH"                       = var.aws_target_file_path
     "S3_CARBON_PATH"                            = var.aws_target_file_path
+    "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
+    "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
+    "BILLING_SCOPE"                             = var.report_scope
   }
 }
 
@@ -574,70 +576,18 @@ resource "azapi_resource" "utilization_container" {
   }
 }
 
-resource "azapi_resource" "carbon_export" {
-  type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
-  name      = "carbon-emissions-export"
-  parent_id = var.report_scope
-  location  = var.location
-  identity {
-    type = "SystemAssigned"
-  }
-
-  body = {
-    properties = {
-      exportDescription = "Carbon Emissions Export"
-      definition = {
-        type = "AmortizedCost"
-        dataSet = {
-          granularity = "Daily"
-        }
-        timeframe = "MonthToDate"
-      }
-      schedule = {
-        status     = "Active"
-        recurrence = "Daily"
-        recurrencePeriod = {
-          from = time_static.recurrence.id
-          to   = timeadd(time_static.recurrence.id, "${24 * 365 * 5}h")
-        }
-      }
-      format = "Csv"
-      deliveryInfo = {
-        destination = {
-          type           = "AzureBlob"
-          resourceId     = azurerm_storage_account.cost_export.id
-          container      = azapi_resource.carbon_container.name
-          rootFolderPath = local.carbon_directory_name
-        }
-      }
-      partitionData         = true
-      dataOverwriteBehavior = "OverwritePreviousReport"
-      compressionMode       = "gzip"
-    }
-  }
+resource "azurerm_role_assignment" "carbon_optimization_reader" {
+  # TODO: Revert to using variable
+  #scope                = var.report_scope
+  scope                = "/subscriptions/a81ff9b8-d793-4337-92dc-111c37a2e331"
+  role_definition_name = "Carbon Optimization Reader"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
 }
 
-resource "azapi_resource" "carbon_container" {
-  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01"
-  name      = "carbon-exports"
-  parent_id = "${azurerm_storage_account.cost_export.id}/blobServices/default"
-  body = {
-    properties = {
-      metadata     = {}
-      publicAccess = "None"
-    }
-  }
-}
 
 resource "azapi_resource" "utilization_data_queue" {
   type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
   name      = "utilizationdata"
-  parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
-}
-
-resource "azapi_resource" "carbon_data_queue" {
-  type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
-  name      = "carbondata"
   parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
 }
 
@@ -668,35 +618,5 @@ resource "azurerm_eventgrid_event_subscription" "utilization_blob_created" {
   depends_on = [
     azurerm_role_assignment.event_grid_queue_sender,
     azapi_resource.utilization_data_queue
-  ]
-}
-
-resource "azurerm_eventgrid_event_subscription" "carbon_blob_created" {
-  name                  = "evgs-carbon-${random_string.unique.result}"
-  scope                 = azurerm_storage_account.cost_export.id
-  event_delivery_schema = "EventGridSchema"
-
-  included_event_types = [
-    "Microsoft.Storage.BlobCreated"
-  ]
-
-  subject_filter {
-    subject_begins_with = "/blobServices/default/containers/${azapi_resource.carbon_container.name}/blobs/${local.carbon_directory_name}/"
-    subject_ends_with   = ".csv.gz"
-  }
-
-  storage_queue_endpoint {
-    storage_account_id                    = azurerm_storage_account.cost_export.id
-    queue_name                            = azapi_resource.carbon_data_queue.name
-    queue_message_time_to_live_in_seconds = 604800
-  }
-
-  delivery_identity {
-    type = "SystemAssigned"
-  }
-
-  depends_on = [
-    azurerm_role_assignment.event_grid_queue_sender,
-    azapi_resource.carbon_data_queue
   ]
 }
