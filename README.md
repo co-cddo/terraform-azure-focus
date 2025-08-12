@@ -25,108 +25,43 @@ This Terraform module exports Azure cost-related data and forwards to AWS S3. Th
 This module creates a fully integrated solution for exporting multiple Azure datasets and forwarding them to AWS S3. The following diagram illustrates the data flow and component architecture for all three export types:
 
 ```mermaid
-graph TB
-    subgraph "Azure Subscription"
-        subgraph "Data Sources"
-            CM1[Cost Management Export<br/>FOCUS Daily Export]
-            CM2[Cost Management Export<br/>Utilization Daily Export]
-            CM3[Carbon Optimization API<br/>Monthly Timer Trigger]
-            CM1 -->|Daily Parquet| SA1
-            CM2 -->|Daily CSV| SA1
-        end
-        
-        subgraph "Resource Group"
-            subgraph "Storage"
-                SA1[Storage Account<br/>Cost Export Data]
-                SA2[Storage Account<br/>Function Deployment]
-            end
-            
-            subgraph "Function App"
-                FA1[CostExportProcessor<br/>Queue Triggered Function]
-                FA2[UtilizationExportProcessor<br/>Queue Triggered Function] 
-                FA3[CarbonEmissionsExporter<br/>Timer Triggered Function]
-                SP[Service Plan<br/>Flex Consumption]
-                AI[Application Insights]
-            end
-            
-            subgraph "Networking"
-                PE1[Private Endpoint<br/>Storage]
-                PE2[Private Endpoint<br/>Function App]
-                DNS[Private DNS Zones]
-            end
-            
-            subgraph "Identity"
-                MSI[Managed Service Identity]
-                EA[Entra ID Application]
-            end
-        end
-        
-        subgraph "Virtual Network"
-            VNET[Existing VNet]
-            SUBNET1[Private Endpoint Subnet]
-            SUBNET2[Function App Subnet]
-        end
+graph LR
+    subgraph "Azure"
+        CM[Cost Management<br/>Exports]
+        SA[Storage Account]
+        Q[Storage Queue]
+        F[Function App]
+        MSI[Managed Identity]
+        APP[Entra ID App<br/>Registration]
     end
     
     subgraph "AWS"
-        subgraph "IAM"
-            ROLE[IAM Role<br/>Cross-Account Trust]
-        end
-        
-        subgraph "S3"
-            BUCKET[S3 Bucket<br/>Cost Data Destination]
-        end
+        IAM[IAM Role<br/>Cross-Account Trust]
+        S3[S3 Bucket]
     end
     
     %% Data Flow
-    CM1 -->|Parquet Files| SA1
-    CM2 -->|CSV Files| SA1  
-    SA1 -->|Blob Triggers| FA1
-    SA1 -->|Blob Triggers| FA2
-    CM3 -->|Monthly Timer| FA3
-    FA1 -->|Process FOCUS Data| BUCKET
-    FA2 -->|Process Utilization Data| BUCKET
-    FA3 -->|Process Carbon Data| BUCKET
-    FA1 -->|Assume Role via OIDC| ROLE
-    FA2 -->|Assume Role via OIDC| ROLE
-    FA3 -->|Assume Role via OIDC| ROLE
+    CM -->|Daily Files| SA
+    SA -->|Blob Events| Q
+    Q -->|Triggers| F
     
-    %% Networking
-    PE1 -.->|Private Access| SA1
-    PE2 -.->|Private Access| FA1
-    PE2 -.->|Private Access| FA2
-    PE2 -.->|Private Access| FA3
-    VNET --> SUBNET1
-    VNET --> SUBNET2
-    SUBNET1 --> PE1
-    SUBNET2 --> FA1
-    SUBNET2 --> FA2 
-    SUBNET2 --> FA3
+    %% Authentication Flow
+    F -->|Uses| MSI
+    MSI -->|Authenticates| APP
+    APP -->|OIDC Token| IAM
+    IAM -->|AWS STS Credentials| F
     
-    %% Identity & Access
-    MSI --> EA
-    EA -->|OIDC Federation| ROLE
-    FA1 --> MSI
-    FA2 --> MSI
-    FA3 --> MSI
-    
-    %% Monitoring
-    FA1 --> AI
-    FA2 --> AI
-    FA3 --> AI
+    %% Upload
+    F -->|Upload Data| S3
     
     %% Styling
-    classDef azure fill:#0078d4,stroke:#ffffff,stroke-width:2px,color:#ffffff
-    classDef aws fill:#ff9900,stroke:#ffffff,stroke-width:2px,color:#ffffff
-    classDef storage fill:#00bcf2,stroke:#ffffff,stroke-width:2px,color:#ffffff
-    classDef compute fill:#804080,stroke:#ffffff,stroke-width:2px,color:#ffffff
-    classDef network fill:#40e0d0,stroke:#333,stroke-width:2px
+    classDef azure fill:#0078d4,color:#fff
+    classDef aws fill:#ff9900,color:#fff
+    classDef auth fill:#28a745,color:#fff
     
-    class CM1,CM2,CM3,MSI,EA azure
-    class ROLE,BUCKET aws
-    class SA1,SA2 storage
-    class FA1,FA2,FA3,SP,AI compute
-    class PE1,PE2,DNS,VNET,SUBNET1,SUBNET2 network
+    class CM,SA,Q,F,MSI azure
+    class IAM,S3 aws
+    class APP auth
 ```
 
 ### Data Flow

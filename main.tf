@@ -2,7 +2,7 @@
 
 locals {
   publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"
-  publish_code_command        = var.deploy_from_external_network ? "sleep 240 && ${local.publish_code_command_common} && az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled" : local.publish_code_command_common
+  publish_code_command        = var.deploy_from_external_network ? "sleep 180 && ${local.publish_code_command_common}" : local.publish_code_command_common
   identifier_uri              = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding"
   focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)
   # FOCUS directory name should only contain major version number for the data set
@@ -181,6 +181,15 @@ data "archive_file" "function" {
   type        = "zip"
   source_dir  = "${path.module}/src/cost_export"
   output_path = "${path.module}/cost_export.zip"
+  
+  excludes = [
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    ".pytest_cache",
+    ".DS_Store",
+    "*.log"
+  ]
 }
 
 resource "azurerm_function_app_flex_consumption" "cost_export" {
@@ -279,11 +288,25 @@ resource "null_resource" "publish_function_code" {
   }
 
   triggers = {
-    src_md5              = md5(data.archive_file.function.output_md5)
+    src_md5              = data.archive_file.function.output_md5
     publish_code_command = local.publish_code_command
   }
 
   depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+}
+
+resource "null_resource" "set_function_app_public_network_access_disabled" {
+  count = var.deploy_from_external_network ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled"
+  }
+
+  triggers = {
+    always_run = timestamp()
+  }
+
+  depends_on = [null_resource.publish_function_code]
 }
 
 resource "time_static" "recurrence" {}
