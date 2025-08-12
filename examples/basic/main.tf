@@ -7,7 +7,7 @@ module "example" {
   source = "../../"
 
   name                                = "terraform-azurerm-cost-forwarding"
-  aws_target_file_path                = "s3://<your-s3-bucket>/<your-path>/"
+  aws_target_file_path                = "<your-s3-bucket>/<your-path>"
   aws_role_arn                        = "arn:aws:iam::<aws-account-id>:role/<your-cost-export-role>"
   report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"

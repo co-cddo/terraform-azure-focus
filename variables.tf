@@ -60,3 +60,9 @@ variable "aws_region" {
   type        = string
   default     = "eu-west-2"
 }
+
+variable "focus_dataset_version" {
+  description = "Version of the cost and usage details (FOCUS) dataset to use"
+  type        = string
+  default     = "1.0r2"
+}
