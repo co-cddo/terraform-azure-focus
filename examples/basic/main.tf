@@ -6,7 +6,6 @@ provider "azurerm" {
 module "example" {
   source = "../../"
 
-  name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = "<your-s3-bucket>/<your-path>"
   aws_account_id                      = "<aws-account-id>"
   report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"

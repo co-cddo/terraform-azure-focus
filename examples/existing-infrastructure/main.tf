@@ -102,7 +102,6 @@ resource "azurerm_subnet" "functionapp" {
 module "cost_forwarding" {
   source = "../../"
 
-  name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = var.aws_target_file_path
   aws_account_id                      = var.aws_account_id
   report_scope                        = var.report_scope

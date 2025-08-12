@@ -49,12 +49,6 @@ variable "deploy_from_external_network" {
   default     = false
 }
 
-variable "name" {
-  description = "Name of the storage account"
-  type        = string
-  default     = "costexport"
-}
-
 variable "aws_region" {
   description = "AWS region for the S3 bucket"
   type        = string
