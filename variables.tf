@@ -33,8 +33,8 @@ variable "report_scope" {
   type        = string
 }
 
-variable "aws_role_arn" {
-  description = "ARN of the AWS role to assume  Eg 'arn:aws:iam::000000000000:role/entra_s3'"
+variable "aws_account_id" {
+  description = "AWS account ID to use for the S3 bucket"
   type        = string
 }
 
