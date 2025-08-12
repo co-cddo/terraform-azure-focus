@@ -96,6 +96,12 @@ resource "azurerm_subnet" "functionapp" {
       actions = ["Microsoft.Network/virtualNetworks/subnets/action"]
     }
   }
+  
+  lifecycle {
+    ignore_changes = [
+      delegation[0].service_delegation[0].actions
+    ]
+  }
 }
 
 # Call the cost forwarding module using the created resources
