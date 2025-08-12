@@ -13,7 +13,7 @@ variable "aws_target_file_path" {
   type        = string
 }
 
-variable "aws_role_arn" {
+variable "aws_account_id" {
   description = "AWS IAM role ARN for cross-account access"
   type        = string
 }
@@ -104,7 +104,7 @@ module "cost_forwarding" {
 
   name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = var.aws_target_file_path
-  aws_role_arn                        = var.aws_role_arn
+  aws_account_id                      = var.aws_account_id 
   report_scope                        = var.report_scope
   subnet_id                           = azurerm_subnet.default.id
   function_app_subnet_id              = azurerm_subnet.functionapp.id
