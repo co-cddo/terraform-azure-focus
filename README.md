@@ -63,7 +63,6 @@ graph LR
     class IAM,S3 aws
     class APP auth
 ```
-
 ### Data Flow
 
 The module creates three distinct export pipelines for each of the data sets:
