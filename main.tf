@@ -181,7 +181,7 @@ data "archive_file" "function" {
   type        = "zip"
   source_dir  = "${path.module}/src/cost_export"
   output_path = "${path.module}/cost_export.zip"
-  
+
   excludes = [
     "__pycache__",
     "*.pyc",
