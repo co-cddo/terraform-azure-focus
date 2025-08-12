@@ -11,21 +11,28 @@
 
 ## Description
 
-A Terraform module to export Azure cost data and forward to AWS.
+This Terraform module exports Azure cost-related data and forwards to AWS S3. The supported data sets are described below:
+
+- **Cost Data**: Daily parquet files containing standardized cost and usage details in FOCUS format
+- **Utilisation Data**: Daily CSV files with resource usage metrics and recommendations
+- **Carbon Emissions Data**: Monthly JSON reports with carbon footprint metrics across Scope 1 and Scope 3 emissions
 
 > [!NOTE]  
 > There is currently an [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------) with publishing Function App code on the Flex Consumption Plan using a managed identity. We have had to revert to using the storage account connection string for now. More details can be found [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f) (behind a paywall, sadly).
 
 ## Architecture
 
-This module creates a fully integrated solution for exporting Azure cost data and forwarding it to AWS S3. The following diagram illustrates the data flow and component architecture:
+This module creates a fully integrated solution for exporting multiple Azure datasets and forwarding them to AWS S3. The following diagram illustrates the data flow and component architecture for all three export types:
 
 ```mermaid
 graph TB
     subgraph "Azure Subscription"
-        subgraph "Cost Management"
-            CM[Cost Management Export]
-            CM -->|Daily FOCUS Export| SA1
+        subgraph "Data Sources"
+            CM1[Cost Management Export<br/>FOCUS Daily Export]
+            CM2[Cost Management Export<br/>Utilization Daily Export]
+            CM3[Carbon Optimization API<br/>Monthly Timer Trigger]
+            CM1 -->|Daily Parquet| SA1
+            CM2 -->|Daily CSV| SA1
         end
         
         subgraph "Resource Group"
@@ -35,7 +42,9 @@ graph TB
             end
             
             subgraph "Function App"
-                FA[Python Function App<br/>Cost Data Processor]
+                FA1[CostExportProcessor<br/>Queue Triggered Function]
+                FA2[UtilizationExportProcessor<br/>Queue Triggered Function] 
+                FA3[CarbonEmissionsExporter<br/>Timer Triggered Function]
                 SP[Service Plan<br/>Flex Consumption]
                 AI[Application Insights]
             end
@@ -70,27 +79,41 @@ graph TB
     end
     
     %% Data Flow
-    CM -->|Parquet Files| SA1
-    SA1 -->|Blob Trigger| FA
-    FA -->|Process & Transform| FA
-    FA -->|Assume Role| ROLE
-    FA -->|Upload| BUCKET
+    CM1 -->|Parquet Files| SA1
+    CM2 -->|CSV Files| SA1  
+    SA1 -->|Blob Triggers| FA1
+    SA1 -->|Blob Triggers| FA2
+    CM3 -->|Monthly Timer| FA3
+    FA1 -->|Process FOCUS Data| BUCKET
+    FA2 -->|Process Utilization Data| BUCKET
+    FA3 -->|Process Carbon Data| BUCKET
+    FA1 -->|Assume Role via OIDC| ROLE
+    FA2 -->|Assume Role via OIDC| ROLE
+    FA3 -->|Assume Role via OIDC| ROLE
     
     %% Networking
     PE1 -.->|Private Access| SA1
-    PE2 -.->|Private Access| FA
+    PE2 -.->|Private Access| FA1
+    PE2 -.->|Private Access| FA2
+    PE2 -.->|Private Access| FA3
     VNET --> SUBNET1
     VNET --> SUBNET2
     SUBNET1 --> PE1
-    SUBNET2 --> FA
+    SUBNET2 --> FA1
+    SUBNET2 --> FA2 
+    SUBNET2 --> FA3
     
     %% Identity & Access
     MSI --> EA
     EA -->|OIDC Federation| ROLE
-    FA --> MSI
+    FA1 --> MSI
+    FA2 --> MSI
+    FA3 --> MSI
     
     %% Monitoring
-    FA --> AI
+    FA1 --> AI
+    FA2 --> AI
+    FA3 --> AI
     
     %% Styling
     classDef azure fill:#0078d4,stroke:#ffffff,stroke-width:2px,color:#ffffff
@@ -99,21 +122,40 @@ graph TB
     classDef compute fill:#804080,stroke:#ffffff,stroke-width:2px,color:#ffffff
     classDef network fill:#40e0d0,stroke:#333,stroke-width:2px
     
-    class CM,MSI,EA azure
+    class CM1,CM2,CM3,MSI,EA azure
     class ROLE,BUCKET aws
     class SA1,SA2 storage
-    class FA,SP,AI compute
+    class FA1,FA2,FA3,SP,AI compute
     class PE1,PE2,DNS,VNET,SUBNET1,SUBNET2 network
 ```
 
 ### Data Flow
 
-1. **Cost Export**: Azure Cost Management exports daily FOCUS-format cost data to Azure Storage
-2. **Trigger**: Blob storage trigger activates the Python Function App when new cost data arrives
-3. **Authentication**: Function App uses Managed Identity to authenticate with Entra ID Application
-4. **Cross-Cloud Auth**: Entra ID Application uses OIDC federation to assume AWS IAM Role
-5. **Data Transfer**: Function App downloads cost data from Azure Storage and uploads to AWS S3
-6. **Monitoring**: Application Insights provides telemetry and monitoring for the entire process
+The module creates three distinct export pipelines for each of the data sets:
+
+#### FOCUS Cost Data Pipeline
+1. **Daily Export**: Cost Management exports daily FOCUS-format cost data (Parquet files) to Azure Storage
+2. **Event Trigger**: Blob creation events trigger the `CostExportProcessor` function via storage queue
+3. **Processing**: Function processes and transforms the data (removes sensitive columns, restructures paths)
+4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+
+#### Utilization Data Pipeline  
+1. **Daily Export**: Cost Management exports daily usage data (compressed CSV files) to Azure Storage
+2. **Event Trigger**: Blob creation events trigger the `UtilizationExportProcessor` function via storage queue
+3. **Processing**: Function processes CSV.GZ files and transforms file paths
+4. **Upload**: Raw data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+
+#### Carbon Emissions Pipeline
+1. **Monthly Trigger**: `CarbonEmissionsExporter` function runs monthly on the 20th (timer trigger)
+2. **API Call**: Function calls Azure Carbon Optimization API for previous month's Scope 1 & 3 emissions
+3. **Processing**: Response data formatted as JSON with date range validation (2024-06-01 to 2025-06-01)
+4. **Upload**: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+
+#### Common Authentication Flow
+- Function Apps use Managed Identity to authenticate with Entra ID Application  
+- Entra ID Application uses OIDC federation to assume AWS IAM Role
+- All data transfers secured with cross-cloud federation (no long-lived AWS credentials)
+- Application Insights provides telemetry and monitoring for all pipelines
 
 ### Security Features
 
