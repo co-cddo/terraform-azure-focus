@@ -104,7 +104,7 @@ module "cost_forwarding" {
 
   name                                = "terraform-azurerm-cost-forwarding"
   aws_target_file_path                = var.aws_target_file_path
-  aws_account_id                      = var.aws_account_id 
+  aws_account_id                      = var.aws_account_id
   report_scope                        = var.report_scope
   subnet_id                           = azurerm_subnet.default.id
   function_app_subnet_id              = azurerm_subnet.functionapp.id
