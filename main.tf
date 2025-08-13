@@ -261,7 +261,8 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "S3_CARBON_PATH"                            = var.aws_target_file_path
     "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
     "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
-    "BILLING_SCOPE"                             = var.report_scope
+    # This is used exclusively for the Carbon Optimization API - we have to use an Azure Resource Manager scope rather than the true billing account scope
+    "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   }
 }
 
@@ -352,6 +353,77 @@ resource "azapi_resource" "daily_cost_export" {
       }
       partitionData         = true
       dataOverwriteBehavior = "OverwritePreviousReport"
+      compressionMode       = "None"
+    }
+  }
+}
+
+# Generate backfill exports for each month from January 2022 to last complete month
+locals {
+  # Generate a list of year-month combinations from 2022-01 to 2025-07 (July 2025, last complete month)
+  backfill_months = [
+    for month_offset in range(0, (2025 - 2022) * 12 + 7) : # From 2022-01 to 2025-07
+    format("%04d-%02d",
+      2022 + floor(month_offset / 12),
+      (month_offset % 12) + 1
+    )
+  ]
+
+  # Calculate end dates for each month
+  month_end_dates = {
+    for month in local.backfill_months : month => (
+      contains(["01", "03", "05", "07", "08", "10", "12"], split("-", month)[1]) ? "${month}-31" :
+      contains(["04", "06", "09", "11"], split("-", month)[1]) ? "${month}-30" :
+      split("-", month)[1] == "02" ? (
+        parseint(split("-", month)[0], 10) % 4 == 0 && (parseint(split("-", month)[0], 10) % 100 != 0 || parseint(split("-", month)[0], 10) % 400 == 0) ? "${month}-29" : "${month}-28"
+      ) : "${month}-31"
+    )
+  }
+}
+
+# Create one-time backfill exports for historical data
+resource "azapi_resource" "backfill_cost_exports" {
+  for_each = { for month in local.backfill_months : month => month }
+
+  type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
+  name      = "focus-backfill-${each.value}"
+  parent_id = var.report_scope
+  location  = var.location
+  identity {
+    type = "SystemAssigned"
+  }
+
+  body = {
+    properties = {
+      exportDescription = "Focus Backfill Cost Export for ${each.value}"
+      definition = {
+        type = "FocusCost"
+        dataSet = {
+          configuration = {
+            dataVersion = var.focus_dataset_version
+          }
+          granularity = "Daily"
+        }
+        timeframe = "Custom"
+        timePeriod = {
+          from = "${each.value}-01T00:00:00Z"
+          to   = "${local.month_end_dates[each.value]}T23:59:59Z"
+        }
+      }
+      schedule = {
+        status = "Inactive"
+      }
+      format = "Parquet"
+      deliveryInfo = {
+        destination = {
+          type       = "AzureBlob"
+          resourceId = azurerm_storage_account.cost_export.id
+          container : azapi_resource.cost_export.name
+          rootFolderPath : local.focus_directory_name
+        }
+      }
+      partitionData         = true
+      dataOverwriteBehavior = "CreateNewReport"
       compressionMode       = "None"
     }
   }
@@ -601,13 +673,17 @@ resource "azapi_resource" "utilization_container" {
 }
 
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
-  # TODO: Revert to using variable
-  #scope                = var.report_scope
-  scope                = "/subscriptions/a81ff9b8-d793-4337-92dc-111c37a2e331"
+  # TODO: Verify this scope is ok
+  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Carbon Optimization Reader"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
 }
 
+resource "azurerm_role_assignment" "management_group_reader" {
+  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+  role_definition_name = "Management Group Reader"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+}
 
 resource "azapi_resource" "utilization_data_queue" {
   type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"

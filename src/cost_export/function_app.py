@@ -27,9 +27,7 @@ carbon_directory_name = os.environ.get("CARBON_DIRECTORY_NAME")
 
 # Carbon Optimization API settings
 carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
-# TODO: Revert to using environment variable
-# billing_scope = os.environ.get("BILLING_SCOPE")
-billing_scope = "/subscriptions/a81ff9b8-d793-4337-92dc-111c37a2e331"
+billing_scope = os.environ.get("BILLING_SCOPE")
  
 app = func.FunctionApp()
  
@@ -43,6 +41,27 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
     logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
     
     try:
+        # Parse the EventGrid message to get the specific blob
+        message_body = json.loads(msg.get_body().decode("utf-8"))
+        blob_url = message_body.get("subject", "")
+        
+        # Extract blob name from the subject (format: /blobServices/default/containers/{container}/blobs/{blobname})
+        blob_name = None
+        if blob_url.startswith("/blobServices/default/containers/"):
+            parts = blob_url.split("/blobs/", 1)
+            if len(parts) == 2:
+                blob_name = parts[1]
+        
+        if not blob_name:
+            logging.error(f"Could not extract blob name from message subject: {blob_url}")
+            return
+            
+        if not blob_name.endswith('.parquet'):
+            logging.info(f"Skipping non-parquet file: {blob_name}")
+            return
+            
+        logging.info(f"Processing specific parquet file: {blob_name}")
+        
         # Initialize blob service client
         blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
         container_client = blob_service_client.get_container_client(container_name)
@@ -50,90 +69,77 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         # Get S3 filesystem
         s3 = getS3FileSystem()
         
-        # Find and process all parquet files
-        processed_files = []
-        failed_files = []
-        
-        # List all blobs in container recursively
-        blobs = container_client.list_blobs()
-        
-        for blob in blobs:
-            if blob.name.endswith('.parquet'):
-                try:
-                    logging.info(f"Processing parquet file: {blob.name}")
-                    
-                    # Download blob content
-                    blob_client = container_client.get_blob_client(blob.name)
-                    blob_data = blob_client.download_blob().readall()
-                    blob_to_read = io.BytesIO(blob_data)
-                    
-                    # Read parquet table
-                    table = pq.read_table(blob_to_read)
-                    
-                    ### Any deployment specific requirements can be implemented here ###
-                    table = table.drop_columns("ResourceName")
-                    table = table.drop_columns("BillingAccountId")
-                    table = table.drop_columns("BillingAccountName")
-                    table = table.drop_columns("BillingAccountType")
-                    table = table.drop_columns("ChargeDescription")
-                    table = table.drop_columns("CommitmentDiscountName")
-                    table = table.drop_columns("RegionId")
-                    table = table.drop_columns("ResourceId")
-                    table = table.drop_columns("SubAccountId")
-                    table = table.drop_columns("SubAccountName")
-                    table = table.drop_columns("SubAccountType")
-                    table = table.drop_columns("Tags")
-                    
-                    # Drop any columns that start with "x_"
-                    columns_to_drop = [col for col in table.column_names if col.startswith("x_")]
-                    if columns_to_drop:
-                        table = table.drop_columns(columns_to_drop)
-                    ### End of deployment specific requirements ###
-                    
-                    # Transform S3 path
-                    # Example: /7a770e35-b455-4df2-a276-b07408438d9a/gds-focus-v1/focus-daily-cost-export/20250801-20250831/part_0_0001.parquet
-                    # Becomes: /7a770e35-b455-4df2-a276-b07408438d9a/gds-focus-v1/billing_period=20250801/part_0_0001.parquet
-                    path_parts = blob.name.split('/')
-                    modified_parts = []
-                    
-                    for part in path_parts:
-                        if part == "focus-daily-cost-export":
-                            # Skip this part entirely
-                            continue
-                        elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
-                            # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
-                            billing_period = part.split("-")[0]
-                            modified_parts.append(f"billing_period={billing_period}")
-                        elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
-                            # Skip GUID directories (format: 8-4-4-4-12 characters)
-                            logging.info(f"Skipping GUID directory: {part}")
-                            continue
-                        else:
-                            modified_parts.append(part)
-                    
-                    modified_path = '/'.join(modified_parts)
-                    s3_path = f"{s3_focus_path.rstrip('/')}/{modified_path}"
-                    pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
-                    logging.info(f"Successfully uploaded {blob.name} to S3 at path: {s3_path}")
-
-                    # Delete source file after successful upload
-                    blob_client.delete_blob()
-                    logging.info(f"Successfully deleted source file: {blob.name}")
-                    
-                    processed_files.append(blob.name)
-                    
-                except Exception as e:
-                    logging.error(f"Failed to process {blob.name}: {str(e)}")
-                    failed_files.append({"file": blob.name, "error": str(e)})
+        # Process the specific blob from the message
+        try:
+            # Download blob content
+            blob_client = container_client.get_blob_client(blob_name)
+            blob_data = blob_client.download_blob().readall()
+            blob_to_read = io.BytesIO(blob_data)
+            
+            # Read parquet table
+            table = pq.read_table(blob_to_read)
+            
+            ### Any deployment specific requirements can be implemented here ###
+            table = table.drop_columns("ResourceName")
+            table = table.drop_columns("BillingAccountId")
+            table = table.drop_columns("BillingAccountName")
+            table = table.drop_columns("BillingAccountType")
+            table = table.drop_columns("ChargeDescription")
+            table = table.drop_columns("CommitmentDiscountName")
+            table = table.drop_columns("RegionId")
+            table = table.drop_columns("ResourceId")
+            table = table.drop_columns("SubAccountId")
+            table = table.drop_columns("SubAccountName")
+            table = table.drop_columns("SubAccountType")
+            table = table.drop_columns("Tags")
+            
+            # Drop any columns that start with "x_"
+            columns_to_drop = [col for col in table.column_names if col.startswith("x_")]
+            if columns_to_drop:
+                table = table.drop_columns(columns_to_drop)
+            ### End of deployment specific requirements ###
+            
+            # Transform S3 path
+            # Example: /7a770e35-b455-4df2-a276-b07408438d9a/gds-focus-v1/focus-backfill-2025-06/billing_period=20250601/202508131031/part_0_0001.parquet
+            # Becomes: /7a770e35-b455-4df2-a276-b07408438d9a/gds-focus-v1/billing_period=20250601/part_0_0001.parquet
+            path_parts = blob_name.split('/')
+            modified_parts = []
+            
+            for part in path_parts:
+                if part == "focus-daily-cost-export":
+                    # Skip this part entirely
                     continue
-        
-        # Summary logging
-        logging.info(f"Processing complete. Successfully processed: {len(processed_files)} files")
-        if failed_files:
-            logging.warning(f"Failed to process: {len(failed_files)} files - {failed_files}")
-        
-        if not processed_files and not failed_files:
-            logging.info("No parquet files found to process")
+                elif part.startswith("focus-backfill-"):
+                    # Skip focus-backfill-YYYY-MM directories
+                    logging.info(f"Skipping focus-backfill directory: {part}")
+                    continue
+                elif len(part) == 12 and part.isdigit():
+                    # Skip timestamp directories (format: YYYYMMDDHHMM)
+                    logging.info(f"Skipping timestamp directory: {part}")
+                    continue
+                elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
+                    # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
+                    billing_period = part.split("-")[0]
+                    modified_parts.append(f"billing_period={billing_period}")
+                elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
+                    # Skip GUID directories (format: 8-4-4-4-12 characters)
+                    logging.info(f"Skipping GUID directory: {part}")
+                    continue
+                else:
+                    modified_parts.append(part)
+            
+            modified_path = '/'.join(modified_parts)
+            s3_path = f"{s3_focus_path.rstrip('/')}/{modified_path}"
+            pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
+            logging.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path}")
+
+            # Delete source file after successful upload
+            blob_client.delete_blob()
+            logging.info(f"Successfully deleted source file: {blob_name}")
+            
+        except Exception as e:
+            logging.error(f"Failed to process {blob_name}: {str(e)}")
+            raise
             
     except Exception as e:
         logging.error(f"Error in daily cost export processor: {str(e)}")
@@ -332,19 +338,39 @@ def get_subscriptions_from_billing_account(scope, headers):
         return []
 
 def get_subscriptions_from_management_group(scope, headers):
-    """Get all subscription IDs from a management group scope"""
+    """Get all subscription IDs from a management group scope using Resource Graph API"""
     try:
         # Extract management group ID from scope
         # Format: /providers/Microsoft.Management/managementGroups/{managementGroupId}
         mg_id = scope.split("/")[-1]
         
-        # Query management group descendants API to get all subscriptions
-        api_url = f"https://management.azure.com/providers/Microsoft.Management/managementGroups/{mg_id}/descendants"
-        api_version = "2020-05-01"
+        # Use Resource Graph API to get subscriptions under management group
+        subscription_ids = get_subscriptions_via_resource_graph(mg_id, headers)
         
-        response = requests.get(
+        logging.info(f"Retrieved {len(subscription_ids)} subscriptions from management group {mg_id}")
+        return subscription_ids
+            
+    except Exception as e:
+        logging.error(f"Error getting subscriptions from management group: {str(e)}")
+        return []
+
+def get_subscriptions_via_resource_graph(mg_id, headers):
+    """Get subscriptions using Azure Resource Graph API"""
+    try:
+        # Use Resource Graph to query subscriptions under management group
+        api_url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources"
+        api_version = "2021-03-01"
+        
+        # Query to get all subscriptions under the management group
+        query_data = {
+            "query": f"ResourceContainers | where type =~ 'microsoft.resources/subscriptions' | project subscriptionId",
+            "managementGroups": [mg_id]
+        }
+        
+        response = requests.post(
             f"{api_url}?api-version={api_version}",
             headers=headers,
+            json=query_data,
             timeout=60
         )
         
@@ -352,22 +378,19 @@ def get_subscriptions_from_management_group(scope, headers):
             data = response.json()
             subscription_ids = []
             
-            for item in data.get("value", []):
-                # Only include items of type 'Microsoft.Management/managementGroups/subscriptions'
-                if item.get("type") == "/subscriptions":
-                    sub_id = item.get("name")  # The name is the subscription ID
-                    if sub_id:
-                        subscription_ids.append(sub_id)
-                        
-            logging.info(f"Retrieved {len(subscription_ids)} subscriptions from management group {mg_id}")
+            for row in data.get("data", []):
+                if "subscriptionId" in row:
+                    subscription_ids.append(row["subscriptionId"])
+                    
+            logging.info(f"Resource Graph API found {len(subscription_ids)} subscriptions under management group {mg_id}")
             return subscription_ids
             
         else:
-            logging.error(f"Failed to get subscriptions from management group: {response.status_code} - {response.text}")
+            logging.error(f"Resource Graph API failed: {response.status_code} - {response.text}")
             return []
             
     except Exception as e:
-        logging.error(f"Error getting subscriptions from management group: {str(e)}")
+        logging.error(f"Error using Resource Graph API: {str(e)}")
         return []
 
 def save_carbon_data_to_s3(data, file_name):
@@ -408,6 +431,27 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
     logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
     
     try:
+        # Parse the EventGrid message to get the specific blob
+        message_body = json.loads(msg.get_body().decode("utf-8"))
+        blob_url = message_body.get("subject", "")
+        
+        # Extract blob name from the subject (format: /blobServices/default/containers/{container}/blobs/{blobname})
+        blob_name = None
+        if blob_url.startswith("/blobServices/default/containers/"):
+            parts = blob_url.split("/blobs/", 1)
+            if len(parts) == 2:
+                blob_name = parts[1]
+        
+        if not blob_name:
+            logging.error(f"Could not extract blob name from message subject: {blob_url}")
+            return
+            
+        if not blob_name.endswith('.csv.gz'):
+            logging.info(f"Skipping non-CSV.GZ file: {blob_name}")
+            return
+            
+        logging.info(f"Processing specific utilization CSV.GZ file: {blob_name}")
+        
         # Initialize blob service client
         blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
         container_client = blob_service_client.get_container_client(utilization_container_name)
@@ -415,68 +459,48 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
         # Get S3 filesystem
         s3 = getS3FileSystem()
         
-        # Find and process all CSV files
-        processed_files = []
-        failed_files = []
-        
-        # List all blobs in container recursively
-        blobs = container_client.list_blobs()
-        
-        for blob in blobs:
-            if blob.name.endswith('.csv.gz'):
-                try:
-                    logging.info(f"Processing utilization CSV.GZ file: {blob.name}")
-                    
-                    # Download blob content
-                    blob_client = container_client.get_blob_client(blob.name)
-                    blob_data = blob_client.download_blob().readall()
-                    
-                    # Transform S3 path
-                    # Example blob.name: utilization-data/utilization-export/20250801-20250831/f2d6918d-67e2-4a1e-b5f6-9a69f1a87160/part_0_0001.csv.gz
-                    # Final S3 path: {aws_target_file_path}/gds-recommendations-v1/billing_period=20250801/part_0_0001.csv.gz
-                    path_parts = blob.name.split('/')
-                    modified_parts = []
-                    
-                    for part in path_parts:
-                        if part == "utilization-data" or part == "utilization-export":
-                            # Skip these parts entirely
-                            continue
-                        elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
-                            # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
-                            billing_period = part.split("-")[0]
-                            modified_parts.append(f"billing_period={billing_period}")
-                        elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
-                            # Skip GUID directories (format: 8-4-4-4-12 characters)
-                            logging.info(f"Skipping GUID directory: {part}")
-                            continue
-                        else:
-                            modified_parts.append(part)
-                    
-                    modified_path = '/'.join(modified_parts)
-                    s3_path = f"{s3_utilization_path.rstrip('/')}/{modified_path}"
-                    
-                    # Upload to S3
-                    s3.open_output_stream(s3_path).write(blob_data)
-                    logging.info(f"Successfully uploaded {blob.name} to S3 at path: {s3_path}")
-                    
-                    # Delete source file after successful upload
-                    blob_client.delete_blob()
-                    logging.info(f"Successfully deleted source file: {blob.name}")
-                    
-                    processed_files.append(blob.name)
-                    
-                except Exception as e:
-                    logging.error(f"Failed to process {blob.name}: {str(e)}")
-                    failed_files.append({"file": blob.name, "error": str(e)})
+        # Process the specific blob from the message
+        try:
+            # Download blob content
+            blob_client = container_client.get_blob_client(blob_name)
+            blob_data = blob_client.download_blob().readall()
+            
+            # Transform S3 path
+            # Example blob_name: utilization-data/utilization-export/20250801-20250831/f2d6918d-67e2-4a1e-b5f6-9a69f1a87160/part_0_0001.csv.gz
+            # Final S3 path: {aws_target_file_path}/gds-recommendations-v1/billing_period=20250801/part_0_0001.csv.gz
+            path_parts = blob_name.split('/')
+            modified_parts = []
+            
+            for part in path_parts:
+                if part == "utilization-data" or part == "utilization-export":
+                    # Skip these parts entirely
                     continue
-        
-        # Summary logging
-        logging.info(f"Utilization processing complete. Successfully processed: {len(processed_files)} files")
-        if failed_files:
-            logging.warning(f"Failed to process: {len(failed_files)} files - {failed_files}")
-        
-        if not processed_files and not failed_files:
-            logging.info("No utilization CSV.GZ files found to process")
+                elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
+                    # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
+                    billing_period = part.split("-")[0]
+                    modified_parts.append(f"billing_period={billing_period}")
+                elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
+                    # Skip GUID directories (format: 8-4-4-4-12 characters)
+                    logging.info(f"Skipping GUID directory: {part}")
+                    continue
+                else:
+                    modified_parts.append(part)
+            
+            modified_path = '/'.join(modified_parts)
+            s3_path = f"{s3_utilization_path.rstrip('/')}/{modified_path}"
+            
+            # Upload to S3
+            with s3.open_output_stream(s3_path) as f:
+                f.write(blob_data)
+            logging.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path}")
+            
+            # Delete source file after successful upload
+            blob_client.delete_blob()
+            logging.info(f"Successfully deleted source file: {blob_name}")
+            
+        except Exception as e:
+            logging.error(f"Failed to process {blob_name}: {str(e)}")
+            raise
             
     except Exception as e:
         logging.error(f"Error in utilization export processor: {str(e)}")

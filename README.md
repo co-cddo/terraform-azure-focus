@@ -7,7 +7,7 @@
 
 ![Github Actions](../../actions/workflows/terraform.yml/badge.svg)
 
-# terraform-azurerm-cost-forwarding
+# terraform-azure-focus
 
 ## Description
 
@@ -25,44 +25,67 @@ This Terraform module exports Azure cost-related data and forwards to AWS S3. Th
 This module creates a fully integrated solution for exporting multiple Azure datasets and forwarding them to AWS S3. The following diagram illustrates the data flow and component architecture for all three export types:
 
 ```mermaid
-graph LR
-    subgraph "Azure"
-        CM[Cost Management<br/>Exports]
+graph TD
+    subgraph "Data Sources"
+        CMF[Cost Management<br/>FOCUS Export]
+        CMU[Cost Management<br/>Utilization Export]
+        COA[Carbon Optimization API<br/>Monthly Timer]
+    end
+    
+    subgraph "Azure Storage"
         SA[Storage Account]
-        Q[Storage Queue]
-        F[Function App]
-        MSI[Managed Identity]
-        APP[Entra ID App<br/>Registration]
+    end
+    
+    subgraph "Processing"
+        QF[Queue: FOCUS]
+        QU[Queue: Utilization]
+        
+        FAF[CostExportProcessor<br/>Function App]
+        FAU[UtilizationProcessor<br/>Function App]
+        FAC[CarbonExporter<br/>Function App]
     end
     
     subgraph "AWS"
-        IAM[IAM Role<br/>Cross-Account Trust]
         S3[S3 Bucket]
+        APP[Entra ID App<br/>Registration<br/>for Upload Auth]
     end
     
     %% Data Flow
-    CM -->|Daily Files| SA
-    SA -->|Blob Events| Q
-    Q -->|Triggers| F
+    CMF -->|Daily Parquet| SA
+    CMU -->|Daily CSV.GZ| SA
+    COA -->|Monthly Timer| FAC
     
-    %% Authentication Flow
-    F -->|Uses| MSI
-    MSI -->|Authenticates| APP
-    APP -->|OIDC Token| IAM
-    IAM -->|AWS STS Credentials| F
+    SA -->|Blob Event| QF
+    SA -->|Blob Event| QU
     
-    %% Upload
-    F -->|Upload Data| S3
+    QF -->|Trigger| FAF
+    QU -->|Trigger| FAU
+    
+    %% Upload Flow with App Registration Authentication
+    FAF -->|Upload via<br/>App Registration| S3
+    FAU -->|Upload via<br/>App Registration| S3
+    FAC -->|Upload via<br/>App Registration| S3
+    
+    FAF -.->|Uses for Auth| APP
+    FAU -.->|Uses for Auth| APP
+    FAC -.->|Uses for Auth| APP
     
     %% Styling
-    classDef azure fill:#0078d4,color:#fff
+    classDef datasource fill:#4285f4,color:#fff
+    classDef storage fill:#4285f4,color:#fff
+    classDef queue fill:#00d4aa,color:#fff
+    classDef function fill:#4285f4,color:#fff
     classDef aws fill:#ff9900,color:#fff
     classDef auth fill:#28a745,color:#fff
     
-    class CM,SA,Q,F,MSI azure
-    class IAM,S3 aws
+    class CMF,CMU,COA datasource
+    class SA storage
+    class QF,QU queue
+    class FAF,FAU,FAC function
+    class S3 aws
     class APP auth
 ```
+
 ### Data Flow
 
 The module creates three distinct export pipelines for each of the data sets:
@@ -111,7 +134,7 @@ provider "azurerm" {
 }
 
 module "example" {
-  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=33e484a0ac416c413a0273b9359abf4f77c5b06a" # release v0.0.3
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
 
   aws_target_file_path                = "s3://<your-s3-bucket>/<your-path>/"
   aws_role_arn                        = "arn:aws:iam::<aws-account-id>:role/<your-cost-export-role>"
@@ -237,7 +260,7 @@ resource "azurerm_subnet" "functionapp" {
 
 # Call the cost forwarding module using the created resources
 module "cost_forwarding" {
-  source                              = "git::https://github.com/appvia/terraform-azurerm-cost-forwarding?ref=33e484a0ac416c413a0273b9359abf4f77c5b06a" # release v0.0.3
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
 
   aws_target_file_path                = var.aws_target_file_path
   aws_role_arn                        = var.aws_role_arn
@@ -302,6 +325,7 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | Name | Description |
 |------|-------------|
 | <a name="output_aws_app_client_id"></a> [aws\_app\_client\_id](#output\_aws\_app\_client\_id) | The aws app client id |
+| <a name="output_backfill_export_names"></a> [backfill\_export\_names](#output\_backfill\_export\_names) | The names of the backfill FOCUS cost exports for historical data |
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
 | <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |
