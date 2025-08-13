@@ -529,3 +529,126 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
         logging.error(f"Error in utilization export processor: {str(e)}")
         raise
 
+@app.function_name(name="CarbonEmissionsBackfill")
+@app.route(route="carbon-backfill", auth_level=func.AuthLevel.FUNCTION)
+def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP trigger function for carbon emissions backfill from 2022-01-01"""
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    
+    logging.info(f'Carbon emissions backfill triggered at: {utc_timestamp}')
+    
+    try:
+        # Get access token using managed identity
+        credential = ManagedIdentityCredential()
+        token = credential.get_token("https://management.azure.com/.default")
+        
+        headers = {
+            "Authorization": f"Bearer {token.token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Extract subscription IDs from billing scope
+        subscription_ids = extract_subscription_ids_from_billing_scope(billing_scope)
+        
+        logging.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions")
+        
+        # API available range: 2024-06-01 to 2025-06-01, but we'll process from 2022-01
+        # Generate months from 2022-01 to 2024-05 (before API range)
+        start_year, start_month = 2022, 1
+        api_start_year, api_start_month = 2024, 6
+        
+        current_year, current_month = start_year, start_month
+        processed_months = 0
+        
+        while (current_year, current_month) < (api_start_year, api_start_month):
+            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
+            month_str = month_date.strftime("%Y-%m-01")
+            
+            logging.info(f"Processing month: {month_str} (outside API range - will create empty record)")
+            
+            # Create empty carbon data for months outside API range
+            empty_emissions_data = {
+                "value": [{
+                    "dataType": "MonthlySummaryData",
+                    "date": month_str,
+                    "carbonIntensity": 0.0,
+                    "latestMonthEmissions": 0.0,
+                    "previousMonthEmissions": 0.0,
+                    "monthOverMonthEmissionsChangeRatio": 0.0,
+                    "monthlyEmissionsChangeValue": 0.0,
+                    "note": "Data not available via API for this period"
+                }]
+            }
+            
+            file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
+            save_carbon_data_to_s3(empty_emissions_data, file_name)
+            processed_months += 1
+            
+            # Move to next month
+            if current_month == 12:
+                current_year += 1
+                current_month = 1
+            else:
+                current_month += 1
+        
+        # Now process months within API range (2024-06 to 2025-05)
+        current_year, current_month = api_start_year, api_start_month
+        api_end_year, api_end_month = 2025, 6  # API goes up to 2025-06-01
+        
+        while (current_year, current_month) < (api_end_year, api_end_month):
+            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
+            month_str = month_date.strftime("%Y-%m-01")
+            
+            logging.info(f"Processing month: {month_str} (within API range)")
+            
+            # Call Carbon Optimization API
+            api_url = "https://management.azure.com/providers/Microsoft.Carbon/carbonEmissionReports"
+            api_version = "2025-04-01"
+            
+            request_data = {
+                "reportType": "MonthlySummaryReport",
+                "subscriptionList": subscription_ids,
+                "carbonScopeList": ["Scope1", "Scope3"],
+                "dateRange": {
+                    "start": month_str,
+                    "end": month_str
+                }
+            }
+            
+            response = requests.post(
+                f"{api_url}?api-version={api_version}",
+                headers=headers,
+                json=request_data,
+                timeout=300
+            )
+            
+            if response.status_code == 200:
+                emissions_data = response.json()
+                file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
+                save_carbon_data_to_s3(emissions_data, file_name)
+                processed_months += 1
+                logging.info(f"Successfully processed {month_str}")
+            else:
+                logging.error(f"API request failed for {month_str}: {response.status_code} - {response.text}")
+            
+            # Move to next month
+            if current_month == 12:
+                current_year += 1
+                current_month = 1
+            else:
+                current_month += 1
+        
+        logging.info(f"Carbon backfill completed. Processed {processed_months} months total.")
+        
+        return func.HttpResponse(
+            f"Carbon backfill completed successfully. Processed {processed_months} months.",
+            status_code=200
+        )
+        
+    except Exception as e:
+        error_msg = f"Error in carbon emissions backfill: {str(e)}"
+        logging.error(error_msg)
+        return func.HttpResponse(
+            error_msg,
+            status_code=500
+        )
