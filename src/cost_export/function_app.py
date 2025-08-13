@@ -217,6 +217,12 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         # Extract subscription IDs from billing scope
         subscription_ids = extract_subscription_ids_from_billing_scope(billing_scope)
         
+        # Log detailed information about the request
+        logging.info(f"Preparing Carbon API request with {len(subscription_ids)} subscriptions")
+        logging.info(f"First 10 subscription IDs: {subscription_ids[:10]}")
+        if len(subscription_ids) > 10:
+            logging.info(f"... and {len(subscription_ids) - 10} more subscriptions")
+        
         # Call Carbon Optimization API for MonthlySummaryReport
         api_url = "https://management.azure.com/providers/Microsoft.Carbon/carbonEmissionReports"
         api_version = "2025-04-01"
@@ -231,6 +237,10 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             }
         }
         
+        # Log the full request payload (excluding sensitive headers)
+        logging.info(f"Carbon API request URL: {api_url}?api-version={api_version}")
+        logging.info(f"Carbon API request payload: {json.dumps(request_data, indent=2)}")
+        
         response = requests.post(
             f"{api_url}?api-version={api_version}",
             headers=headers,
@@ -241,6 +251,17 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         if response.status_code == 200:
             emissions_data = response.json()
             
+            # Log response details for confirmation
+            logging.info(f"Carbon API response received successfully")
+            logging.info(f"Response data structure: {json.dumps(emissions_data, indent=2)[:1000]}...")  # First 1000 chars
+            
+            if 'value' in emissions_data and len(emissions_data['value']) > 0:
+                first_record = emissions_data['value'][0]
+                logging.info(f"First record - Date: {first_record.get('date')}, Emissions: {first_record.get('latestMonthEmissions')}, Data Type: {first_record.get('dataType')}")
+                logging.info(f"Total records in response: {len(emissions_data['value'])}")
+            else:
+                logging.warning("No data found in Carbon API response")
+            
             # Save to storage and upload to S3
             file_name = f"carbon-emissions-{last_month.strftime('%Y-%m')}.json"
             save_carbon_data_to_s3(emissions_data, file_name)
@@ -249,6 +270,8 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             
         else:
             logging.error(f"Carbon API request failed with status {response.status_code}: {response.text}")
+            logging.error(f"Request headers (auth redacted): Content-Type: {headers.get('Content-Type')}")
+            logging.error(f"Request was for {len(subscription_ids)} subscriptions")
             
     except Exception as e:
         logging.error(f"Error in carbon emissions exporter: {str(e)}")
