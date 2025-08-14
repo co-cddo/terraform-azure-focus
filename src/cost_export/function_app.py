@@ -495,7 +495,8 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
             modified_parts = []
             
             for part in path_parts:
-                if part == "utilization-data" or part == "utilization-export":
+                if part in {"utilization-data", "utilization-export"}:
+
                     # Skip these parts entirely
                     continue
                 elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
