@@ -466,13 +466,12 @@ def save_recommendations_to_s3(data, file_name):
         # Get S3 filesystem
         s3 = getS3FileSystem()
         
-        # Create S3 path with billing period structure matching the current date
-        # Extract YYYY-MM-DD from filename like "advisor-cost-recommendations-2025-05-15.json"
-        filename_parts = file_name.replace('.json', '').split('-')
-        year_month_day = f"{filename_parts[-3]}-{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05-15"
-        data_date = datetime.strptime(year_month_day, '%Y-%m-%d')
-        billing_period = data_date.strftime("%Y%m%d")  # Current date as YYYYMMDD
+        # Use current date directly for billing period instead of parsing from filename
+        current_date = datetime.now(timezone.utc)
+        billing_period = current_date.strftime("%Y%m%d")  # Current date as YYYYMMDD (e.g., 20250814)
         s3_path = f"{Config.s3_recommendations_path.rstrip('/')}/gds-recommendations-v1/billing_period={billing_period}/{file_name}"
+        
+        logging.info(f"Saving recommendations with billing_period={billing_period} to path: {s3_path}")
         
         # Upload to S3
         with s3.open_output_stream(s3_path) as f:

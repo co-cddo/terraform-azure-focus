@@ -118,9 +118,18 @@ The module creates three distinct export pipelines for each of the data sets:
 - **Managed Identity**: Azure resources authenticate using system-assigned managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
 
-## Usage
+## Prerequisites
 
-This example assumes you have an existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments:
+- Role assignments:
+
+  - Cost Management Contributor at billing account scope(s)
+  - User Access Administrator and Contributor (or Owner) at the Tenant Root Management Group Scope*
+
+    *_role assignment privileges can be constrained to Carbon Optimization Reader, Management Group Reader and Reader_
+
+- An existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments (`function_app_subnet_id`).
+
+## Usage
 
 ```hcl
 provider "azurerm" {
