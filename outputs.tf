@@ -32,3 +32,8 @@ output "carbon_container_name" {
   description = "The storage container name for carbon data (not used - carbon data goes directly to S3)"
   value       = null
 }
+
+output "backfill_export_names" {
+  description = "The names of the backfill FOCUS cost exports for historical data"
+  value       = { for k, v in azapi_resource.backfill_cost_exports : k => v.name }
+}

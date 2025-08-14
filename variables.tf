@@ -1,8 +1,3 @@
-variable "location" {
-  description = "The Azure region where resources will be created"
-  type        = string
-}
-
 variable "resource_group_name" {
   description = "Name of the new resource group"
   type        = string
@@ -38,9 +33,16 @@ variable "aws_account_id" {
   type        = string
 }
 
-variable "aws_target_file_path" {
-  description = "S3 target file path Eg 's3://s3bucketname/folder/'"
+variable "location" {
+  description = "The Azure region where resources will be created"
   type        = string
+  default     = "uksouth"
+}
+
+variable "aws_s3_bucket_name" {
+  description = "Name of the AWS S3 bucket to store cost data"
+  type        = string
+  default     = "uk-gov-gds-cost-inbound-azure"
 }
 
 variable "deploy_from_external_network" {
