@@ -6,7 +6,6 @@ locals {
   # FOCUS directory name should only contain major version number for the data set
   focus_directory_name           = "gds-focus-v${local.focus_dataset_major_version}"
   carbon_directory_name          = "gds-carbon-v1"
-  recommendations_directory_name = "gds-recommendations-v1"
   aws_role_arn                   = "arn:aws:iam::${var.aws_account_id}:role/AzureFederated-${data.azurerm_client_config.current.tenant_id}"
   aws_target_file_path           = "${var.aws_s3_bucket_name}/${data.azurerm_client_config.current.tenant_id}"
 
