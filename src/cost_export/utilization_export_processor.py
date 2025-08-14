@@ -1,6 +1,6 @@
 import logging
 import azure.functions as func
-from cost_export.utils import Config, getS3FileSystem
+from cost_export.utils import Config, getS3FileSystem, is_uuid
 import json
 from azure.storage.blob import BlobServiceClient
 from datetime import datetime, timezone
@@ -66,9 +66,9 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
                     # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
                     billing_period = part.split("-")[0]
                     modified_parts.append(f"billing_period={billing_period}")
-                elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
-                    # Skip GUID directories (format: 8-4-4-4-12 characters)
-                    logging.info(f"Skipping GUID directory: {part}")
+                elif is_uuid(part):
+                    # Skip UUID directories
+                    logging.info(f"Skipping UUID directory: {part}")
                     continue
                 else:
                     modified_parts.append(part)

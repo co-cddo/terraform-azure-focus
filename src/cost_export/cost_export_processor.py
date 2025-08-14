@@ -1,6 +1,6 @@
 import logging
 import azure.functions as func
-from cost_export.utils import Config, getS3FileSystem
+from cost_export.utils import Config, getS3FileSystem, is_uuid
 import pyarrow.parquet as pq
 import io
 import json
@@ -92,16 +92,21 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     logging.info(f"Skipping focus-backfill directory: {part}")
                     continue
                 elif len(part) == 12 and part.isdigit():
-                    # Skip timestamp directories (format: YYYYMMDDHHMM)
-                    logging.info(f"Skipping timestamp directory: {part}")
-                    continue
+                    # Validate that this is actually a valid YYYYMMDDHHMM timestamp
+                    try:
+                        datetime.strptime(part, "%Y%m%d%H%M")
+                        logging.info(f"Skipping timestamp directory: {part}")
+                        continue
+                    except ValueError:
+                        # Not a valid timestamp, continue processing normally
+                        pass
                 elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
                     # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
                     billing_period = part.split("-")[0]
                     modified_parts.append(f"billing_period={billing_period}")
-                elif len(part) == 36 and part.count('-') == 4 and all(c.isalnum() or c == '-' for c in part):
-                    # Skip GUID directories (format: 8-4-4-4-12 characters)
-                    logging.info(f"Skipping GUID directory: {part}")
+                elif is_uuid(part):
+                    # Skip UUID directories
+                    logging.info(f"Skipping UUID directory: {part}")
                     continue
                 else:
                     modified_parts.append(part)

@@ -2,6 +2,7 @@ import os
 import boto3
 import logging
 import requests
+import uuid
 from pyarrow.fs import S3FileSystem
 from azure.identity import ManagedIdentityCredential
 
@@ -10,6 +11,14 @@ def _get_required_env(name):
     if not value:
         raise EnvironmentError(f"Missing required environment variable: {name}")
     return value
+
+def is_uuid(value):
+    """Check if a string is a valid UUID"""
+    try:
+        uuid.UUID(value)
+        return True
+    except ValueError:
+        return False
 
 class Config:    
     client_id = _get_required_env("ENTRA_APP_CLIENT_ID")  # Example: "00000000-0000-0000-0000-000000000000"
