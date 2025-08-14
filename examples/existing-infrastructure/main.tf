@@ -19,8 +19,9 @@ variable "aws_account_id" {
 }
 
 variable "report_scope" {
-  description = "Azure billing scope for cost reporting"
+  description = "Azure management group scope for cost reporting. Defaults to tenant root if not specified."
   type        = string
+  default     = null
 }
 
 variable "existing_resource_group_name" {

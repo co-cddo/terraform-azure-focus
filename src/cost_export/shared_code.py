@@ -59,8 +59,8 @@ def getS3FileSystem():
         region=Config.aws_region
     )
 
-def extract_subscription_ids_from_billing_scope(scope):
-    """Extract all subscription IDs that belong to the billing scope"""
+def extract_subscription_ids_from_management_group(scope):
+    """Extract all subscription IDs from a management group scope"""
     try:
         # Get access token using managed identity
         credential = ManagedIdentityCredential()
@@ -71,76 +71,21 @@ def extract_subscription_ids_from_billing_scope(scope):
             "Content-Type": "application/json"
         }
         
-        subscription_ids = []
-        
-        # Parse the billing scope type and extract subscription IDs accordingly
-        if "/providers/Microsoft.Billing/billingAccounts/" in scope:
-            # Billing Account scope - get all subscriptions under this billing account
-            subscription_ids = get_subscriptions_from_billing_account(scope, headers)
-            
-        elif "/providers/Microsoft.Management/managementGroups/" in scope:
-            # Management Group scope - get all subscriptions under this management group
-            subscription_ids = get_subscriptions_from_management_group(scope, headers)
-            
-        elif "/subscriptions/" in scope and scope.count("/") == 2:
-            # Single subscription scope - extract the subscription ID directly
-            subscription_id = scope.split("/")[2]
-            subscription_ids = [subscription_id]
-            logging.info(f"Single subscription scope detected: {subscription_id}")
-        elif "subscriptions/" in scope and scope.count("/") == 1:
-            # Single subscription scope without leading slash - extract the subscription ID directly
-            subscription_id = scope.split("/")[1]
-            subscription_ids = [subscription_id]
-            logging.info(f"Single subscription scope detected (no leading slash): {subscription_id}")
-            
-        else:
-            logging.error(f"Unsupported billing scope format: {scope}")
+        # Validate that this is a management group scope
+        if "/providers/Microsoft.Management/managementGroups/" not in scope:
+            logging.error(f"Expected management group scope, got: {scope}")
             return []
         
-        logging.info(f"Found {len(subscription_ids)} subscriptions in billing scope")
+        # Get all subscriptions under this management group
+        subscription_ids = get_subscriptions_from_management_group(scope, headers)
+        
+        logging.info(f"Found {len(subscription_ids)} subscriptions in management group")
         return subscription_ids
         
     except Exception as e:
         logging.error(f"Error extracting subscription IDs: {str(e)}")
         return []
 
-def get_subscriptions_from_billing_account(scope, headers):
-    """Get all subscription IDs from a billing account scope"""
-    try:
-        # Extract billing account ID from scope
-        # Format: /providers/Microsoft.Billing/billingAccounts/{billingAccountId}
-        billing_account_id = scope.split("/")[-1]
-        
-        # Query billing subscriptions API
-        api_url = f"https://management.azure.com/providers/Microsoft.Billing/billingAccounts/{billing_account_id}/billingSubscriptions"
-        api_version = "2020-05-01"
-        
-        response = requests.get(
-            f"{api_url}?api-version={api_version}",
-            headers=headers,
-            timeout=60
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            subscription_ids = []
-            
-            for subscription in data.get("value", []):
-                # Extract subscription ID from the subscription properties
-                sub_id = subscription.get("properties", {}).get("subscriptionId")
-                if sub_id:
-                    subscription_ids.append(sub_id)
-                    
-            logging.info(f"Retrieved {len(subscription_ids)} subscriptions from billing account {billing_account_id}")
-            return subscription_ids
-            
-        else:
-            logging.error(f"Failed to get subscriptions from billing account: {response.status_code} - {response.text}")
-            return []
-            
-    except Exception as e:
-        logging.error(f"Error getting subscriptions from billing account: {str(e)}")
-        return []
 
 def get_subscriptions_from_management_group(scope, headers):
     """Get all subscription IDs from a management group scope using Resource Graph API"""

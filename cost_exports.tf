@@ -1,7 +1,7 @@
 resource "azapi_resource" "daily_cost_export" {
   type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
   name      = "focus-daily-cost-export"
-  parent_id = var.report_scope
+  parent_id = local.management_group_scope
   location  = var.location
   identity {
     type = "SystemAssigned"
@@ -50,7 +50,7 @@ resource "azapi_resource" "backfill_cost_exports" {
 
   type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
   name      = "focus-backfill-${each.value}"
-  parent_id = var.report_scope
+  parent_id = local.management_group_scope
   location  = var.location
   identity {
     type = "SystemAssigned"

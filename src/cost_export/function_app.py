@@ -1,6 +1,6 @@
 import azure.functions as func
 import logging
-from shared_code import Config, getS3FileSystem, is_uuid, extract_subscription_ids_from_billing_scope
+from shared_code import Config, getS3FileSystem, is_uuid, extract_subscription_ids_from_management_group
 import pyarrow.parquet as pq
 import io
 import json
@@ -154,8 +154,8 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
             "Content-Type": "application/json"
         }
         
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        # Extract subscription IDs from management group scope
+        subscription_ids = extract_subscription_ids_from_management_group(Config.billing_scope)
         
         logging.info(f"Fetching cost recommendations for {len(subscription_ids)} subscriptions")
         
@@ -270,8 +270,8 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             "Content-Type": "application/json"
         }
         
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        # Extract subscription IDs from management group scope
+        subscription_ids = extract_subscription_ids_from_management_group(Config.billing_scope)
         
         # Log detailed information about the request
         logging.info(f"Preparing Carbon API request with {len(subscription_ids)} subscriptions")
@@ -351,8 +351,8 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             "Content-Type": "application/json"
         }
         
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        # Extract subscription IDs from management group scope
+        subscription_ids = extract_subscription_ids_from_management_group(Config.billing_scope)
         
         logging.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions")
         

@@ -122,7 +122,7 @@ The module creates three distinct export pipelines for each of the data sets:
 
 - Role assignments:
 
-  - Cost Management Contributor at billing account scope(s)
+  - Cost Management Contributor at the Management Group scope (where cost exports will be created)
   - User Access Administrator and Contributor (or Owner) at the Tenant Root Management Group Scope*
 
     *_role assignment privileges can be constrained to Carbon Optimization Reader, Management Group Reader and Reader_
@@ -142,7 +142,8 @@ module "example" {
   source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
 
   aws_account_id                      = "<aws-account-id>"
-  report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
+  # report_scope defaults to tenant root management group if not specified
+  # report_scope                      = "/providers/Microsoft.Management/managementGroups/<management-group-id>"
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
   function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
   virtual_network_name                = "existing-vnet"
@@ -184,7 +185,6 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
-| <a name="input_report_scope"></a> [report\_scope](#input\_report\_scope) | Scope of the cost report Eg '/providers/Microsoft.Billing/billingAccounts/00000000-0000-0000-0000-000000000000' | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the new resource group | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
@@ -194,6 +194,7 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
+| <a name="input_report_scope"></a> [report\_scope](#input\_report\_scope) | Scope of the cost report. Use management group scope for uniform coverage. Eg '/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000000' | `string` | `null` | no |
 
 ## Outputs
 

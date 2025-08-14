@@ -23,14 +23,16 @@ variable "function_app_subnet_id" {
   type        = string
 }
 
-variable "report_scope" {
-  description = "Scope of the cost report Eg '/providers/Microsoft.Billing/billingAccounts/00000000-0000-0000-0000-000000000000'"
-  type        = string
-}
 
 variable "aws_account_id" {
   description = "AWS account ID to use for the S3 bucket"
   type        = string
+}
+
+variable "report_scope" {
+  description = "Scope of the cost report. Use management group scope for uniform coverage. Eg '/providers/Microsoft.Management/managementGroups/00000000-0000-0000-0000-000000000000'"
+  type        = string
+  default     = null
 }
 
 variable "location" {
