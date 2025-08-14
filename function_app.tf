@@ -62,7 +62,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   app_settings = {
     "STORAGE_CONNECTION_STRING"                 = azurerm_storage_account.cost_export.primary_connection_string
     "CONTAINER_NAME"                            = azapi_resource.cost_export.name
-    "UTILIZATION_CONTAINER_NAME"                = azapi_resource.utilization_container.name
     "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
@@ -72,6 +71,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "AWS_REGION"                                = var.aws_region
     "S3_FOCUS_PATH"                             = local.aws_target_file_path
     "S3_UTILIZATION_PATH"                       = local.aws_target_file_path
+    "S3_RECOMMENDATIONS_PATH"                   = local.aws_target_file_path
     "S3_CARBON_PATH"                            = local.aws_target_file_path
     "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
     "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id

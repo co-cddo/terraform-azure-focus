@@ -133,93 +133,94 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         logging.error(f"Error in daily cost export processor: {str(e)}")
         raise
 
-@app.function_name(name="UtilizationExportProcessor")
-@app.queue_trigger(arg_name="msg", queue_name="utilizationdata", connection="StorageAccountManagedIdentity")
-def utilization_export_processor(msg: func.QueueMessage) -> None:
-    """Queue trigger function that processes utilization CSV files when messages are received"""
+@app.function_name(name="AdvisorRecommendationsExporter")
+@app.timer_trigger(schedule="0 0 1 * *", arg_name="timer", run_on_startup=False)
+def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
+    """Timer trigger function that exports Azure Advisor cost recommendations monthly on the 1st"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
-
-    logging.info(f'Utilization export processor triggered at: {utc_timestamp}')
-    logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
     
-    try:
-        # Parse the EventGrid message to get the specific blob
-        message_body = json.loads(msg.get_body().decode("utf-8"))
-        blob_url = message_body.get("subject")
-        if not blob_url:
-           # log an error
-           return
-        
-        # Extract blob name from the subject (format: /blobServices/default/containers/{container}/blobs/{blobname})
-        blob_name = None
-        if blob_url.startswith("/blobServices/default/containers/"):
-            parts = blob_url.split("/blobs/", 1)
-            if len(parts) == 2:
-                blob_name = parts[1]
-        
-        if not blob_name:
-            logging.error(f"Could not extract blob name from message subject: {blob_url}")
-            return
-            
-        if not blob_name.endswith('.csv.gz'):
-            logging.info(f"Skipping non-CSV.GZ file: {blob_name}")
-            return
-            
-        logging.info(f"Processing specific utilization CSV.GZ file: {blob_name}")
-        
-        # Initialize blob service client
-        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
-        container_client = blob_service_client.get_container_client(Config.utilization_container_name)
-        
-        # Get S3 filesystem
-        s3 = getS3FileSystem()
-        
-        # Process the specific blob from the message
-        try:
-            # Download blob content
-            blob_client = container_client.get_blob_client(blob_name)
-            blob_data = blob_client.download_blob().readall()
-            
-            # Transform S3 path
-            # Example blob_name: utilization-data/utilization-export/20250801-20250831/f2d6918d-67e2-4a1e-b5f6-9a69f1a87160/part_0_0001.csv.gz
-            # Final S3 path: {aws_target_file_path}/gds-recommendations-v1/billing_period=20250801/part_0_0001.csv.gz
-            path_parts = blob_name.split('/')
-            modified_parts = []
-            
-            for part in path_parts:
-                if part in {"utilization-data", "utilization-export"}:
+    logging.info(f'Azure Advisor recommendations exporter triggered at: {utc_timestamp}')
+    
+    if timer.past_due:
+        logging.info('The timer is past due!')
 
-                    # Skip these parts entirely
-                    continue
-                elif "-" in part and len(part) == 17 and part[:8].isdigit() and part[9:17].isdigit():
-                    # Transform date range (e.g., "20250801-20250831" -> "billing_period=20250801")
-                    billing_period = part.split("-")[0]
-                    modified_parts.append(f"billing_period={billing_period}")
-                elif is_uuid(part):
-                    # Skip UUID directories
-                    logging.info(f"Skipping UUID directory: {part}")
-                    continue
+    try:
+        # Get access token using managed identity
+        credential = ManagedIdentityCredential()
+        token = credential.get_token("https://management.azure.com/.default")
+        
+        headers = {
+            "Authorization": f"Bearer {token.token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Extract subscription IDs from billing scope
+        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        
+        logging.info(f"Fetching cost recommendations for {len(subscription_ids)} subscriptions")
+        
+        all_recommendations = []
+        
+        # Fetch cost recommendations for each subscription
+        for subscription_id in subscription_ids:
+            try:
+                logging.info(f"Fetching cost recommendations for subscription: {subscription_id}")
+                
+                # Azure Advisor Recommendations API endpoint
+                api_url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Advisor/recommendations"
+                api_version = "2025-01-01"
+                
+                # Filter for cost category recommendations only
+                params = {
+                    "api-version": api_version,
+                    "$filter": "Category eq 'Cost'"
+                }
+                
+                logging.info(f"Calling API: {api_url} with params: {params}")
+                
+                response = requests.get(
+                    api_url,
+                    headers=headers,
+                    params=params,
+                    timeout=300
+                )
+                
+                logging.info(f"API Response Status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    recommendations_data = response.json()
+                    recommendations = recommendations_data.get("value", [])
+                    
+                    logging.info(f"Raw API response for subscription {subscription_id}: {recommendations_data}")
+                    
+                    # Add subscription ID to each recommendation for tracking
+                    for rec in recommendations:
+                        rec["subscriptionId"] = subscription_id
+                    
+                    all_recommendations.extend(recommendations)
+                    logging.info(f"Retrieved {len(recommendations)} cost recommendations for subscription {subscription_id}")
+                    
                 else:
-                    modified_parts.append(part)
+                    logging.error(f"Failed to fetch recommendations for subscription {subscription_id}: {response.status_code}")
+                    logging.error(f"Response text: {response.text}")
+                    logging.error(f"Response headers: {dict(response.headers)}")
+                    
+            except Exception as e:
+                logging.error(f"Error fetching recommendations for subscription {subscription_id}: {str(e)}")
+                continue
+        
+        if all_recommendations:
+            # Save recommendations to S3
+            current_date = datetime.now(timezone.utc)
+            file_name = f"advisor-cost-recommendations-{current_date.strftime('%Y-%m')}.json"
+            save_recommendations_to_s3({"value": all_recommendations}, file_name)
             
-            modified_path = '/'.join(modified_parts)
-            s3_path = f"{Config.s3_utilization_path.rstrip('/')}/{modified_path.lstrip('/')}"
-            
-            # Upload to S3
-            with s3.open_output_stream(s3_path) as f:
-                f.write(blob_data)
-            logging.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path}")
-            
-            # Delete source file after successful upload
-            blob_client.delete_blob()
-            logging.info(f"Successfully deleted source file: {blob_name}")
-            
-        except Exception as e:
-            logging.error(f"Failed to process {blob_name}: {str(e)}")
-            raise
+            logging.info(f"Successfully exported {len(all_recommendations)} cost recommendations from {len(subscription_ids)} subscriptions")
+        else:
+            logging.warning("No cost recommendations found across all subscriptions")
             
     except Exception as e:
-        logging.error(f"Error in utilization export processor: {str(e)}")
+        logging.error(f"Error in Azure Advisor recommendations exporter: {str(e)}")
         raise
 
 @app.function_name(name="CarbonEmissionsExporter")
@@ -455,6 +456,33 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             error_msg,
             status_code=500
         )
+
+def save_recommendations_to_s3(data, file_name):
+    """Save Azure Advisor recommendations data to S3"""
+    try:
+        # Convert to JSON string
+        json_data = json.dumps(data, indent=2).encode('utf-8')
+        
+        # Get S3 filesystem
+        s3 = getS3FileSystem()
+        
+        # Create S3 path with billing period structure matching the current month
+        # Extract YYYY-MM from filename like "advisor-cost-recommendations-2025-05.json"
+        filename_parts = file_name.replace('.json', '').split('-')
+        year_month = f"{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05"
+        data_month = datetime.strptime(year_month, '%Y-%m')
+        billing_period = data_month.strftime("%Y%m01")  # First day of data month
+        s3_path = f"{Config.s3_recommendations_path.rstrip('/')}/gds-recommendations-v1/billing_period={billing_period}/{file_name}"
+        
+        # Upload to S3
+        with s3.open_output_stream(s3_path) as f:
+            f.write(json_data)
+            
+        logging.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
+        
+    except Exception as e:
+        logging.error(f"Error saving recommendations data to S3: {str(e)}")
+        raise
 
 def save_carbon_data_to_s3(data, file_name):
     """Save carbon emissions data to S3"""

@@ -28,8 +28,8 @@ class Config:
     aws_region = _get_required_env("AWS_REGION")  # Example: "eu-west-2"
     storage_connection_string = _get_required_env("STORAGE_CONNECTION_STRING")
     container_name = _get_required_env("CONTAINER_NAME")
-    utilization_container_name = _get_required_env("UTILIZATION_CONTAINER_NAME")
     s3_utilization_path = _get_required_env("S3_UTILIZATION_PATH")
+    s3_recommendations_path = _get_required_env("S3_RECOMMENDATIONS_PATH")
     s3_carbon_path = _get_required_env("S3_CARBON_PATH")
     carbon_directory_name = _get_required_env("CARBON_DIRECTORY_NAME")
 

@@ -13,14 +13,9 @@ output "focus_container_name" {
   value       = azapi_resource.cost_export.name
 }
 
-output "utilization_export_name" {
-  description = "The name of the cost utilization export"
-  value       = azapi_resource.utilization_export.name
-}
-
-output "utilization_container_name" {
-  description = "The storage container name for utilization data"
-  value       = azapi_resource.utilization_container.name
+output "recommendations_export_name" {
+  description = "The name of the Azure Advisor recommendations export (timer-triggered function)"
+  value       = "AdvisorRecommendationsExporter"
 }
 
 output "carbon_export_name" {

@@ -8,9 +8,9 @@ output "focus_export_name" {
   value       = module.cost_forwarding.focus_export_name
 }
 
-output "utilization_export_name" {
-  description = "The name of the cost utilization export"
-  value       = module.cost_forwarding.utilization_export_name
+output "recommendations_export_name" {
+  description = "The name of the Azure Advisor recommendations export"
+  value       = module.cost_forwarding.recommendations_export_name
 }
 
 output "carbon_export_name" {
