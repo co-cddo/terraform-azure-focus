@@ -121,8 +121,6 @@ The module creates three distinct export pipelines for each of the data sets:
 - **Managed Identity**: Azure resources authenticate using system-assigned managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
 
-![Azure Resource Topology Diagram](./images/infra.png)
-
 ## Usage
 
 This example assumes you have an existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments:
