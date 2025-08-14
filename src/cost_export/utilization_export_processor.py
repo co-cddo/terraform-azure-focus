@@ -19,7 +19,10 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
     try:
         # Parse the EventGrid message to get the specific blob
         message_body = json.loads(msg.get_body().decode("utf-8"))
-        blob_url = message_body.get("subject", "")
+        blob_url = message_body.get("subject")
+        if not blob_url:
+           # log an error
+           return
         
         # Extract blob name from the subject (format: /blobServices/default/containers/{container}/blobs/{blobname})
         blob_name = None
@@ -74,7 +77,7 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
                     modified_parts.append(part)
             
             modified_path = '/'.join(modified_parts)
-            s3_path = f"{Config.s3_utilization_path.rstrip('/')}/{modified_path}"
+            s3_path = f"{Config.s3_utilization_path.rstrip('/')}/{modified_path.lstrip('/')}"
             
             # Upload to S3
             with s3.open_output_stream(s3_path) as f:

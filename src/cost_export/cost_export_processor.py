@@ -21,7 +21,10 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
     try:
         # Parse the EventGrid message to get the specific blob
         message_body = json.loads(msg.get_body().decode("utf-8"))
-        blob_url = message_body.get("subject", "")
+        blob_url = message_body.get("subject")
+        if not blob_url:
+           # log an error
+           return
         
         # Extract blob name from the subject (format: /blobServices/default/containers/{container}/blobs/{blobname})
         blob_name = None
@@ -112,7 +115,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     modified_parts.append(part)
             
             modified_path = '/'.join(modified_parts)
-            s3_path = f"{Config.s3_focus_path.rstrip('/')}/{modified_path}"
+            s3_path = f"{Config.s3_focus_path.rstrip('/')}/{modified_path.lstrip('/')}"
             pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
             logging.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path}")
 
