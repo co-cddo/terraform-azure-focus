@@ -14,7 +14,7 @@
 This Terraform module exports Azure cost-related data and forwards to AWS S3. The supported data sets are described below:
 
 - **Cost Data**: Daily parquet files containing standardized cost and usage details in FOCUS format
-- **Utilisation Data**: Daily CSV files with resource usage metrics and recommendations
+- **Azure Advisor Recommendations**: Daily JSON files containing cost optimization recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint metrics across Scope 1 and Scope 3 emissions
 
 > [!NOTE]  
@@ -28,7 +28,7 @@ This module creates a fully integrated solution for exporting multiple Azure dat
 graph TD
     subgraph "Data Sources"
         CMF[Cost Management<br/>FOCUS Export]
-        CMU[Cost Management<br/>Utilization Export]
+        AAA[Azure Advisor API<br/>Daily Timer]
         COA[Carbon Optimization API<br/>Monthly Timer]
     end
     
@@ -38,10 +38,9 @@ graph TD
     
     subgraph "Processing"
         QF[Queue: FOCUS]
-        QU[Queue: Utilization]
         
         FAF[CostExportProcessor<br/>Function App]
-        FAU[UtilizationProcessor<br/>Function App]
+        FAR[AdvisorRecommendationsExporter<br/>Function App]
         FAC[CarbonExporter<br/>Function App]
     end
     
@@ -52,22 +51,20 @@ graph TD
     
     %% Data Flow
     CMF -->|Daily Parquet| SA
-    CMU -->|Daily CSV.GZ| SA
+    AAA -->|Daily Timer| FAR
     COA -->|Monthly Timer| FAC
     
     SA -->|Blob Event| QF
-    SA -->|Blob Event| QU
     
     QF -->|Trigger| FAF
-    QU -->|Trigger| FAU
     
     %% Upload Flow with App Registration Authentication
     FAF -->|Upload via<br/>App Registration| S3
-    FAU -->|Upload via<br/>App Registration| S3
+    FAR -->|Upload via<br/>App Registration| S3
     FAC -->|Upload via<br/>App Registration| S3
     
     FAF -.->|Uses for Auth| APP
-    FAU -.->|Uses for Auth| APP
+    FAR -.->|Uses for Auth| APP
     FAC -.->|Uses for Auth| APP
     
     %% Styling
@@ -78,10 +75,10 @@ graph TD
     classDef aws fill:#ff9900,color:#fff
     classDef auth fill:#28a745,color:#fff
     
-    class CMF,CMU,COA datasource
+    class CMF,AAA,COA datasource
     class SA storage
-    class QF,QU queue
-    class FAF,FAU,FAC function
+    class QF queue
+    class FAF,FAR,FAC function
     class S3 aws
     class APP auth
 ```
@@ -96,11 +93,11 @@ The module creates three distinct export pipelines for each of the data sets:
 3. **Processing**: Function processes and transforms the data (removes sensitive columns, restructures paths)
 4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
 
-#### Utilization Data Pipeline  
-1. **Daily Export**: Cost Management exports daily usage data (compressed CSV files) to Azure Storage
-2. **Event Trigger**: Blob creation events trigger the `UtilizationExportProcessor` function via storage queue
-3. **Processing**: Function processes CSV.GZ files and transforms file paths
-4. **Upload**: Raw data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+#### Azure Advisor Recommendations Pipeline  
+1. **Daily Trigger**: `AdvisorRecommendationsExporter` function runs daily at 2 AM (timer trigger)
+2. **API Call**: Function calls Azure Advisor Recommendations API for all subscriptions in scope, filtering for cost category recommendations
+3. **Processing**: Response data formatted as JSON with subscription tracking and date metadata
+4. **Upload**: JSON data uploaded to S3 in partitioned structure: `gds-recommendations-v1/billing_period=YYYYMMDD/`
 
 #### Carbon Emissions Pipeline
 1. **Monthly Trigger**: `CarbonEmissionsExporter` function runs monthly on the 20th (timer trigger)

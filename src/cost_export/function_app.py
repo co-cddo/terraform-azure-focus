@@ -134,9 +134,9 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         raise
 
 @app.function_name(name="AdvisorRecommendationsExporter")
-@app.timer_trigger(schedule="0 0 1 * *", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 0 2 * * *", arg_name="timer", run_on_startup=False)
 def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
-    """Timer trigger function that exports Azure Advisor cost recommendations monthly on the 1st"""
+    """Timer trigger function that exports Azure Advisor cost recommendations daily at 2 AM"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
     logging.info(f'Azure Advisor recommendations exporter triggered at: {utc_timestamp}')
@@ -212,7 +212,7 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
         if all_recommendations:
             # Save recommendations to S3
             current_date = datetime.now(timezone.utc)
-            file_name = f"advisor-cost-recommendations-{current_date.strftime('%Y-%m')}.json"
+            file_name = f"advisor-cost-recommendations-{current_date.strftime('%Y-%m-%d')}.json"
             save_recommendations_to_s3({"value": all_recommendations}, file_name)
             
             logging.info(f"Successfully exported {len(all_recommendations)} cost recommendations from {len(subscription_ids)} subscriptions")
@@ -466,12 +466,12 @@ def save_recommendations_to_s3(data, file_name):
         # Get S3 filesystem
         s3 = getS3FileSystem()
         
-        # Create S3 path with billing period structure matching the current month
-        # Extract YYYY-MM from filename like "advisor-cost-recommendations-2025-05.json"
+        # Create S3 path with billing period structure matching the current date
+        # Extract YYYY-MM-DD from filename like "advisor-cost-recommendations-2025-05-15.json"
         filename_parts = file_name.replace('.json', '').split('-')
-        year_month = f"{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05"
-        data_month = datetime.strptime(year_month, '%Y-%m')
-        billing_period = data_month.strftime("%Y%m01")  # First day of data month
+        year_month_day = f"{filename_parts[-3]}-{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05-15"
+        data_date = datetime.strptime(year_month_day, '%Y-%m-%d')
+        billing_period = data_date.strftime("%Y%m%d")  # Current date as YYYYMMDD
         s3_path = f"{Config.s3_recommendations_path.rstrip('/')}/gds-recommendations-v1/billing_period={billing_period}/{file_name}"
         
         # Upload to S3
