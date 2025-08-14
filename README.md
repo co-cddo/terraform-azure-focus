@@ -151,7 +151,7 @@ module "example" {
 
 > [!TIP]
 > If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
-> please refer to the example [here](examples/existing-infrastructure) to deploy the prerequisite baseline infrastructure
+> please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
 
 ## Update Documentation
 
