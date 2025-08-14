@@ -123,7 +123,8 @@ The module creates three distinct export pipelines for each of the data sets:
 - Role assignments:
 
   - Cost Management Contributor at the Management Group scope (where cost exports will be created)
-  - User Access Administrator and Contributor (or Owner) at the Tenant Root Management Group Scope*
+  - User Access Administrator (or Owner) at the Tenant Root Management Group scope*
+  - User Access Administrator and Contributor (or Owner) at the scope of the subscription you are provisioning resources to
 
     *_role assignment privileges can be constrained to Carbon Optimization Reader, Management Group Reader and Reader_
 

@@ -23,7 +23,6 @@ variable "function_app_subnet_id" {
   type        = string
 }
 
-
 variable "aws_account_id" {
   description = "AWS account ID to use for the S3 bucket"
   type        = string
