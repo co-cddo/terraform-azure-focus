@@ -70,9 +70,9 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "ENTRA_APP_URN"                             = local.identifier_uri
     "AWS_ROLE_ARN"                              = local.aws_role_arn
     "AWS_REGION"                                = var.aws_region
-    "S3_FOCUS_PATH"                             = var.aws_target_file_path
-    "S3_UTILIZATION_PATH"                       = var.aws_target_file_path
-    "S3_CARBON_PATH"                            = var.aws_target_file_path
+    "S3_FOCUS_PATH"                             = local.aws_target_file_path
+    "S3_UTILIZATION_PATH"                       = local.aws_target_file_path
+    "S3_CARBON_PATH"                            = local.aws_target_file_path
     "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
     "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
     # This is used exclusively for the Carbon Optimization API - we have to use an Azure Resource Manager scope rather than the true billing account scope

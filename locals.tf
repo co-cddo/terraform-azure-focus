@@ -1,5 +1,3 @@
-#### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
-
 locals {
   publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"
   publish_code_command        = var.deploy_from_external_network ? "sleep 180 && ${local.publish_code_command_common}" : local.publish_code_command_common
@@ -10,10 +8,9 @@ locals {
   carbon_directory_name      = "gds-carbon-v1"
   utilization_directory_name = "gds-recommendations-v1"
   aws_role_arn               = "arn:aws:iam::${var.aws_account_id}:role/AzureFederated-${data.azurerm_client_config.current.tenant_id}"
-}
+  aws_target_file_path       = "${var.aws_s3_bucket_name}/${data.azurerm_client_config.current.tenant_id}"
 
-# Generate backfill exports for each month from January 2022 to last complete month
-locals {
+  # Generate backfill exports for each month from January 2022 to last complete month
   # Generate a list of year-month combinations from 2022-01 to 2025-07 (July 2025, last complete month)
   backfill_months = [
     for month_offset in range(0, (2025 - 2022) * 12 + 7) : # From 2022-01 to 2025-07

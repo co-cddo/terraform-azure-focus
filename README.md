@@ -129,6 +129,7 @@ This example assumes you have an existing virtual network with two subnets, one 
 
 ```hcl
 provider "azurerm" {
+  # These need to be explicitly registered
   resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
   features {}
 }
@@ -136,151 +137,21 @@ provider "azurerm" {
 module "example" {
   source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
 
-  aws_target_file_path                = "s3://<your-s3-bucket>/<your-path>/"
-  aws_role_arn                        = "arn:aws:iam::<aws-account-id>:role/<your-cost-export-role>"
+  aws_account_id                      = "<aws-account-id>"
   report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
   function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
   virtual_network_name                = "existing-vnet"
   virtual_network_resource_group_name = "existing-infra"
-  location                            = "uksouth"
   resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
+  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production.
   deploy_from_external_network        = false
 }
-
-output "aws_app_client_id" {
-  description = "The aws app client id"
-  value       = module.example.aws_app_client_id
-}
 ```
 
-Greenfield test deployment example:
-
-```hcl
-provider "azurerm" {
-  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  features {}
-}
-
-locals {
-  # Setting to true enables 'public' access to the Function App for the duration of the deployment. This is not recommended for production.
-  deploy_from_external_network = true
-}
-
-variable "aws_target_file_path" {
-  description = "AWS S3 path for cost export"
-  type        = string
-}
-
-variable "aws_role_arn" {
-  description = "AWS IAM role ARN for cross-account access"
-  type        = string
-}
-
-variable "report_scope" {
-  description = "Azure billing scope for cost reporting"
-  type        = string
-}
-
-variable "existing_resource_group_name" {
-  description = "Name of the existing resource group containing the VNet"
-  type        = string
-  default     = "existing-infra"
-}
-
-variable "existing_vnet_name" {
-  description = "Name of the existing virtual network"
-  type        = string
-  default     = "existing-vnet"
-}
-
-variable "default_subnet_name" {
-  description = "Name of the existing default subnet"
-  type        = string
-  default     = "default"
-}
-
-variable "functionapp_subnet_name" {
-  description = "Name of the existing function app subnet"
-  type        = string
-  default     = "functionapp"
-}
-
-variable "location" {
-  description = "Azure region for the cost forwarding resources"
-  type        = string
-  default     = "uksouth"
-}
-
-variable "resource_group_name" {
-  description = "Name of the resource group to create for cost forwarding resources"
-  type        = string
-  default     = "rg-cost-export"
-}
-
-# Create the resource group for existing infrastructure
-resource "azurerm_resource_group" "existing" {
-  name     = var.existing_resource_group_name
-  location = var.location
-}
-
-# Create the virtual network
-resource "azurerm_virtual_network" "existing" {
-  name                = var.existing_vnet_name
-  address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.existing.location
-  resource_group_name = azurerm_resource_group.existing.name
-}
-
-# Create the default subnet
-resource "azurerm_subnet" "default" {
-  name                 = var.default_subnet_name
-  resource_group_name  = azurerm_resource_group.existing.name
-  virtual_network_name = azurerm_virtual_network.existing.name
-  address_prefixes     = ["10.0.0.0/24"]
-}
-
-# Create the function app subnet with delegation
-resource "azurerm_subnet" "functionapp" {
-  name                 = var.functionapp_subnet_name
-  resource_group_name  = azurerm_resource_group.existing.name
-  virtual_network_name = azurerm_virtual_network.existing.name
-  address_prefixes     = ["10.0.1.0/24"]
-
-  delegation {
-    name = "Microsoft.App.environments"
-
-    service_delegation {
-      name    = "Microsoft.App/environments"
-      actions = ["Microsoft.Network/virtualNetworks/subnets/action"]
-    }
-  }
-}
-
-# Call the cost forwarding module using the created resources
-module "cost_forwarding" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
-
-  aws_target_file_path                = var.aws_target_file_path
-  aws_role_arn                        = var.aws_role_arn
-  report_scope                        = var.report_scope
-  subnet_id                           = azurerm_subnet.default.id
-  function_app_subnet_id              = azurerm_subnet.functionapp.id
-  virtual_network_name                = azurerm_virtual_network.existing.name
-  virtual_network_resource_group_name = azurerm_resource_group.existing.name
-  location                            = var.location
-  resource_group_name                 = var.resource_group_name
-  deploy_from_external_network        = local.deploy_from_external_network
-
-  depends_on = [ azurerm_subnet.default, azurerm_subnet.functionapp ]
-}
-
-output "aws_app_client_id" {
-  description = "The aws app client id"
-  value       = module.cost_forwarding.aws_app_client_id
-}
-```
+> [!TIP]
+> If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
+> please refer to the example [here](examples/existing-infrastructure) to deploy the prerequisite baseline infrastructure
 
 ## Update Documentation
 
@@ -308,17 +179,17 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
-| <a name="input_aws_target_file_path"></a> [aws\_target\_file\_path](#input\_aws\_target\_file\_path) | S3 target file path Eg 's3://s3bucketname/folder/' | `string` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
-| <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | n/a | yes |
 | <a name="input_report_scope"></a> [report\_scope](#input\_report\_scope) | Scope of the cost report Eg '/providers/Microsoft.Billing/billingAccounts/00000000-0000-0000-0000-000000000000' | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the new resource group | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the existing resource group where the virtual network is located | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
+| <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | `"uk-gov-gds-cost-inbound-azure"` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
+| <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
 
 ## Outputs
 

@@ -8,8 +8,8 @@ locals {
   deploy_from_external_network = true
 }
 
-variable "aws_target_file_path" {
-  description = "AWS S3 path for cost export e.g. <your-s3-bucket>/<your-path>"
+variable "aws_s3_bucket_name" {
+  description = "Name of the AWS S3 bucket to store cost data"
   type        = string
 }
 
@@ -108,7 +108,7 @@ resource "azurerm_subnet" "functionapp" {
 module "cost_forwarding" {
   source = "../../"
 
-  aws_target_file_path                = var.aws_target_file_path
+  aws_s3_bucket_name                  = var.aws_s3_bucket_name
   aws_account_id                      = var.aws_account_id
   report_scope                        = var.report_scope
   subnet_id                           = azurerm_subnet.default.id
