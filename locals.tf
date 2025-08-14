@@ -4,10 +4,10 @@ locals {
   identifier_uri              = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding"
   focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)
   # FOCUS directory name should only contain major version number for the data set
-  focus_directory_name           = "gds-focus-v${local.focus_dataset_major_version}"
-  carbon_directory_name          = "gds-carbon-v1"
-  aws_role_arn                   = "arn:aws:iam::${var.aws_account_id}:role/AzureFederated-${data.azurerm_client_config.current.tenant_id}"
-  aws_target_file_path           = "${var.aws_s3_bucket_name}/${data.azurerm_client_config.current.tenant_id}"
+  focus_directory_name  = "gds-focus-v${local.focus_dataset_major_version}"
+  carbon_directory_name = "gds-carbon-v1"
+  aws_role_arn          = "arn:aws:iam::${var.aws_account_id}:role/AzureFederated-${data.azurerm_client_config.current.tenant_id}"
+  aws_target_file_path  = "${var.aws_s3_bucket_name}/${data.azurerm_client_config.current.tenant_id}"
 
   # Generate backfill exports for each month from January 2022 to last complete month
   # Generate a list of year-month combinations from 2022-01 to 2025-07 (July 2025, last complete month)
