@@ -1,6 +1,7 @@
 import logging
 import os
 import azure.functions as func
+from cost_export.utils import Config
 import pyarrow.parquet as pq
 import pandas as pd
 import io
@@ -12,23 +13,6 @@ from pyarrow.fs import S3FileSystem
 from azure.storage.blob import BlobServiceClient
 from datetime import datetime, timezone, timedelta
 
-# Environment variables - examples of expected values:
-client_id = os.environ.get("ENTRA_APP_CLIENT_ID")  # Example: "00000000-0000-0000-0000-000000000000"
-urn = os.environ.get("ENTRA_APP_URN")  # Example: "api://AWS-Federation-App"
-arn = os.environ.get("AWS_ROLE_ARN")  # Example: "arn:aws:iam::000000000000:role/aad_s3"
-s3_focus_path = os.environ.get("S3_FOCUS_PATH")  # Example: "s3://s3bucketname/test/"
-aws_region = os.environ.get("AWS_REGION")  # Example: "eu-west-2"
-storage_connection_string = os.environ.get("STORAGE_CONNECTION_STRING")
-container_name = os.environ.get("CONTAINER_NAME")
-utilization_container_name = os.environ.get("UTILIZATION_CONTAINER_NAME")
-s3_utilization_path = os.environ.get("S3_UTILIZATION_PATH")
-s3_carbon_path = os.environ.get("S3_CARBON_PATH")
-carbon_directory_name = os.environ.get("CARBON_DIRECTORY_NAME")
-
-# Carbon Optimization API settings
-carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
-billing_scope = os.environ.get("BILLING_SCOPE")
- 
 app = func.FunctionApp()
  
 @app.function_name(name="CostExportProcessor")
@@ -63,8 +47,8 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         logging.info(f"Processing specific parquet file: {blob_name}")
         
         # Initialize blob service client
-        blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
-        container_client = blob_service_client.get_container_client(container_name)
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
         
         # Get S3 filesystem
         s3 = getS3FileSystem()
@@ -129,7 +113,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     modified_parts.append(part)
             
             modified_path = '/'.join(modified_parts)
-            s3_path = f"{s3_focus_path.rstrip('/')}/{modified_path}"
+            s3_path = f"{Config.s3_focus_path.rstrip('/')}/{modified_path}"
             pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
             logging.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path}")
 
@@ -147,10 +131,10 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
 
 def getS3FileSystem():
     default_credential = ManagedIdentityCredential()
-    token = default_credential.get_token(urn)
+    token = default_credential.get_token(Config.urn)
 
     role = boto3.client('sts').assume_role_with_web_identity(
-        RoleArn=arn,
+        RoleArn=Config.arn,
         RoleSessionName='session1',
         WebIdentityToken=token.token
         )
@@ -164,7 +148,7 @@ def getS3FileSystem():
         access_key=aws_access_key_id,
         secret_key=aws_secret_access_key,
         session_token=aws_session_token,
-        region=aws_region
+        region=Config.aws_region
     )
 
 @app.function_name(name="CarbonEmissionsExporter")
@@ -215,7 +199,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         }
         
         # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(billing_scope)
+        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
         
         # Log detailed information about the request
         logging.info(f"Preparing Carbon API request with {len(subscription_ids)} subscriptions")
@@ -432,7 +416,7 @@ def save_carbon_data_to_s3(data, file_name):
         year_month = f"{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05"
         data_month = datetime.strptime(year_month, '%Y-%m')
         billing_period = data_month.strftime("%Y%m01")  # First day of data month
-        s3_path = f"{s3_carbon_path.rstrip('/')}/{carbon_directory_name}/billing_period={billing_period}/{file_name}"
+        s3_path = f"{Config.s3_carbon_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={billing_period}/{file_name}"
         
         # Upload to S3
         with s3.open_output_stream(s3_path) as f:
@@ -476,8 +460,8 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
         logging.info(f"Processing specific utilization CSV.GZ file: {blob_name}")
         
         # Initialize blob service client
-        blob_service_client = BlobServiceClient.from_connection_string(storage_connection_string)
-        container_client = blob_service_client.get_container_client(utilization_container_name)
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.utilization_container_name)
         
         # Get S3 filesystem
         s3 = getS3FileSystem()
@@ -511,7 +495,7 @@ def utilization_export_processor(msg: func.QueueMessage) -> None:
                     modified_parts.append(part)
             
             modified_path = '/'.join(modified_parts)
-            s3_path = f"{s3_utilization_path.rstrip('/')}/{modified_path}"
+            s3_path = f"{Config.s3_utilization_path.rstrip('/')}/{modified_path}"
             
             # Upload to S3
             with s3.open_output_stream(s3_path) as f:
@@ -549,7 +533,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(billing_scope)
+        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
         
         logging.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions")
         
