@@ -84,7 +84,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
 
 resource "azurerm_application_insights" "this" {
   name                                  = "ai-func-cost-export-${random_string.unique.result}"
-  location                              = "uksouth"
+  location                              = azurerm_resource_group.cost_export.location
   resource_group_name                   = azurerm_resource_group.cost_export.name
   application_type                      = "web"
   daily_data_cap_in_gb                  = 5
