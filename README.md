@@ -161,12 +161,12 @@ module "example" {
 
 ### FOCUS Cost Data
 
-When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select all reports and click 'Run now':
+When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select reports and click 'Run now' in small batches:
 
 ![focus-backfill-exports](images/focus-backfill-exports.png)
 
 > [!NOTE]  
-> An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. You can safely ignore this message - the reports will run fine.
+> An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
 
 ### Carbon Emissions Exporter
 
