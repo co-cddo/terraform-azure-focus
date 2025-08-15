@@ -139,16 +139,16 @@ provider "azurerm" {
 }
 
 module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=4300e50c9710cac01b6dcb98294a8c4d24180a95"
 
   aws_account_id                      = "<aws-account-id>"
-  report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
+  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
   function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
   virtual_network_name                = "existing-vnet"
   virtual_network_resource_group_name = "existing-infra"
   resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production.
+  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network        = false
 }
 ```
