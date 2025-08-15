@@ -122,8 +122,8 @@ The module creates three distinct export pipelines for each of the data sets:
 
 - An existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments (`function_app_subnet_id`).
 - Role assignments:
-  - User Access Administrator and Contributor (or Owner) at the scope of the subscription you are provisioning resources to
-  - Cost Management Contributor at the billing account scope(s) (where cost exports will be created)
+  - Reader and Data Access, User Access Administrator and Contributor (or Owner) at the scope of the subscription you are provisioning resources to
+  - Contributor at the billing account scope(s) (where cost exports will be created)
   - User Access Administrator (or Owner) at the Tenant Root Management Group scope*
 
 > [!TIP]
