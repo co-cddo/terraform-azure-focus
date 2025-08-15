@@ -588,11 +588,38 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500
         )
 
+def sanitize_recommendations_data(data):
+    """Remove sensitive data from recommendations for security reasons"""
+    if not isinstance(data, dict) or "value" not in data:
+        return data
+    
+    sanitized_data = data.copy()
+    sanitized_recommendations = []
+    
+    for recommendation in data.get("value", []):
+        sanitized_rec = recommendation.copy()
+        
+        # Remove impactedValue from properties
+        if "properties" in sanitized_rec and "impactedValue" in sanitized_rec["properties"]:
+            del sanitized_rec["properties"]["impactedValue"]
+        
+        # Remove resourceMetadata object entirely
+        if "properties" in sanitized_rec and "resourceMetadata" in sanitized_rec["properties"]:
+            del sanitized_rec["properties"]["resourceMetadata"]
+        
+        sanitized_recommendations.append(sanitized_rec)
+    
+    sanitized_data["value"] = sanitized_recommendations
+    return sanitized_data
+
 def save_recommendations_to_s3(data, file_name):
     """Save Azure Advisor recommendations data to S3"""
     try:
+        # Sanitize data before saving to remove sensitive information
+        sanitized_data = sanitize_recommendations_data(data)
+        
         # Convert to JSON string
-        json_data = json.dumps(data, indent=2).encode('utf-8')
+        json_data = json.dumps(sanitized_data, indent=2).encode('utf-8')
         
         # Get S3 filesystem
         s3 = getS3FileSystem()
