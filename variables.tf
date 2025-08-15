@@ -23,9 +23,13 @@ variable "function_app_subnet_id" {
   type        = string
 }
 
-variable "report_scope" {
-  description = "Scope of the cost report Eg '/providers/Microsoft.Billing/billingAccounts/00000000-0000-0000-0000-000000000000'"
-  type        = string
+variable "billing_account_ids" {
+  description = "List of billing account IDs to create FOCUS cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31')"
+  type        = list(string)
+  validation {
+    condition     = length(var.billing_account_ids) > 0
+    error_message = "At least one billing account ID must be provided."
+  }
 }
 
 variable "aws_account_id" {

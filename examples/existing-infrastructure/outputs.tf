@@ -3,11 +3,6 @@ output "aws_app_client_id" {
   value       = module.cost_forwarding.aws_app_client_id
 }
 
-output "focus_export_name" {
-  description = "The name of the FOCUS cost export"
-  value       = module.cost_forwarding.focus_export_name
-}
-
 output "recommendations_export_name" {
   description = "The name of the Azure Advisor recommendations export"
   value       = module.cost_forwarding.recommendations_export_name
