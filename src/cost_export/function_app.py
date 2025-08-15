@@ -225,7 +225,9 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                 # Construct flattened filename: billing_account_id_billing_profile_original_filename
                 filename_parts = []
                 if billing_account_folder:
-                    filename_parts.append(billing_account_folder)
+                    # Replace colons with dashes for filesystem compatibility
+                    safe_billing_account = billing_account_folder.replace(':', '-')
+                    filename_parts.append(safe_billing_account)
                 
                 # Prefer billing profile from data over path
                 billing_profile_to_use = billing_profile_from_data or billing_profile_path_part
