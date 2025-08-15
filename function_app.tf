@@ -75,14 +75,16 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "S3_CARBON_PATH"                            = local.aws_target_file_path
     "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
     "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
-    # This is used exclusively for the Carbon Optimization API - we have to use an Azure Resource Manager scope rather than the true billing account scope
+    # We use the tenant root management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
     "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+    # Mapping of billing account index to billing account ID for S3 path organization
+    "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
   }
 }
 
 resource "azurerm_application_insights" "this" {
   name                                  = "ai-func-cost-export-${random_string.unique.result}"
-  location                              = "uksouth"
+  location                              = azurerm_resource_group.cost_export.location
   resource_group_name                   = azurerm_resource_group.cost_export.name
   application_type                      = "web"
   daily_data_cap_in_gb                  = 5

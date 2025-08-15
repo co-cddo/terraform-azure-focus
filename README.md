@@ -157,6 +157,25 @@ module "example" {
 > If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
 > please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
 
+## Backfill
+
+### FOCUS Cost Data
+
+When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select all reports and click 'Run now':
+
+![focus-backfill-exports](images/focus-backfill-exports.png)
+
+> [!NOTE]  
+> An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. You can safely ignore this message - the reports will run fine.
+
+### Carbon Emissions Exporter
+
+Run the function named 'CarbonEmissionsExporter' once. Note that you will need to temporarily configure the firewall and CORS rules to allow this (add an entry for https://portal.azure.com).
+
+### Recommendations
+
+We don't provide a backfill for this dataset.
+
 ## Update Documentation
 
 The `terraform-docs` utility is used to generate this README. Follow the below steps to update:

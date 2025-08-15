@@ -3,11 +3,6 @@ output "aws_app_client_id" {
   value       = module.example.aws_app_client_id
 }
 
-output "focus_export_name" {
-  description = "The name of the FOCUS cost export"
-  value       = module.example.focus_export_name
-}
-
 output "recommendations_export_name" {
   description = "The name of the Azure Advisor recommendations export"
   value       = module.example.recommendations_export_name

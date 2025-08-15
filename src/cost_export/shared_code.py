@@ -3,6 +3,7 @@ import boto3
 import logging
 import requests
 import uuid
+import json
 from pyarrow.fs import S3FileSystem
 from azure.identity import ManagedIdentityCredential
 
@@ -36,6 +37,14 @@ class Config:
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
     billing_scope = os.environ.get("BILLING_SCOPE")
+    
+    # Billing account mapping for S3 path organization
+    _billing_account_mapping_json = os.environ.get("BILLING_ACCOUNT_MAPPING", "{}")
+    try:
+        billing_account_mapping = json.loads(_billing_account_mapping_json)
+    except:
+        logging.warning(f"Failed to parse BILLING_ACCOUNT_MAPPING: {_billing_account_mapping_json}")
+        billing_account_mapping = {}
 
 def getS3FileSystem():
     default_credential = ManagedIdentityCredential()
@@ -197,3 +206,39 @@ def get_subscriptions_via_resource_graph(mg_id, headers):
     except Exception as e:
         logging.error(f"Error using Resource Graph API: {str(e)}")
         return []
+
+def extract_billing_account_from_blob_path(blob_name):
+    """Extract billing account ID from the blob path structure
+    
+    Cost exports create paths like: 
+    /gds-focus-v1/focus-daily-cost-export-0/billing_period=20250801/...
+    where the export name ends with the billing account index from Terraform
+    """
+    try:
+        path_parts = blob_name.split('/')
+        
+        for part in path_parts:
+            # Look for focus export names that end with a numeric index
+            if part.startswith("focus-daily-cost-export-") or part.startswith("focus-backfill-"):
+                # Extract the index number from the export name
+                if "-" in part:
+                    parts = part.split("-")
+                    if len(parts) >= 4:  # focus-daily-cost-export-N or focus-backfill-N-YYYY-MM
+                        try:
+                            # For daily exports: focus-daily-cost-export-0
+                            if part.startswith("focus-daily-cost-export-"):
+                                export_index = int(parts[-1])
+                                return export_index
+                            # For backfill exports: focus-backfill-0-2024-01
+                            elif part.startswith("focus-backfill-") and len(parts) >= 5:
+                                export_index = int(parts[2])  # Third part after focus-backfill-
+                                return export_index
+                        except (ValueError, IndexError):
+                            continue
+        
+        logging.warning(f"Could not extract billing account index from blob path: {blob_name}")
+        return None
+        
+    except Exception as e:
+        logging.error(f"Error extracting billing account from blob path: {str(e)}")
+        return None
