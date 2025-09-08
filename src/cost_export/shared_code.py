@@ -241,5 +241,5 @@ def extract_billing_account_from_blob_path(blob_name):
         return None
         
     except Exception as e:
-        logging.error(f"Error extracting billing account from blob path: {str(e)}")
+        logging.exception(f"Error extracting billing account from blob path: {str(e)}")
         return None
