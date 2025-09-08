@@ -1,6 +1,6 @@
 import azure.functions as func
 import logging
-from shared_code import Config, getS3FileSystem, is_uuid, extract_subscription_ids_from_billing_scope, extract_billing_account_from_blob_path
+from common import Config, getS3FileSystem, is_uuid, extract_subscription_ids_from_billing_scope, extract_billing_account_from_blob_path
 import pyarrow.parquet as pq
 import io
 import json
