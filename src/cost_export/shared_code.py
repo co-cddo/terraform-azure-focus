@@ -233,7 +233,8 @@ def extract_billing_account_from_blob_path(blob_name):
                             elif part.startswith("focus-backfill-") and len(parts) >= 5:
                                 export_index = int(parts[2])  # Third part after focus-backfill-
                                 return export_index
-                        except (ValueError, IndexError):
+                        except (ValueError, IndexError) as e:
+                            logging.debug(f"Failed to parse blob path part '{part}': {str(e)}")
                             continue
         
         logging.warning(f"Could not extract billing account index from blob path: {blob_name}")
