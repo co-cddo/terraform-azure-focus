@@ -139,7 +139,7 @@ provider "azurerm" {
 }
 
 module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=4300e50c9710cac01b6dcb98294a8c4d24180a95"
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
 
   aws_account_id                      = "<aws-account-id>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
