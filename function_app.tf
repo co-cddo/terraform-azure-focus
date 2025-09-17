@@ -62,7 +62,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   app_settings = {
     "STORAGE_CONNECTION_STRING"                 = azurerm_storage_account.cost_export.primary_connection_string
     "CONTAINER_NAME"                            = azapi_resource.cost_export.name
-    "UTILIZATION_CONTAINER_NAME"                = azapi_resource.utilization_container.name
     "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
@@ -72,17 +71,20 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "AWS_REGION"                                = var.aws_region
     "S3_FOCUS_PATH"                             = local.aws_target_file_path
     "S3_UTILIZATION_PATH"                       = local.aws_target_file_path
+    "S3_RECOMMENDATIONS_PATH"                   = local.aws_target_file_path
     "S3_CARBON_PATH"                            = local.aws_target_file_path
     "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
     "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
-    # This is used exclusively for the Carbon Optimization API - we have to use an Azure Resource Manager scope rather than the true billing account scope
+    # We use the tenant root management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
     "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+    # Mapping of billing account index to billing account ID for S3 path organization
+    "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
   }
 }
 
 resource "azurerm_application_insights" "this" {
   name                                  = "ai-func-cost-export-${random_string.unique.result}"
-  location                              = "uksouth"
+  location                              = azurerm_resource_group.cost_export.location
   resource_group_name                   = azurerm_resource_group.cost_export.name
   application_type                      = "web"
   daily_data_cap_in_gb                  = 5

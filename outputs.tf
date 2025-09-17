@@ -3,24 +3,14 @@ output "aws_app_client_id" {
   value       = azuread_application.aws_app.client_id
 }
 
-output "focus_export_name" {
-  description = "The name of the FOCUS cost export"
-  value       = azapi_resource.daily_cost_export.name
-}
-
 output "focus_container_name" {
   description = "The storage container name for FOCUS cost data"
   value       = azapi_resource.cost_export.name
 }
 
-output "utilization_export_name" {
-  description = "The name of the cost utilization export"
-  value       = azapi_resource.utilization_export.name
-}
-
-output "utilization_container_name" {
-  description = "The storage container name for utilization data"
-  value       = azapi_resource.utilization_container.name
+output "recommendations_export_name" {
+  description = "The name of the Azure Advisor recommendations export (timer-triggered function)"
+  value       = "AdvisorRecommendationsExporter"
 }
 
 output "carbon_export_name" {
@@ -33,7 +23,17 @@ output "carbon_container_name" {
   value       = null
 }
 
-output "backfill_export_names" {
-  description = "The names of the backfill FOCUS cost exports for historical data"
-  value       = { for k, v in azapi_resource.backfill_cost_exports : k => v.name }
+output "billing_account_ids" {
+  description = "Billing account IDs configured for cost reporting"
+  value       = var.billing_account_ids
+}
+
+output "report_scopes" {
+  description = "Report scopes created for each billing account"
+  value       = local.report_scopes
+}
+
+output "billing_accounts_map" {
+  description = "Map of billing account indices to IDs and scopes"
+  value       = local.billing_accounts_map
 }

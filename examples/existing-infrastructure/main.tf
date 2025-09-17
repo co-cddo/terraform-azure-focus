@@ -18,9 +18,9 @@ variable "aws_account_id" {
   type        = string
 }
 
-variable "report_scope" {
-  description = "Azure billing scope for cost reporting"
-  type        = string
+variable "billing_account_ids" {
+  description = "List of billing account IDs to create FOCUS cost exports for"
+  type        = list(string)
 }
 
 variable "existing_resource_group_name" {
@@ -110,7 +110,7 @@ module "cost_forwarding" {
 
   aws_s3_bucket_name                  = var.aws_s3_bucket_name
   aws_account_id                      = var.aws_account_id
-  report_scope                        = var.report_scope
+  billing_account_ids                 = var.billing_account_ids
   subnet_id                           = azurerm_subnet.default.id
   function_app_subnet_id              = azurerm_subnet.functionapp.id
   virtual_network_name                = azurerm_virtual_network.existing.name

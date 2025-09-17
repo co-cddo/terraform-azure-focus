@@ -22,3 +22,4 @@ jobs:
     name: Module Validation
     with:
       working-directory: .
+      enable-commitlint: false

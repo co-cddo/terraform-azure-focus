@@ -60,20 +60,3 @@ resource "azapi_resource" "deployment" {
   }
 }
 
-resource "azapi_resource" "utilization_container" {
-  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01"
-  name      = "utilization-exports"
-  parent_id = "${azurerm_storage_account.cost_export.id}/blobServices/default"
-  body = {
-    properties = {
-      metadata     = {}
-      publicAccess = "None"
-    }
-  }
-}
-
-resource "azapi_resource" "utilization_data_queue" {
-  type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
-  name      = "utilizationdata"
-  parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
-}

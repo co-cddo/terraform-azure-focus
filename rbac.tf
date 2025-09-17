@@ -61,3 +61,9 @@ resource "azurerm_role_assignment" "management_group_reader" {
   role_definition_name = "Management Group Reader"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
 }
+
+resource "azurerm_role_assignment" "advisor_reader" {
+  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+  role_definition_name = "Reader"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+}

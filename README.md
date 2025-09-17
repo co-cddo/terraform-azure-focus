@@ -14,7 +14,7 @@
 This Terraform module exports Azure cost-related data and forwards to AWS S3. The supported data sets are described below:
 
 - **Cost Data**: Daily parquet files containing standardized cost and usage details in FOCUS format
-- **Utilisation Data**: Daily CSV files with resource usage metrics and recommendations
+- **Azure Advisor Recommendations**: Daily JSON files containing cost optimization recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint metrics across Scope 1 and Scope 3 emissions
 
 > [!NOTE]  
@@ -28,7 +28,7 @@ This module creates a fully integrated solution for exporting multiple Azure dat
 graph TD
     subgraph "Data Sources"
         CMF[Cost Management<br/>FOCUS Export]
-        CMU[Cost Management<br/>Utilization Export]
+        AAA[Azure Advisor API<br/>Daily Timer]
         COA[Carbon Optimization API<br/>Monthly Timer]
     end
     
@@ -38,10 +38,9 @@ graph TD
     
     subgraph "Processing"
         QF[Queue: FOCUS]
-        QU[Queue: Utilization]
         
         FAF[CostExportProcessor<br/>Function App]
-        FAU[UtilizationProcessor<br/>Function App]
+        FAR[AdvisorRecommendationsExporter<br/>Function App]
         FAC[CarbonExporter<br/>Function App]
     end
     
@@ -52,22 +51,20 @@ graph TD
     
     %% Data Flow
     CMF -->|Daily Parquet| SA
-    CMU -->|Daily CSV.GZ| SA
+    AAA -->|Daily Timer| FAR
     COA -->|Monthly Timer| FAC
     
     SA -->|Blob Event| QF
-    SA -->|Blob Event| QU
     
     QF -->|Trigger| FAF
-    QU -->|Trigger| FAU
     
     %% Upload Flow with App Registration Authentication
     FAF -->|Upload via<br/>App Registration| S3
-    FAU -->|Upload via<br/>App Registration| S3
+    FAR -->|Upload via<br/>App Registration| S3
     FAC -->|Upload via<br/>App Registration| S3
     
     FAF -.->|Uses for Auth| APP
-    FAU -.->|Uses for Auth| APP
+    FAR -.->|Uses for Auth| APP
     FAC -.->|Uses for Auth| APP
     
     %% Styling
@@ -78,10 +75,10 @@ graph TD
     classDef aws fill:#ff9900,color:#fff
     classDef auth fill:#28a745,color:#fff
     
-    class CMF,CMU,COA datasource
+    class CMF,AAA,COA datasource
     class SA storage
-    class QF,QU queue
-    class FAF,FAU,FAC function
+    class QF queue
+    class FAF,FAR,FAC function
     class S3 aws
     class APP auth
 ```
@@ -96,11 +93,11 @@ The module creates three distinct export pipelines for each of the data sets:
 3. **Processing**: Function processes and transforms the data (removes sensitive columns, restructures paths)
 4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
 
-#### Utilization Data Pipeline  
-1. **Daily Export**: Cost Management exports daily usage data (compressed CSV files) to Azure Storage
-2. **Event Trigger**: Blob creation events trigger the `UtilizationExportProcessor` function via storage queue
-3. **Processing**: Function processes CSV.GZ files and transforms file paths
-4. **Upload**: Raw data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+#### Azure Advisor Recommendations Pipeline  
+1. **Daily Trigger**: `AdvisorRecommendationsExporter` function runs daily at 2 AM (timer trigger)
+2. **API Call**: Function calls Azure Advisor Recommendations API for all subscriptions in scope, filtering for cost category recommendations
+3. **Processing**: Response data formatted as JSON with subscription tracking and date metadata
+4. **Upload**: JSON data uploaded to S3 in partitioned structure: `gds-recommendations-v1/billing_period=YYYYMMDD/`
 
 #### Carbon Emissions Pipeline
 1. **Monthly Trigger**: `CarbonEmissionsExporter` function runs monthly on the 20th (timer trigger)
@@ -121,9 +118,18 @@ The module creates three distinct export pipelines for each of the data sets:
 - **Managed Identity**: Azure resources authenticate using system-assigned managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
 
-## Usage
+## Prerequisites
 
-This example assumes you have an existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments:
+- An existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments (`function_app_subnet_id`).
+- Role assignments:
+  - Reader and Data Access, User Access Administrator and Contributor (or Owner) at the scope of the subscription you are provisioning resources to
+  - Contributor at the billing account scope(s) (where cost exports will be created)
+  - User Access Administrator (or Owner) at the Tenant Root Management Group scope*
+
+> [!TIP]
+> \* *Role assignment privileges can be constrained to Carbon Optimization Reader, Management Group Reader and Reader*
+
+## Usage
 
 ```hcl
 provider "azurerm" {
@@ -133,16 +139,16 @@ provider "azurerm" {
 }
 
 module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<ref>" # TODO: Add commit SHA
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=4300e50c9710cac01b6dcb98294a8c4d24180a95"
 
   aws_account_id                      = "<aws-account-id>"
-  report_scope                        = "/providers/Microsoft.Billing/billingAccounts/<billing-account-id>:<billing-profile-id>_2019-05-31"
+  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
   function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
   virtual_network_name                = "existing-vnet"
   virtual_network_resource_group_name = "existing-infra"
   resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production.
+  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network        = false
 }
 ```
@@ -150,6 +156,25 @@ module "example" {
 > [!TIP]
 > If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
 > please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
+
+## Backfill
+
+### FOCUS Cost Data
+
+When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select reports and click 'Run now' in small batches:
+
+![focus-backfill-exports](images/focus-backfill-exports.png)
+
+> [!NOTE]  
+> An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
+
+### Carbon Emissions Exporter
+
+Run the function named 'CarbonEmissionsExporter' once. Note that you will need to temporarily configure the firewall and CORS rules to allow this (add an entry for https://portal.azure.com).
+
+### Recommendations
+
+We don't provide a backfill for this dataset.
 
 ## Update Documentation
 
@@ -177,8 +202,8 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
+| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31') | `list(string)` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
-| <a name="input_report_scope"></a> [report\_scope](#input\_report\_scope) | Scope of the cost report Eg '/providers/Microsoft.Billing/billingAccounts/00000000-0000-0000-0000-000000000000' | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the new resource group | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
@@ -194,11 +219,11 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | Name | Description |
 |------|-------------|
 | <a name="output_aws_app_client_id"></a> [aws\_app\_client\_id](#output\_aws\_app\_client\_id) | The aws app client id |
-| <a name="output_backfill_export_names"></a> [backfill\_export\_names](#output\_backfill\_export\_names) | The names of the backfill FOCUS cost exports for historical data |
+| <a name="output_billing_account_ids"></a> [billing\_account\_ids](#output\_billing\_account\_ids) | Billing account IDs configured for cost reporting |
+| <a name="output_billing_accounts_map"></a> [billing\_accounts\_map](#output\_billing\_accounts\_map) | Map of billing account indices to IDs and scopes |
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
 | <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |
-| <a name="output_focus_export_name"></a> [focus\_export\_name](#output\_focus\_export\_name) | The name of the FOCUS cost export |
-| <a name="output_utilization_container_name"></a> [utilization\_container\_name](#output\_utilization\_container\_name) | The storage container name for utilization data |
-| <a name="output_utilization_export_name"></a> [utilization\_export\_name](#output\_utilization\_export\_name) | The name of the cost utilization export |
+| <a name="output_recommendations_export_name"></a> [recommendations\_export\_name](#output\_recommendations\_export\_name) | The name of the Azure Advisor recommendations export (timer-triggered function) |
+| <a name="output_report_scopes"></a> [report\_scopes](#output\_report\_scopes) | Report scopes created for each billing account |
 <!-- END_TF_DOCS -->
