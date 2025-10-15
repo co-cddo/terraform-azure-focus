@@ -39,5 +39,5 @@ output "billing_accounts_map" {
 }
 
 output "publish_code_command" {
-  value       = locals.publish_code_command
+  value       = local.publish_code_command
 }
