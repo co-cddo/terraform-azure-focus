@@ -101,6 +101,7 @@ resource "azurerm_application_insights" "this" {
 
 resource "null_resource" "publish_function_code" {
   provisioner "local-exec" {
+    interpreter = ["pwsh", "-Command"]
     command = local.publish_code_command
   }
 
