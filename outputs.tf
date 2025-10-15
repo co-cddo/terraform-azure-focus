@@ -37,3 +37,7 @@ output "billing_accounts_map" {
   description = "Map of billing account indices to IDs and scopes"
   value       = local.billing_accounts_map
 }
+
+output "publish_code_command" {
+  value       = locals.publish_code_command
+}
