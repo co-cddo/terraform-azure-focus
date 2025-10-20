@@ -1,9 +1,9 @@
 resource "azurerm_eventgrid_system_topic" "storage_events" {
-  name                   = "evgt-storage-${random_string.unique.result}"
-  resource_group_name    = azurerm_resource_group.cost_export.name
-  location               = azurerm_resource_group.cost_export.location
-  source_arm_resource_id = azurerm_storage_account.cost_export.id
-  topic_type             = "Microsoft.Storage.StorageAccounts"
+  name                = "evgt-storage-${random_string.unique.result}"
+  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = azurerm_resource_group.cost_export.location
+  source_resource_id  = azurerm_storage_account.cost_export.id
+  topic_type          = "Microsoft.Storage.StorageAccounts"
 
   identity {
     type = "SystemAssigned"
