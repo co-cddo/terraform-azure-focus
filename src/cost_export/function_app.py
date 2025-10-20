@@ -373,25 +373,21 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
 
     try:
         # Get previous month date range
-        # API available range: 2024-06-01 to 2025-06-01
+        # API available range: 2024-06-01 onwards
         today = datetime.now(timezone.utc)
         last_month = today.replace(day=1) - timedelta(days=1)
         
-        # Ensure we're within the API's available date range (2024-06-01 to 2025-06-01)
-        api_end_date = datetime(2025, 6, 1, tzinfo=timezone.utc)
+        # Ensure we're within the API's available date range (starts from 2024-06-01)
         api_start_date = datetime(2024, 6, 1, tzinfo=timezone.utc)
         
-        if last_month > api_end_date.replace(day=1) - timedelta(days=1):
-            # If requesting beyond API range, use the last available month (May 2025)
-            last_month = datetime(2025, 5, 31, tzinfo=timezone.utc)
-        elif last_month < api_start_date:
+        if last_month < api_start_date:
             # If before API range, use the first available month (June 2024)
             last_month = datetime(2024, 6, 30, tzinfo=timezone.utc)
             
         start_date = last_month.strftime("%Y-%m-01")
         end_date = last_month.strftime("%Y-%m-%d")
         
-        logging.info(f'Exporting carbon data for period: {start_date} to {end_date} (within API range 2024-06-01 to 2025-06-01)')
+        logging.info(f'Exporting carbon data for period: {start_date} to {end_date} (within API range 2024-06-01 onwards)')
         
         # Get access token using managed identity
         credential = ManagedIdentityCredential()
@@ -422,7 +418,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             "carbonScopeList": ["Scope1", "Scope3"],
             "dateRange": {
                 "start": start_date,
-                "end": start_date
+                "end": end_date
             }
         }
         
