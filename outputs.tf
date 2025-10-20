@@ -39,5 +39,6 @@ output "billing_accounts_map" {
 }
 
 output "publish_code_command" {
-  value = local.publish_code_command
+  description = "Publish code command for debugging"
+  value       = local.publish_code_command
 }

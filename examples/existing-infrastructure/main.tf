@@ -1,6 +1,6 @@
 provider "azurerm" {
   resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  subscription_id = var.subscription_id
+  subscription_id                = var.subscription_id
   features {}
 }
 
