@@ -127,7 +127,7 @@ The module creates three distinct export pipelines for each of the data sets:
   - Entra ID:
     - User Access Administrator (or Owner) at the Tenant Root Management Group scope*
   - Billing:
-    - Enterprise Agreements: [EnrollmentReader](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#assign-the-subscription-creator-role-to-the-service-principal)
+    - Enterprise Agreements: [EnrollmentReader](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals)
     - Microsoft Customer Agreement: Billing account contributor
 
 > [!TIP]
