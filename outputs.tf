@@ -37,3 +37,8 @@ output "billing_accounts_map" {
   description = "Map of billing account indices to IDs and scopes"
   value       = local.billing_accounts_map
 }
+
+output "current_principal_type" {
+  description = "Principal type of the current Azure client (ServicePrincipal or User)"
+  value       = local.current_principal_type
+}

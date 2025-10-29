@@ -9,6 +9,10 @@ locals {
   aws_role_arn          = "arn:aws:iam::${var.aws_account_id}:role/AzureFederated-${data.azurerm_client_config.current.tenant_id}"
   aws_target_file_path  = "${var.aws_s3_bucket_name}/${data.azurerm_client_config.current.tenant_id}"
 
+  # Determine if the current client is a service principal or user
+  # Service principals have different client_id and object_id, users typically have the same
+  current_principal_type = data.azurerm_client_config.current.client_id != data.azurerm_client_config.current.object_id ? "ServicePrincipal" : "User"
+
   # Create billing account mapping from the provided list
   # Construct full resource manager paths from just the billing account IDs
   billing_accounts_map = {
