@@ -902,7 +902,7 @@ def check_carbon_data_exists(file_name):
         return exists, s3_path
         
     except Exception as e:
-        logging.warning(f"Error checking if carbon data exists for {file_name}: {str(e)}")
+        logging.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
         # If we can't check, assume it doesn't exist to be safe
         return False, None
 
