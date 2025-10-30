@@ -3,8 +3,8 @@ name: Python Tests
 
 on:
   push:
-    # branches:
-    #   - main
+    branches:
+      - main
     paths:
       - 'src/cost_export/**'
       - '.github/workflows/python-tests.yml'
