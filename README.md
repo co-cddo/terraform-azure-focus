@@ -126,8 +126,8 @@ The module creates three distinct export pipelines for each of the data sets:
     - `Reader and Data Access` and `Contributor` at the subscription scope (where you will be provisioning resources)
     - `User Access Administrator` at the Tenant Root Group management group scope
   - Billing:
-    - [Enterprise Agreements: `EnrollmentReader` at the billing account scope](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals)
-    - Microsoft Customer Agreement: `Billing account contributor` at the billing account scope
+    - Enterprise Agreements (EA): `EnrollmentReader` at the billing account scope. See the [docs](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals) for details on how to assign EA billing roles.
+    - Microsoft Customer Agreements (MCA): `Billing account contributor` at the billing account scope
 
 > [!TIP]
 > \* *Role assignment privileges can be constrained to `Carbon Optimization Reader`, `Management Group Reader` and `Reader`*
