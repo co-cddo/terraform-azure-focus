@@ -124,7 +124,7 @@ The module creates three distinct export pipelines for each of the data sets:
 - Role assignments:
   - Azure RBAC:
     - `Reader and Data Access` and `Contributor` at the subscription scope (where you will be provisioning resources)
-    - `User Access Administrator` at the Tenant Root Group management group scope
+    - `User Access Administrator` at the Tenant Root Group management group scope*
   - Billing:
     - Enterprise Agreement (EA): `EnrollmentReader` at the billing account scope (see [Assign Enterprise Agreement roles to service principals](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals))
     - Microsoft Customer Agreement (MCA): `Billing account contributor` at the billing account scope
