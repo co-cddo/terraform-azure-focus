@@ -123,11 +123,11 @@ The module creates three distinct export pipelines for each of the data sets:
 - An existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments (`function_app_subnet_id`)
 - Role assignments:
   - Azure RBAC:
-    - `Reader and Data Access` and `Contributor` at the *scope of the subscription* you are provisioning resources to
-    - `User Access Administrator` at the *scope of the Tenant Root Management Group**
+    - `Reader and Data Access` and `Contributor` at the ***subscription scope*** (where you are provisioning resources)
+    - `User Access Administrator` at the ***Tenant Root Management Group scope****
   - Billing:
-    - [Enterprise Agreements: `EnrollmentReader` at the *billing account scope*](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals)
-    - Microsoft Customer Agreement: `Billing account contributor` at the *billing account scope*
+    - [Enterprise Agreements: `EnrollmentReader` at the ***billing account scope***](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals)
+    - Microsoft Customer Agreement: `Billing account contributor` at the ***billing account scope***
 
 > [!TIP]
 > \* *Role assignment privileges can be constrained to `Carbon Optimization Reader`, `Management Group Reader` and `Reader`*
