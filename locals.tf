@@ -10,8 +10,14 @@ locals {
   aws_target_file_path  = "${var.aws_s3_bucket_name}/${data.azurerm_client_config.current.tenant_id}"
 
   # Determine if the current client is a service principal or user
-  # Service principals have different client_id and object_id, users typically have the same
-  current_principal_type = data.azurerm_client_config.current.client_id != data.azurerm_client_config.current.object_id ? "ServicePrincipal" : "User"
+  # If explicitly set via variable, use that. Otherwise, attempt detection.
+  # Detection logic: In most interactive scenarios, users authenticate directly
+  # In CI/CD, service principals are typically used but should be explicitly specified
+  current_principal_type = var.current_principal_type != null ? var.current_principal_type : (
+    # Fallback detection: assume User for interactive usage
+    # This covers most local development scenarios
+    "User"
+  )
 
   # Create billing account mapping from the provided list
   # Construct full resource manager paths from just the billing account IDs

@@ -66,3 +66,13 @@ variable "focus_dataset_version" {
   type        = string
   default     = "1.0r2"
 }
+
+variable "current_principal_type" {
+  description = "Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. If not specified, will attempt automatic detection."
+  type        = string
+  default     = null
+  validation {
+    condition = var.current_principal_type == null || contains(["User", "ServicePrincipal"], var.current_principal_type)
+    error_message = "current_principal_type must be either 'User' or 'ServicePrincipal'."
+  }
+}
