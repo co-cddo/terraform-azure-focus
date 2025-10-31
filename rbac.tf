@@ -35,7 +35,7 @@ resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
   scope                = azurerm_storage_account.deployment.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
-  principal_type       = local.current_principal_type
+  principal_type       = var.current_principal_type
 }
 
 resource "azurerm_role_assignment" "grant_func_queue_contributor" {
