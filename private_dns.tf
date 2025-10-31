@@ -89,3 +89,11 @@ resource "azurerm_private_dns_a_record" "function_app" {
   ttl                 = 300
   records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
 }
+
+resource "azurerm_private_dns_a_record" "function_app_kudu" {
+  name                = "${azurerm_function_app_flex_consumption.cost_export.name}.scm"
+  zone_name           = azurerm_private_dns_zone.sites.name
+  resource_group_name = azurerm_resource_group.cost_export.name
+  ttl                 = 300
+  records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
+}
