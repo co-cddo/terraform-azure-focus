@@ -655,7 +655,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
                 logging.warning("No data found in Carbon API response")
             
             # Save to storage and upload to S3
-            save_carbon_data_to_s3(emissions_data, file_name)
+            save_carbon_data_to_s3(emissions_data, file_name, skip_existence_check=True)
             
             logging.info(f"Successfully exported carbon emissions data for {start_date} to {end_date}")
             
@@ -906,11 +906,11 @@ def check_carbon_data_exists(file_name):
         # If we can't check, assume it doesn't exist to be safe
         return False, None
 
-def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
-    """Save carbon emissions data to S3 with idempotency check"""
+def save_carbon_data_to_s3(data, file_name, force_overwrite=False, skip_existence_check=False):
+    """Save carbon emissions data to S3 with optional idempotency check"""
     try:
-        # Check if file already exists (unless forcing overwrite)
-        if not force_overwrite:
+        # Check if file already exists (unless forcing overwrite or skipping the check)
+        if not force_overwrite and not skip_existence_check:
             exists, s3_path = check_carbon_data_exists(file_name)
             if exists:
                 logging.info(f"Skipping upload - carbon data already exists: {s3_path}")
