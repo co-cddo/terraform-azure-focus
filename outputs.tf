@@ -42,3 +42,8 @@ output "current_principal_type" {
   description = "Principal type of the current Azure client (ServicePrincipal or User)"
   value       = local.current_principal_type
 }
+
+output "publish_code_command" {
+  description = "Publish code command for debugging"
+  value       = local.publish_code_command
+}

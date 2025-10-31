@@ -1,11 +1,17 @@
 provider "azurerm" {
   resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  subscription_id                = var.subscription_id
   features {}
 }
 
 locals {
   # Setting to true enables 'public' access to the Function App for the duration of the deployment. This is not recommended for production.
   deploy_from_external_network = true
+}
+
+variable "subscription_id" {
+  description = "Azure Subscription ID"
+  type        = string
 }
 
 variable "aws_s3_bucket_name" {
