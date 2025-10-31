@@ -35,18 +35,21 @@ resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
   scope                = azurerm_storage_account.deployment.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
+  principal_type       = var.current_principal_type
 }
 
 resource "azurerm_role_assignment" "grant_func_queue_contributor" {
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 resource "azurerm_role_assignment" "event_grid_queue_sender" {
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Message Sender"
   principal_id         = azurerm_eventgrid_system_topic.storage_events.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
@@ -54,16 +57,19 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Carbon Optimization Reader"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 resource "azurerm_role_assignment" "management_group_reader" {
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Management Group Reader"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 resource "azurerm_role_assignment" "advisor_reader" {
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Reader"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 }
