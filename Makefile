@@ -12,7 +12,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-.PHONY: all security lint format documentation documentation-examples validate-all validate validate-examples init examples tests
+.PHONY: all security lint format documentation documentation-examples validate-all validate validate-examples init examples tests tests-python python-setup python-lint python-format
 
 default: all
 
@@ -20,6 +20,7 @@ all:
 	$(MAKE) init
 	$(MAKE) validate
 	$(MAKE) tests
+	$(MAKE) tests-python
 	$(MAKE) lint
 	$(MAKE) security
 	$(MAKE) format
@@ -163,3 +164,36 @@ clean:
 		echo "--> Removing $$dir"; \
 		rm -rf $$dir; \
 	done
+
+# Python testing targets for carbon export functions
+python-setup:
+	@echo "--> Setting up Python test environment"
+	@cd src/cost_export && python3 -m pip install --upgrade pip
+	@cd src/cost_export && python3 -m pip install -r requirements.txt
+	@cd src/cost_export && python3 -m pip install -r requirements-test.txt
+
+tests-python: python-setup
+	@echo "--> Running Python tests for carbon export functions"
+	@cd src/cost_export && echo "Running Carbon API Date Range Tests..." && python3 test_carbon_date_range.py
+	@cd src/cost_export && echo "Running Carbon API Idempotency Tests..." && python3 test_carbon_idempotency.py
+	@cd src/cost_export && echo "Running Carbon API Batching Integration Tests..." && python3 test_carbon_batching.py
+	@cd src/cost_export && echo "Running Carbon API Batching Unit Tests..." && python3 test_carbon_batching_unit.py
+	@cd src/cost_export && echo "Validating Python syntax..." && python3 -m py_compile function_app.py common.py
+	@echo "✅ All Python tests completed successfully"
+
+python-lint:
+	@echo "--> Running Python linting checks"
+	@cd src/cost_export && flake8 --max-line-length=120 --ignore=E203,W503 *.py || echo "⚠️  Linting issues found"
+	@cd src/cost_export && bandit -r . -f txt || echo "⚠️  Security issues found"
+
+python-format:
+	@echo "--> Formatting Python code"
+	@cd src/cost_export && black --line-length=120 *.py
+	@cd src/cost_export && isort --profile black *.py
+	@echo "✅ Python code formatted successfully"
+
+python-test-quick:
+	@echo "--> Running quick Python syntax validation"
+	@cd src/cost_export && python3 -m py_compile function_app.py common.py
+	@cd src/cost_export && python3 test_carbon_batching_unit.py
+	@echo "✅ Quick Python validation completed"

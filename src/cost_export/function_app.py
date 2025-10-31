@@ -111,6 +111,8 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
             if response.status_code == 400 and "InvalidRequestPropertyValue" in response.text:
                 if "should be in available range" in response.text:
                     error_msg += " - Date is outside the available range for Carbon Optimization API"
+            elif response.status_code == 400 and "InvalidNumberOfSubscriptions" in response.text:
+                error_msg += " - Too many subscriptions in request (max 100 allowed)"
             return False, None, error_msg
             
     except requests.exceptions.Timeout:
@@ -119,6 +121,99 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
         return False, None, f"API request failed: {str(e)}"
     except Exception as e:
         return False, None, f"Unexpected error in API request: {str(e)}"
+
+def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeout=300, max_batch_size=100):
+    """
+    Make Carbon Optimization API requests in batches to handle subscription limits.
+    
+    The Carbon API has a maximum of 100 subscriptions per request. This function
+    automatically batches large subscription lists and merges the results.
+    
+    Args:
+        headers (dict): Request headers including authorization
+        subscription_ids (list): List of subscription IDs (can be > 100)
+        month_str (str): Month string in YYYY-MM-DD format
+        timeout (int): Request timeout in seconds per batch
+        max_batch_size (int): Maximum subscriptions per API call (default: 100)
+        
+    Returns:
+        tuple: (success: bool, merged_data: dict or None, error_message: str or None)
+    """
+    if not subscription_ids:
+        return False, None, "No subscription IDs provided"
+    
+    total_subscriptions = len(subscription_ids)
+    logging.info(f"Carbon API request for {total_subscriptions} subscriptions (batching with max {max_batch_size} per request)")
+    
+    # If within limit, use single request
+    if total_subscriptions <= max_batch_size:
+        return make_carbon_api_request(headers, subscription_ids, month_str, timeout)
+    
+    # Batch the subscriptions
+    batches = []
+    for i in range(0, total_subscriptions, max_batch_size):
+        batch = subscription_ids[i:i + max_batch_size]
+        batches.append(batch)
+    
+    logging.info(f"Splitting into {len(batches)} batches: {[len(batch) for batch in batches]} subscriptions each")
+    
+    # Collect results from all batches
+    merged_subscription_access_decisions = []
+    merged_value_data = []
+    successful_batches = 0
+    failed_batches = []
+    
+    for batch_num, batch_subscription_ids in enumerate(batches, 1):
+        logging.info(f"Processing batch {batch_num}/{len(batches)} with {len(batch_subscription_ids)} subscriptions")
+        
+        success, batch_data, error_message = make_carbon_api_request(
+            headers, batch_subscription_ids, month_str, timeout
+        )
+        
+        if success and batch_data:
+            # Merge subscription access decisions
+            if "subscriptionAccessDecisionList" in batch_data:
+                merged_subscription_access_decisions.extend(batch_data["subscriptionAccessDecisionList"])
+            
+            # Merge value data
+            if "value" in batch_data:
+                merged_value_data.extend(batch_data["value"])
+            
+            successful_batches += 1
+            logging.info(f"Batch {batch_num} completed successfully")
+        else:
+            failed_batches.append({"batch": batch_num, "error": error_message, "subscription_count": len(batch_subscription_ids)})
+            logging.error(f"Batch {batch_num} failed: {error_message}")
+    
+    # Check if we have any successful data
+    if successful_batches == 0:
+        return False, None, f"All {len(batches)} batches failed. First error: {failed_batches[0]['error'] if failed_batches else 'Unknown error'}"
+    
+    # Log summary
+    logging.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
+    if failed_batches:
+        failed_summary = []
+        for fb in failed_batches[:3]:  # Show first 3 failures
+            error_preview = fb['error'][:100] + "..." if len(fb['error']) > 100 else fb['error']
+            failed_summary.append(f"Batch {fb['batch']} ({fb['subscription_count']} subs): {error_preview}")
+        logging.warning(f"Failed batches: {len(failed_batches)} - {failed_summary}")
+    
+    # Create merged response
+    merged_response = {
+        "subscriptionAccessDecisionList": merged_subscription_access_decisions,
+        "value": merged_value_data
+    }
+    
+    # Add metadata about batching
+    merged_response["_batchingMetadata"] = {
+        "total_batches": len(batches),
+        "successful_batches": successful_batches,
+        "failed_batches": len(failed_batches),
+        "total_subscriptions": total_subscriptions,
+        "batch_size_used": max_batch_size
+    }
+    
+    return True, merged_response, None
 
 @app.function_name(name="CarbonApiDateRangeInfo")
 @app.route(route="carbon-date-range", auth_level=func.AuthLevel.FUNCTION)
@@ -621,6 +716,8 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         
         # Log detailed information about the request
         logging.info(f"Preparing Carbon API request with {len(subscription_ids)} subscriptions")
+        if len(subscription_ids) > 100:
+            logging.info(f"Subscription count ({len(subscription_ids)}) exceeds API limit of 100 - will use batched requests")
         logging.info(f"First 10 subscription IDs: {subscription_ids[:10]}")
         if len(subscription_ids) > 10:
             logging.info(f"... and {len(subscription_ids) - 10} more subscriptions")
@@ -637,14 +734,22 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             logging.info(f"Carbon data for {last_month.strftime('%Y-%m')} already exists at {existing_path}. Skipping API call and upload.")
             return  # Exit early if data already exists
         
-        # Call Carbon Optimization API using helper function
-        success, emissions_data, error_message = make_carbon_api_request(
+        # Call Carbon Optimization API using batched helper function
+        success, emissions_data, error_message = make_carbon_api_request_batched(
             headers, subscription_ids, start_date
         )
         
         if success:
             # Log response details for confirmation
             logging.info(f"Carbon API response received successfully")
+            
+            # Log batching information if available
+            if "_batchingMetadata" in emissions_data:
+                metadata = emissions_data["_batchingMetadata"]
+                logging.info(f"Batching summary: {metadata['successful_batches']}/{metadata['total_batches']} batches successful, {metadata['total_subscriptions']} total subscriptions")
+                if metadata['failed_batches'] > 0:
+                    logging.warning(f"Note: {metadata['failed_batches']} batches failed - some subscription data may be missing")
+            
             logging.info(f"Response data structure: {json.dumps(emissions_data, indent=2)[:1000]}...")  # First 1000 chars
             
             if 'value' in emissions_data and len(emissions_data['value']) > 0:
@@ -789,8 +894,8 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             
             logging.info(f"Processing month: {month_str} (within API range)")
             
-            # Call Carbon Optimization API using helper function
-            success, emissions_data, error_message = make_carbon_api_request(
+            # Call Carbon Optimization API using batched helper function
+            success, emissions_data, error_message = make_carbon_api_request_batched(
                 headers, subscription_ids, month_str
             )
             
@@ -916,8 +1021,14 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
                 logging.info(f"Skipping upload - carbon data already exists: {s3_path}")
                 return True  # Return success since data already exists
         
+        # Remove batching metadata before saving (internal use only)
+        data_to_save = data.copy()
+        if "_batchingMetadata" in data_to_save:
+            batching_info = data_to_save.pop("_batchingMetadata")
+            logging.info(f"Removed batching metadata before saving: {batching_info}")
+        
         # Convert to JSON string
-        json_data = json.dumps(data, indent=2).encode('utf-8')
+        json_data = json.dumps(data_to_save, indent=2).encode('utf-8')
         
         # Get S3 filesystem
         s3 = getS3FileSystem()
