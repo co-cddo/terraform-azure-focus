@@ -102,8 +102,20 @@ The module creates three distinct export pipelines for each of the data sets:
 #### Carbon Emissions Pipeline
 1. **Monthly Trigger**: `CarbonEmissionsExporter` function runs monthly on the 20th (timer trigger)
 2. **API Call**: Function calls Azure Carbon Optimization API for previous month's Scope 1 & 3 emissions
-3. **Processing**: Response data formatted as JSON with date range validation (2024-06-01 to 2025-06-01)
+3. **Processing**: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
 4. **Upload**: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+
+##### Carbon API Date Range Calculation
+The Carbon Optimization API provides a rolling 12-month window of emissions data. The available date range is calculated dynamically based on Microsoft's data availability policy:
+
+- **Data Availability**: Previous month's data becomes available by the 19th of the current month
+- **Rolling Window**: API provides access to exactly 12 months of historical data
+- **Dynamic Calculation**: Date ranges are recalculated on each function execution (no hard-coded dates)
+- **Automatic Adjustment**: Functions automatically use the most recent available data within the API's current range
+
+**Example**: On October 30, 2024 (day ≥19), the API would provide data for September 2023 through September 2024. The same function running on January 15, 2025 would provide data for November 2023 through November 2024.
+
+A test endpoint is available at `/api/carbon-date-range` to view the current calculated date range.
 
 #### Common Authentication Flow
 - Function Apps use Managed Identity to authenticate with Entra ID Application  
@@ -171,9 +183,34 @@ When the terraform apply has completed, exports in each billing account should a
 > [!NOTE]  
 > An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
 
-### Carbon Emissions Exporter
+### Carbon Emissions Data
 
+#### Initial Backfill
+For historical carbon emissions data, use the backfill HTTP endpoint instead of running the timer function:
+
+**Endpoint**: `POST /api/carbon-backfill`
+
+**Query Parameters**:
+- `force_overwrite=true` - Overwrite existing data files (default: false)
+- `skip_existing=false` - Process all months regardless of existing data (default: true)
+
+**Examples**:
+- `POST /api/carbon-backfill` - Skip months that already have data (idempotent)
+- `POST /api/carbon-backfill?force_overwrite=true` - Overwrite all existing data
+- `POST /api/carbon-backfill?skip_existing=false` - Process all months, but don't overwrite existing
+
+#### Date Range Information
+Check current API availability and existing data:
+
+**Endpoint**: `GET /api/carbon-date-range`
+
+**Query Parameters**:
+- `check_existing=true` - Also check which months already have data in S3
+
+#### Manual Monthly Export
 Run the function named 'CarbonEmissionsExporter' once. Note that you will need to temporarily configure the firewall and CORS rules to allow this (add an entry for https://portal.azure.com).
+
+**Idempotency**: Both the timer function and backfill endpoint are idempotent - they will skip processing if data already exists for a given month.
 
 ### Recommendations
 
@@ -227,6 +264,7 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
 | <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |
+| <a name="output_publish_code_command"></a> [publish\_code\_command](#output\_publish\_code\_command) | Publish code command for debugging |
 | <a name="output_recommendations_export_name"></a> [recommendations\_export\_name](#output\_recommendations\_export\_name) | The name of the Azure Advisor recommendations export (timer-triggered function) |
 | <a name="output_report_scopes"></a> [report\_scopes](#output\_report\_scopes) | Report scopes created for each billing account |
 <!-- END_TF_DOCS -->
