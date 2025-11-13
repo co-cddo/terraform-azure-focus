@@ -2,6 +2,7 @@ import azure.functions as func
 import logging
 from common import Config, getS3FileSystem, is_uuid, extract_subscription_ids_from_billing_scope, extract_billing_account_from_blob_path
 import pyarrow.parquet as pq
+import pyarrow.fs as fs
 import io
 import json
 import requests
@@ -999,7 +1000,7 @@ def check_carbon_data_exists(file_name):
         
         # Check if file exists
         file_info = s3.get_file_info(s3_path)
-        exists = file_info.type != 'not_found'
+        exists = file_info.type != fs.FileType.NotFound
         
         if exists:
             logging.info(f"Carbon data file already exists: {s3_path}")
