@@ -1054,3 +1054,394 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
     except Exception as e:
         logging.error(f"Error saving carbon data to S3: {str(e)}")
         raise
+
+@app.function_name(name="BackfillExportsRunner")
+@app.timer_trigger(schedule="0 0 0 30 2 *", arg_name="timer", run_on_startup=True)
+def backfill_exports_runner(timer: func.TimerRequest) -> None:
+    """Timer trigger function that runs the one-time backfill exports automatically after deployment.
+    
+    This function is scheduled for February 30th (which doesn't exist) so it will NEVER run via the timer schedule.
+    The run_on_startup=True ensures it runs immediately after deployment, then becomes permanently dormant.
+    It uses a flag in storage to track whether the backfill has already been completed.
+    """
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    
+    logging.info(f'Backfill exports runner triggered at: {utc_timestamp}')
+    
+    if timer.past_due:
+        logging.info('The timer is past due!')
+
+    try:
+        # Check if backfill has already been completed
+        if has_backfill_completed():
+            logging.info("Backfill already completed - skipping execution")
+            return
+        
+        # Lock to prevent concurrent executions
+        if not acquire_backfill_lock():
+            logging.info("Backfill is already running - skipping execution")
+            return
+        
+        try:
+            logging.info("Starting backfill exports execution...")
+            
+            # Get access token using managed identity
+            credential = ManagedIdentityCredential()
+            token = credential.get_token("https://management.azure.com/.default")
+            
+            headers = {
+                "Authorization": f"Bearer {token.token}",
+                "Content-Type": "application/json"
+            }
+            
+            # Get all backfill export names from local configuration
+            backfill_export_names = get_backfill_export_names()
+            
+            total_exports = len(backfill_export_names)
+            successful_runs = 0
+            failed_runs = 0
+            
+            logging.info(f"Found {total_exports} backfill exports to run")
+            
+            # Run each backfill export
+            for i, (export_name, export_scope) in enumerate(backfill_export_names, 1):
+                logging.info(f"Running backfill export {i}/{total_exports}: {export_name}")
+                
+                try:
+                    success = run_cost_export(export_scope, export_name, headers)
+                    
+                    if success:
+                        successful_runs += 1
+                        logging.info(f"Successfully started export: {export_name}")
+                        
+                        # Save progress
+                        save_backfill_progress(export_name, "completed", None)
+                        
+                    else:
+                        failed_runs += 1
+                        logging.error(f"Failed to start export: {export_name}")
+                        save_backfill_progress(export_name, "failed", "API call failed")
+                        
+                except Exception as e:
+                    failed_runs += 1
+                    error_msg = str(e)
+                    logging.error(f"Error running export {export_name}: {error_msg}")
+                    save_backfill_progress(export_name, "failed", error_msg)
+                    
+                # Small delay between exports to avoid rate limiting
+                import time
+                time.sleep(2)
+            
+            # Mark backfill as completed if all exports were attempted
+            completion_status = "completed" if failed_runs == 0 else "completed_with_errors"
+            mark_backfill_completed(completion_status, successful_runs, failed_runs)
+            
+            logging.info(f"Backfill execution completed: {successful_runs}/{total_exports} successful, {failed_runs} failed")
+            
+        finally:
+            # Always release the lock
+            release_backfill_lock()
+            
+    except Exception as e:
+        logging.error(f"Error in backfill exports runner: {str(e)}")
+        # Don't raise the exception to avoid function failures
+        
+def get_backfill_export_names():
+    """Get all backfill export names that need to be run based on Terraform configuration."""
+    backfill_exports = []
+    
+    try:
+        # Generate the same combinations as Terraform does
+        # Based on the Terraform configuration in cost_exports.tf
+        for account_idx, account_id in Config.billing_account_mapping.items():
+            account_scope = f"/providers/Microsoft.Billing/billingAccounts/{account_id}"
+            
+            # Generate backfill months (2022-01 to 2025-07 based on locals.tf)
+            for month_offset in range(0, (2025 - 2022) * 12 + 7):  # From 2022-01 to 2025-07
+                month = f"{2022 + month_offset // 12:04d}-{(month_offset % 12) + 1:02d}"
+                
+                export_key = f"{account_idx}-{month}"
+                export_name = f"focus-backfill-{export_key}"
+                
+                backfill_exports.append((export_name, account_scope))
+        
+        logging.info(f"Generated {len(backfill_exports)} backfill export configurations")
+        return backfill_exports
+        
+    except Exception as e:
+        logging.error(f"Error generating backfill export names: {str(e)}")
+        return []
+
+def run_cost_export(scope, export_name, headers, max_retries=3, retry_delay=30):
+    """Run a specific cost export using the Azure Cost Management API.
+    
+    Args:
+        scope (str): The billing scope for the export
+        export_name (str): The name of the export to run
+        headers (dict): HTTP headers including authorization
+        max_retries (int): Maximum number of retry attempts
+        retry_delay (int): Delay between retries in seconds
+        
+    Returns:
+        bool: True if export was successfully started, False otherwise
+    """
+    api_url = f"https://management.azure.com{scope}/providers/Microsoft.CostManagement/exports/{export_name}/run"
+    api_version = "2021-10-01"
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            logging.info(f"Triggering export run (attempt {attempt}): POST {api_url}")
+            
+            response = requests.post(
+                f"{api_url}?api-version={api_version}",
+                headers=headers,
+                json={},  # Empty body for export run
+                timeout=120
+            )
+            
+            if response.status_code == 200:
+                logging.info(f"Export {export_name} started successfully")
+                return True
+            elif response.status_code == 202:
+                logging.info(f"Export {export_name} accepted and is starting")
+                return True
+            elif response.status_code == 429:
+                # Rate limited - wait longer before retry
+                wait_time = retry_delay * attempt
+                logging.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt}")
+                import time
+                time.sleep(wait_time)
+                continue
+            else:
+                logging.error(f"Export run failed: {response.status_code} - {response.text}")
+                if attempt == max_retries:
+                    return False
+                    
+                # Wait before retry for other errors
+                import time
+                time.sleep(retry_delay)
+                continue
+                
+        except requests.exceptions.Timeout:
+            logging.warning(f"Request timed out for export {export_name} (attempt {attempt})")
+            if attempt < max_retries:
+                import time
+                time.sleep(retry_delay)
+                continue
+            else:
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error running export {export_name} (attempt {attempt}): {str(e)}")
+            if attempt < max_retries:
+                import time
+                time.sleep(retry_delay)
+                continue
+            else:
+                return False
+    
+    return False
+
+def has_backfill_completed():
+    """Check if the backfill has already been completed."""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
+        
+        flag_blob_name = "backfill_status/completion_flag.json"
+        
+        try:
+            blob_client = container_client.get_blob_client(flag_blob_name)
+            blob_data = blob_client.download_blob().readall()
+            status_data = json.loads(blob_data.decode('utf-8'))
+            
+            completion_status = status_data.get('status', 'not_completed')
+            logging.info(f"Backfill completion status: {completion_status}")
+            
+            return completion_status in ['completed', 'completed_with_errors']
+            
+        except Exception:
+            # Flag doesn't exist - backfill not completed
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error checking backfill completion status: {str(e)}")
+        return False
+
+def acquire_backfill_lock():
+    """Acquire a lock to prevent concurrent backfill executions."""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
+        
+        lock_blob_name = "backfill_status/execution_lock.json"
+        lock_data = {
+            "locked": True,
+            "locked_at": datetime.now(timezone.utc).isoformat(),
+            "function_instance": f"backfill-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        }
+        
+        try:
+            blob_client = container_client.get_blob_client(lock_blob_name)
+            
+            # Try to create the blob with if-none-match to ensure atomicity
+            blob_client.upload_blob(
+                json.dumps(lock_data, indent=2).encode('utf-8'),
+                overwrite=False  # Fail if blob already exists
+            )
+            
+            logging.info("Successfully acquired backfill execution lock")
+            return True
+            
+        except Exception:
+            # Lock already exists - another instance is running
+            logging.info("Failed to acquire lock - backfill may already be running")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error acquiring backfill lock: {str(e)}")
+        return False
+
+def release_backfill_lock():
+    """Release the backfill execution lock."""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
+        
+        lock_blob_name = "backfill_status/execution_lock.json"
+        blob_client = container_client.get_blob_client(lock_blob_name)
+        
+        try:
+            blob_client.delete_blob()
+            logging.info("Successfully released backfill execution lock")
+        except Exception:
+            logging.warning("Lock blob may not exist or already deleted")
+            
+    except Exception as e:
+        logging.error(f"Error releasing backfill lock: {str(e)}")
+
+def mark_backfill_completed(status, successful_runs, failed_runs):
+    """Mark the backfill as completed with summary statistics."""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
+        
+        flag_blob_name = "backfill_status/completion_flag.json"
+        completion_data = {
+            "status": status,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "total_exports": successful_runs + failed_runs,
+            "successful_runs": successful_runs,
+            "failed_runs": failed_runs,
+            "success_rate": round((successful_runs / (successful_runs + failed_runs)) * 100, 2) if (successful_runs + failed_runs) > 0 else 0
+        }
+        
+        blob_client = container_client.get_blob_client(flag_blob_name)
+        blob_client.upload_blob(
+            json.dumps(completion_data, indent=2).encode('utf-8'),
+            overwrite=True
+        )
+        
+        logging.info(f"Marked backfill as {status}: {successful_runs} successful, {failed_runs} failed")
+        
+    except Exception as e:
+        logging.error(f"Error marking backfill as completed: {str(e)}")
+
+def save_backfill_progress(export_name, status, error_message=None):
+    """Save progress for individual backfill export runs."""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
+        
+        progress_blob_name = f"backfill_status/export_progress/{export_name}.json"
+        progress_data = {
+            "export_name": export_name,
+            "status": status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error_message": error_message
+        }
+        
+        blob_client = container_client.get_blob_client(progress_blob_name)
+        blob_client.upload_blob(
+            json.dumps(progress_data, indent=2).encode('utf-8'),
+            overwrite=True
+        )
+        
+    except Exception as e:
+        logging.warning(f"Could not save progress for {export_name}: {str(e)}")
+
+@app.function_name(name="BackfillStatus")
+@app.route(route="backfill-status", auth_level=func.AuthLevel.FUNCTION)
+def backfill_status(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP trigger function that returns the status of the backfill exports process."""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
+        container_client = blob_service_client.get_container_client(Config.container_name)
+        
+        # Get overall completion status
+        flag_blob_name = "backfill_status/completion_flag.json"
+        overall_status = {"status": "not_started"}
+        
+        try:
+            blob_client = container_client.get_blob_client(flag_blob_name)
+            blob_data = blob_client.download_blob().readall()
+            overall_status = json.loads(blob_data.decode('utf-8'))
+        except Exception:
+            pass  # Flag doesn't exist yet
+        
+        # Get progress for individual exports (optional detailed view)
+        show_details = req.params.get('details', 'false').lower() == 'true'
+        export_details = []
+        
+        if show_details:
+            try:
+                # List all progress files
+                progress_blobs = container_client.list_blobs(name_starts_with="backfill_status/export_progress/")
+                
+                for blob in progress_blobs:
+                    try:
+                        blob_client = container_client.get_blob_client(blob.name)
+                        blob_data = blob_client.download_blob().readall()
+                        export_data = json.loads(blob_data.decode('utf-8'))
+                        export_details.append(export_data)
+                    except Exception:
+                        continue
+                        
+                # Sort by export name for consistent ordering
+                export_details.sort(key=lambda x: x.get('export_name', ''))
+                
+            except Exception as e:
+                logging.warning(f"Could not retrieve export details: {str(e)}")
+        
+        response_data = {
+            "overall_status": overall_status,
+            "total_expected_exports": len(get_backfill_export_names()),
+            "export_details_included": show_details,
+            "export_details": export_details if show_details else None
+        }
+        
+        if export_details and show_details:
+            # Add summary statistics
+            completed_count = len([d for d in export_details if d.get('status') == 'completed'])
+            failed_count = len([d for d in export_details if d.get('status') == 'failed'])
+            
+            response_data["progress_summary"] = {
+                "completed": completed_count,
+                "failed": failed_count,
+                "total_tracked": len(export_details)
+            }
+        
+        return func.HttpResponse(
+            json.dumps(response_data, indent=2),
+            status_code=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_msg = f"Error getting backfill status: {str(e)}"
+        logging.error(error_msg)
+        return func.HttpResponse(
+            json.dumps({"error": error_msg}),
+            status_code=500,
+            headers={"Content-Type": "application/json"}
+        )
