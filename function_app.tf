@@ -126,3 +126,39 @@ resource "null_resource" "set_function_app_public_network_access_disabled" {
 
   depends_on = [null_resource.publish_function_code]
 }
+
+resource "null_resource" "trigger_hello_world_function" {
+  provisioner "local-exec" {
+    interpreter = ["pwsh", "-Command"]
+    command     = <<-EOT
+      $masterKey = az functionapp keys list --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --query masterKey -o tsv
+      $functionUrl = "https://${azurerm_function_app_flex_consumption.cost_export.default_hostname}/admin/functions/HelloWorldNever"
+      $headers = @{
+        'x-functions-key' = $masterKey
+        'Content-Type' = 'application/json'
+      }
+      # Send an empty JSON object as the body for timer trigger functions
+      $body = @{
+        input = ""
+      } | ConvertTo-Json
+      try {
+        $response = Invoke-WebRequest -Uri $functionUrl -Method Post -Headers $headers -Body $body -UseBasicParsing
+        Write-Output "HelloWorldNever function triggered successfully. Status: $($response.StatusCode)"
+      } catch {
+        Write-Output "Error details: $($_.Exception.Message)"
+        if ($_.Exception.Response) {
+          $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+          $responseBody = $reader.ReadToEnd()
+          Write-Output "Response body: $responseBody"
+        }
+        Write-Warning "Failed to trigger HelloWorldNever function"
+      }
+    EOT
+  }
+
+  triggers = {
+    function_code_md5 = data.archive_file.function.output_md5
+  }
+
+  depends_on = [null_resource.publish_function_code]
+}

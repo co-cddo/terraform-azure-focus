@@ -1054,3 +1054,28 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
     except Exception as e:
         logging.error(f"Error saving carbon data to S3: {str(e)}")
         raise
+
+@app.function_name(name="HelloWorldNever")
+@app.timer_trigger(schedule="0 0 0 30 2 *", arg_name="timer", run_on_startup=False)
+def hello_world_never(timer: func.TimerRequest) -> None:
+    """Timer trigger function that runs on February 30th annually (never)
+    
+    This function will never execute because February 30th doesn't exist.
+    Schedule: "0 0 0 30 2 *" means:
+    - Second: 0
+    - Minute: 0
+    - Hour: 0 (midnight)
+    - Day: 30
+    - Month: 2 (February)
+    - Year: * (every year)
+    """
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    
+    logging.info(f'Hello World (Never) function triggered at: {utc_timestamp}')
+    logging.info('Hello, World! This message will never be logged because February 30th does not exist.')
+    
+    if timer.past_due:
+        logging.info('The timer is past due!')
+    
+    # This code will never run
+    print("Hello, World from the function that never runs!")
