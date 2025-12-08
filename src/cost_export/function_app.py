@@ -182,7 +182,6 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
             
             successful_batches += 1
             logging.info(f"Batch {batch_num} completed successfully")
-        else:
             failed_batches.append({"batch": batch_num, "error": error_message, "subscription_count": len(batch_subscription_ids)})
             logging.error(f"Batch {batch_num} failed: {error_message}")
     
@@ -662,7 +661,7 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
         raise
 
 @app.function_name(name="CarbonEmissionsExporter")
-@app.timer_trigger(schedule="0 0 20 * *", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 0 12 * * *", arg_name="timer", run_on_startup=False)
 def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports carbon emissions data monthly on the 20th
     
