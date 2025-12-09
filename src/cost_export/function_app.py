@@ -197,11 +197,25 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
             error_preview = fb['error'][:100] + "..." if len(fb['error']) > 100 else fb['error']
             failed_summary.append(f"Batch {fb['batch']} ({fb['subscription_count']} subs): {error_preview}")
         logging.warning(f"Failed batches: {len(failed_batches)} - {failed_summary}")
+
+    # aggregate the set of batch results
+    countOfBatchDataItems = len(merged_value_data)
+    accummulatedBatch = merged_value_data[0]
+    for myBatchItem in merged_value_data[1:]:
+        accummulatedBatch["latestMonthEmissions"] += myBatchItem["latestMonthEmissions"]
+        accummulatedBatch["previousMonthEmissions"] += myBatchItem["previousMonthEmissions"]
+        accummulatedBatch["monthlyEmissionsChangeValue"] += myBatchItem["monthlyEmissionsChangeValue"]
+        accummulatedBatch["carbonIntensity"] += myBatchItem["carbonIntensity"]
+    accummulatedBatch["monthOverMonthEmissionsChangeRatio"] = (accummulatedBatch["latestMonthEmissions"] - accummulatedBatch["previousMonthEmissions"]) / accummulatedBatch["previousMonthEmissions"]
+    accummulatedBatch["carbonIntensity"] = accummulatedBatch["carbonIntensity"] / countOfBatchDataItems
+
     
     # Create merged response
     merged_response = {
         "subscriptionAccessDecisionList": merged_subscription_access_decisions,
-        "value": merged_value_data
+        "value": [
+            accummulatedBatch
+        ]
     }
     
     # Add metadata about batching
@@ -212,8 +226,11 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         "total_subscriptions": total_subscriptions,
         "batch_size_used": max_batch_size
     }
+
+    logging.info(f"Merged response: {merged_response}")
     
-    return True, merged_response, None
+    # success is True only if no failed batches - will force an error
+    return merged_response["_batchingMetadata"]["failed_batches"] == 0, merged_response, None
 
 @app.function_name(name="CarbonApiDateRangeInfo")
 @app.route(route="carbon-date-range", auth_level=func.AuthLevel.FUNCTION)
