@@ -665,42 +665,47 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
 def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports carbon emissions data monthly on the 20th
     
-    Runs on the 20th because Azure Carbon Optimization data for the previous month
-    is available by day 19 of the current month (e.g., February data available by March 19).
+    Runs every day to collect the latest carbon export, if not already existing.
+    But the export data for the previous month is only released on the 19th of next month.
+
+    So each day this timer event runs, it attempts to download the previous months data if
+    not already existing.
+
+    By running every day, it allows for late release of the data by Microsoft.
     """
+    DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED=(19-1)     # minus 1 so when the timer runs on the 19th is will fetch the latest
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
     logging.info(f'Carbon emissions exporter triggered at: {utc_timestamp}')
     
     if timer.past_due:
-        logging.info('The timer is past due!')
+        logging.debug('The timer is past due!')
 
     try:
         # Get previous month date range using dynamic API range calculation
         today = datetime.now(timezone.utc)
-        last_month = today.replace(day=1) - timedelta(days=1)
+
+        # offset today's date by 19 days - which will be last month (upto the 19th day)
+        #  or this month if 19th and onwards
+
+        last_month = today - timedelta(month=1, days=DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED)
+        last_month_start = last_month.replace(day=1)
+        last_month_end = (last_month + timedelta(month=1)) - timedelta(day=1)
+
+        logging.info(f"WA DEBUG - today: {today.strftime('%Y-%m-%d')}, last_month: {last_month.strftime('%Y-%m-%d')} and WA last month: {last_month.strftime('%Y-%m-%d')}")
         
-        # Get current API available date range
-        api_start_date, api_end_date = get_carbon_api_date_range()
+        # carbon data for the previous month is released from the 19th of the next month
+        #  this timer simply needs to attempt downloading the current month's data from the 19th
+        #  and only if the current month's data does not exist.
+        # Examples:
+        #  1. today is 8th Dec 2025 - latest carbon export data available is 2025-10 (so start date is 2025-10-01) in API call and target S3 object is "carbon-emissions-2025-10.json"
+        #  2. today is 18th Dec 2025 - latest carbon export data available is 2025-10 (so start date is 2025-10-01) in API call and target S3 object is "carbon-emissions-2025-10.json"
+        #  3. today is 19th Dec 2025 - latest carbon export data available is 2025-11 (so start date is 2025-11-01) in API call and target S3 object is "carbon-emissions-2025-11.json"
+        start_date = last_month_start.strftime("%Y-%m-01")
+        end_date = last_month_end.strftime("%Y-%m-%d")
         
-        logging.info(f"Current Carbon API available range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
-        
-        # Check if the requested month is within the API range
-        if not is_month_within_api_range(last_month):
-            if last_month < api_start_date:
-                # If before API range, use the earliest available month
-                last_month = api_start_date
-                logging.info(f"Requested month was before API range, using earliest available: {last_month.strftime('%Y-%m-%d')}")
-            elif last_month > api_end_date:
-                # If after API range, use the latest available month
-                last_month = api_end_date
-                logging.info(f"Requested month was after API range, using latest available: {last_month.strftime('%Y-%m-%d')}")
-            
-        start_date = last_month.strftime("%Y-%m-01")
-        end_date = last_month.strftime("%Y-%m-%d")
-        
-        logging.info(f'Exporting carbon data for period: {start_date} to {end_date}')
-        
+        logging.info(f'Exporting carbon data month: {last_month.strftime("%Y-%m")} - from {start_date} to {end_date}')
+
         # Get access token using managed identity
         credential = ManagedIdentityCredential()
         token = credential.get_token("https://management.azure.com/.default")
@@ -754,13 +759,12 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             # Save to storage and upload to S3
             save_carbon_data_to_s3(emissions_data, file_name)
             
-            logging.info(f"Successfully exported carbon emissions data for {start_date} to {end_date}")
+            logging.info(f"Successfully exported carbon emissions data from {start_date} to {end_date}")
             
         else:
             logging.error(f"Carbon API request failed: {error_message}")
             logging.error(f"Request was for {len(subscription_ids)} subscriptions")
             logging.error(f"Attempted date range: {start_date} to {end_date}")
-            logging.error(f"Current API available range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
             raise Exception(f"Carbon API request failed: {error_message}")
             
     except Exception as e:
