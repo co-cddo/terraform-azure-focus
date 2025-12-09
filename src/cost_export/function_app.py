@@ -711,20 +711,6 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             "Content-Type": "application/json"
         }
         
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
-        
-        # Log detailed information about the request
-        logging.info(f"Preparing Carbon API request with {len(subscription_ids)} subscriptions")
-        if len(subscription_ids) > 100:
-            logging.info(f"Subscription count ({len(subscription_ids)}) exceeds API limit of 100 - will use batched requests")
-        logging.info(f"First 10 subscription IDs: {subscription_ids[:10]}")
-        if len(subscription_ids) > 10:
-            logging.info(f"... and {len(subscription_ids) - 10} more subscriptions")
-        
-        # Log the full request payload (excluding sensitive headers)
-        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions and date range {start_date} to {end_date}")
-        
         # Save to storage and upload to S3
         file_name = f"carbon-emissions-{last_month.strftime('%Y-%m')}.json"
         
@@ -733,6 +719,12 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         if exists:
             logging.info(f"Carbon data for {last_month.strftime('%Y-%m')} already exists at {existing_path}. Skipping API call and upload.")
             return  # Exit early if data already exists
+        
+        # Extract subscription IDs from billing scope
+        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        
+        # Log the full request payload (excluding sensitive headers)
+        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions target date {last_month}")
         
         # Call Carbon Optimization API using batched helper function
         success, emissions_data, error_message = make_carbon_api_request_batched(
