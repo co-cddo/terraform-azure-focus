@@ -182,13 +182,10 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
             
             successful_batches += 1
             logging.info(f"Batch {batch_num} completed successfully")
+        else:
             failed_batches.append({"batch": batch_num, "error": error_message, "subscription_count": len(batch_subscription_ids)})
             logging.error(f"Batch {batch_num} failed: {error_message}")
-    
-    # Check if we have any successful data
-    if successful_batches == 0:
-        return False, None, f"All {len(batches)} batches failed. First error: {failed_batches[0]['error'] if failed_batches else 'Unknown error'}"
-    
+       
     # Log summary
     logging.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
     if failed_batches:
@@ -223,7 +220,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
             "subscriptionAccessDecisionList": merged_subscription_access_decisions,
             "value": [
             ]
-        }   
+        }
     # Add metadata about batching
     merged_response["_batchingMetadata"] = {
         "total_batches": len(batches),
@@ -735,7 +732,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         
         # Call Carbon Optimization API using batched helper function
         success, emissions_data, error_message = make_carbon_api_request_batched(
-            headers, subscription_ids, carbon_api_fetch_date.strftime('%Y-%m')
+            headers, subscription_ids, carbon_api_fetch_date.strftime('%Y-%m-%d')
         )
         
         if success:
@@ -906,6 +903,10 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             else:
                 logging.error(error_message)
                 skipped_months += 1
+
+                # if the requested date is outside of the Carbon API date range, the batched API request returns an error
+                #  don't write an empty file
+                # the alternative could be to write a zero entry file
             
             # Move to next month
             if current_month == 12:
