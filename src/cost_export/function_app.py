@@ -823,13 +823,16 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
     # Parse query parameters
     force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
     skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
-    start_date = datetime.strptime(req.params.get('start_date'), '%Y-%m-%d')
-    logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}")
+    start_date_param = req.params.get('start_date')
+    logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
     
     try:
         # check parameters
-        if len(start_date) != 8:
-            raise Exception("Invalid start_date parameter. Given start date in format YYYY-MM-DD")
+        try:
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d')
+        except:
+            raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
+            
         current_year, current_month = start_date.year, start_date.month
 
         # Get access token using managed identity
