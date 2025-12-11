@@ -872,23 +872,34 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
                     continue
             
             logging.info(f"Processing month: {month_str}")
-            
-            # Create empty carbon data for months outside API range
-            empty_emissions_data = {
-                "value": [{
-                    "dataType": "MonthlySummaryData",
-                    "date": month_str,
-                    "carbonIntensity": 0.0,
-                    "latestMonthEmissions": 0.0,
-                    "previousMonthEmissions": 0.0,
-                    "monthOverMonthEmissionsChangeRatio": 0.0,
-                    "monthlyEmissionsChangeValue": 0.0,
-                    "note": "Data not available via API for this period"
-                }]
-            }
-            
-            save_carbon_data_to_s3(empty_emissions_data, file_name, force_overwrite=force_overwrite)
-            processed_months += 1
+
+            # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
+            #  will return an empty "value" array
+            success, emissions_data, error_message = make_carbon_api_request_batched(
+                headers, subscription_ids, month_date
+            )
+
+            if success:
+                if success and len(emissions_data["value"]) == 0:
+                    # Create empty carbon data for months outside API range
+                    empty_emissions_data = {
+                        "value": [{
+                            "dataType": "MonthlySummaryData",
+                            "date": month_str,
+                            "carbonIntensity": 0.0,
+                            "latestMonthEmissions": 0.0,
+                            "previousMonthEmissions": 0.0,
+                            "monthOverMonthEmissionsChangeRatio": 0.0,
+                            "monthlyEmissionsChangeValue": 0.0,
+                            "note": "Data not available via API for this period"
+                        }]
+                    }                
+                
+                save_carbon_data_to_s3(empty_emissions_data, file_name, force_overwrite=force_overwrite)
+                processed_months += 1
+            else:
+                logging.error(error_message)
+                skipped_months += 1
             
             # Move to next month
             if current_month == 12:
