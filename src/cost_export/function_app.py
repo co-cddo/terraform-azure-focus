@@ -871,7 +871,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
                         current_month += 1
                     continue
             
-            logging.info(f"Processing month: {month_str} (outside API range - will create empty record)")
+            logging.info(f"Processing month: {month_str}")
             
             # Create empty carbon data for months outside API range
             empty_emissions_data = {
