@@ -177,7 +177,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
                 merged_subscription_access_decisions.extend(batch_data["subscriptionAccessDecisionList"])
             
             # Merge value data
-            if "value" in batch_data:
+            if "value" in batch_data and len(batch_data["value"]) > 0:
                 merged_value_data.extend(batch_data["value"])
             
             successful_batches += 1
@@ -200,24 +200,30 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
 
     # aggregate the set of batch results
     countOfBatchDataItems = len(merged_value_data)
-    accummulatedBatch = merged_value_data[0]
-    for myBatchItem in merged_value_data[1:]:
-        accummulatedBatch["latestMonthEmissions"] += myBatchItem["latestMonthEmissions"]
-        accummulatedBatch["previousMonthEmissions"] += myBatchItem["previousMonthEmissions"]
-        accummulatedBatch["monthlyEmissionsChangeValue"] += myBatchItem["monthlyEmissionsChangeValue"]
-        accummulatedBatch["carbonIntensity"] += myBatchItem["carbonIntensity"]
-    accummulatedBatch["monthOverMonthEmissionsChangeRatio"] = (accummulatedBatch["latestMonthEmissions"] - accummulatedBatch["previousMonthEmissions"]) / accummulatedBatch["previousMonthEmissions"]
-    accummulatedBatch["carbonIntensity"] = accummulatedBatch["carbonIntensity"] / countOfBatchDataItems
+    if countOfBatchDataItems > 0:
+        accummulatedBatch = merged_value_data[0]
+        for myBatchItem in merged_value_data[1:]:
+            accummulatedBatch["latestMonthEmissions"] += myBatchItem["latestMonthEmissions"]
+            accummulatedBatch["previousMonthEmissions"] += myBatchItem["previousMonthEmissions"]
+            accummulatedBatch["monthlyEmissionsChangeValue"] += myBatchItem["monthlyEmissionsChangeValue"]
+            accummulatedBatch["carbonIntensity"] += myBatchItem["carbonIntensity"]
+        accummulatedBatch["monthOverMonthEmissionsChangeRatio"] = (accummulatedBatch["latestMonthEmissions"] - accummulatedBatch["previousMonthEmissions"]) / accummulatedBatch["previousMonthEmissions"]
+        accummulatedBatch["carbonIntensity"] = accummulatedBatch["carbonIntensity"] / countOfBatchDataItems
 
     
-    # Create merged response
-    merged_response = {
-        "subscriptionAccessDecisionList": merged_subscription_access_decisions,
-        "value": [
-            accummulatedBatch
-        ]
-    }
-    
+        # Create merged response
+        merged_response = {
+            "subscriptionAccessDecisionList": merged_subscription_access_decisions,
+            "value": [
+                accummulatedBatch
+            ]
+        }
+    else:
+        merged_response = {
+            "subscriptionAccessDecisionList": merged_subscription_access_decisions,
+            "value": [
+            ]
+        }   
     # Add metadata about batching
     merged_response["_batchingMetadata"] = {
         "total_batches": len(batches),
@@ -699,7 +705,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
 
     try:
         # Get previous month date range using dynamic API range calculation
-        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()     
+        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
         logging.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
         # Get access token using managed identity
@@ -729,7 +735,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         
         # Call Carbon Optimization API using batched helper function
         success, emissions_data, error_message = make_carbon_api_request_batched(
-            headers, subscription_ids, carbon_api_fetch_date
+            headers, subscription_ids, carbon_api_fetch_date.strftime('%Y-%m')
         )
         
         if success:
@@ -760,7 +766,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         else:
             logging.error(f"Carbon API request failed: {error_message}")
             logging.error(f"Request was for {len(subscription_ids)} subscriptions")
-            logging.error(f"Attempted date: {carbon_api_fetch_date}")
+            logging.error(f"Attempted date: {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
             raise Exception(f"Carbon API request failed: {error_message}")
             
     except Exception as e:
