@@ -690,7 +690,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
 
     By running every day, it allows for late release of the data by Microsoft.
     """
-    DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED=(19-1)     # minus 1 so when the timer runs on the 19th is will fetch the latest
+    DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED=19
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
     logging.info(f'Carbon emissions exporter triggered at: {utc_timestamp}')
@@ -702,15 +702,6 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         # Get previous month date range using dynamic API range calculation
         today = datetime.now(timezone.utc)
 
-        # offset today's date by 19 days - which will be last month (upto the 19th day)
-        #  or this month if 19th and onwards
-
-        last_month = today - timedelta(month=1, days=DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED)
-        last_month_start = last_month.replace(day=1)
-        last_month_end = (last_month + timedelta(month=1)) - timedelta(day=1)
-
-        logging.info(f"WA DEBUG - today: {today.strftime('%Y-%m-%d')}, last_month: {last_month.strftime('%Y-%m-%d')} and WA last month: {last_month.strftime('%Y-%m-%d')}")
-        
         # carbon data for the previous month is released from the 19th of the next month
         #  this timer simply needs to attempt downloading the current month's data from the 19th
         #  and only if the current month's data does not exist.
@@ -718,10 +709,29 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         #  1. today is 8th Dec 2025 - latest carbon export data available is 2025-10 (so start date is 2025-10-01) in API call and target S3 object is "carbon-emissions-2025-10.json"
         #  2. today is 18th Dec 2025 - latest carbon export data available is 2025-10 (so start date is 2025-10-01) in API call and target S3 object is "carbon-emissions-2025-10.json"
         #  3. today is 19th Dec 2025 - latest carbon export data available is 2025-11 (so start date is 2025-11-01) in API call and target S3 object is "carbon-emissions-2025-11.json"
-        start_date = last_month_start.strftime("%Y-%m-01")
-        end_date = last_month_end.strftime("%Y-%m-%d")
-        
-        logging.info(f'Exporting carbon data month: {last_month.strftime("%Y-%m")} - from {start_date} to {end_date}')
+
+        # timedelta doesn't have a month offset (so annoying) - because of the variation of days in a month - is not using it
+        # if today is the carbon release day or more, then attempt to fetch last months carbon data
+        # if today is less than carbon release day, then attempt to fetch the month before last's carbon data
+
+        # but we can apply some business logic based on day export is available
+        # if today's day is less than DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED, then the "start date & end date" for
+        #  API call use the first day of the two months previous to this month
+        # else
+        #  API call uses the first day of the last month previous to this month
+        current_day = today.day
+        NUMBER_OF_MONTH_OFFSET = 1
+        if current_day < DAY_OF_MONTH_EXPORT_DATA_IS_RELEASED:
+            NUMBER_OF_MONTH_OFFSET = 2
+
+        current_month = today.month
+        # months starts at one, so subtract 1 before mod and add 1 back after mod
+        fetch_month = ((current_month - 1 - NUMBER_OF_MONTH_OFFSET) % 12) + 1
+
+        carbon_api_fetch_date = today.replace(month=fetch_month, day=1)
+        print('API fetch date is: ', carbon_api_fetch_date.strftime('%Y-%m-%d'))
+       
+        logging.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
         # Get access token using managed identity
         credential = ManagedIdentityCredential()
@@ -734,23 +744,23 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         }
         
         # Save to storage and upload to S3
-        file_name = f"carbon-emissions-{last_month.strftime('%Y-%m')}.json"
+        file_name = f"carbon-emissions-{carbon_api_fetch_date.strftime('%Y-%m')}.json"
         
         # Check if data already exists
         exists, existing_path = check_carbon_data_exists(file_name)
         if exists:
-            logging.info(f"Carbon data for {last_month.strftime('%Y-%m')} already exists at {existing_path}. Skipping API call and upload.")
+            logging.info(f"Carbon data for {carbon_api_fetch_date.strftime('%Y-%m')} already exists at {existing_path}.")
             return  # Exit early if data already exists
         
         # Extract subscription IDs from billing scope
         subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
         
         # Log the full request payload (excluding sensitive headers)
-        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions target date {last_month}")
+        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions target date")
         
         # Call Carbon Optimization API using batched helper function
         success, emissions_data, error_message = make_carbon_api_request_batched(
-            headers, subscription_ids, start_date
+            headers, subscription_ids, carbon_api_fetch_date
         )
         
         if success:
@@ -776,12 +786,12 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             # Save to storage and upload to S3
             save_carbon_data_to_s3(emissions_data, file_name)
             
-            logging.info(f"Successfully exported carbon emissions data from {start_date} to {end_date}")
+            logging.info(f"Successfully exported carbon emissions data for {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
             
         else:
             logging.error(f"Carbon API request failed: {error_message}")
             logging.error(f"Request was for {len(subscription_ids)} subscriptions")
-            logging.error(f"Attempted date range: {start_date} to {end_date}")
+            logging.error(f"Attempted date: {carbon_api_fetch_date}")
             raise Exception(f"Carbon API request failed: {error_message}")
             
     except Exception as e:
