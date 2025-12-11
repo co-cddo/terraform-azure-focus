@@ -897,54 +897,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             else:
                 current_month += 1
         
-        # Now process months within API range
-        current_year, current_month = api_start_year, api_start_month
-        api_end_year, api_end_month = api_end_date.year, api_end_date.month
-        
-        # Process up to and including the end month of API range
-        while (current_year, current_month) <= (api_end_year, api_end_month):
-            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
-            month_str = month_date.strftime("%Y-%m-01")
-            file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
-            
-            # Check if data already exists
-            if skip_existing:
-                exists, existing_path = check_carbon_data_exists(file_name)
-                if exists:
-                    logging.info(f"Skipping {month_str} - data already exists at {existing_path}")
-                    skipped_months += 1
-                    # Move to next month
-                    if current_month == 12:
-                        current_year += 1
-                        current_month = 1
-                    else:
-                        current_month += 1
-                    continue
-            
-            logging.info(f"Processing month: {month_str} (within API range)")
-            
-            # Call Carbon Optimization API using batched helper function
-            success, emissions_data, error_message = make_carbon_api_request_batched(
-                headers, subscription_ids, month_str
-            )
-            
-            if success:
-                save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
-                processed_months += 1
-                logging.info(f"Successfully processed {month_str}")
-            else:
-                logging.error(f"API request failed for {month_str}: {error_message}")
-                # Continue processing other months even if one fails
-            
-            # Move to next month
-            if current_month == 12:
-                current_year += 1
-                current_month = 1
-            else:
-                current_month += 1
-        
         logging.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
-        logging.info(f"API range used: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
         
         return func.HttpResponse(
             f"Carbon backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months. API range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}",
