@@ -882,7 +882,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
             #  will return an empty "value" array
             success, emissions_data, error_message = make_carbon_api_request_batched(
-                headers, subscription_ids, month_date
+                headers, subscription_ids, month_str
             )
 
             if success:
@@ -899,7 +899,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
                             "monthlyEmissionsChangeValue": 0.0,
                             "note": "Data not available via API for this period"
                         }]
-                    }                
+                    }
                 
                 save_carbon_data_to_s3(empty_emissions_data, file_name, force_overwrite=force_overwrite)
                 processed_months += 1
@@ -921,7 +921,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         logging.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
         
         return func.HttpResponse(
-            f"Carbon backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months. API range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}",
+            f"Carbon backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
             status_code=200
         )
         
