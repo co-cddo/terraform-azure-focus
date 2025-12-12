@@ -813,6 +813,8 @@ def carbon_export_api_latest_fetch_date() -> datetime:
 def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP trigger function for carbon emissions backfill from given start date in ISO format (YYYY-MM-DD)
     Query parameters:
+    - start_date: Required parameter; is the ISO date (YYYY-MM-DD) to start backfill from, e.g. 2024-01-01
+    - write_empty_object: Set to 'false' to skip writing an empty result set - if date range exists Azure API range (default: true)
     - force_overwrite: Set to 'true' to overwrite existing data (default: false)
     - skip_existing: Set to 'false' to process all months regardless of existing data (default: true)
     """
@@ -822,9 +824,23 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
     
     # Parse query parameters
     force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
+    write_empty_object = req.params.get('write_empty_object', 'true').lower() == 'true'
     skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
     start_date_param = req.params.get('start_date')
     logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
+
+    EMPTY_EMISSIONS_DATA = {
+        "value": [{
+            "dataType": "MonthlySummaryData",
+            "date": month_str,
+            "carbonIntensity": 0.0,
+            "latestMonthEmissions": 0.0,
+            "previousMonthEmissions": 0.0,
+            "monthOverMonthEmissionsChangeRatio": 0.0,
+            "monthlyEmissionsChangeValue": 0.0,
+            "note": "Data not available via API for this period"
+        }]
+    }
     
     try:
         # check parameters
@@ -888,28 +904,20 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             if success:
                 if success and len(emissions_data["value"]) == 0:
                     # Create empty carbon data for months outside API range
-                    emissions_data = {
-                        "value": [{
-                            "dataType": "MonthlySummaryData",
-                            "date": month_str,
-                            "carbonIntensity": 0.0,
-                            "latestMonthEmissions": 0.0,
-                            "previousMonthEmissions": 0.0,
-                            "monthOverMonthEmissionsChangeRatio": 0.0,
-                            "monthlyEmissionsChangeValue": 0.0,
-                            "note": "Data not available via API for this period"
-                        }]
-                    }
+                    emissions_data = EMPTY_EMISSIONS_DATA
                 
                 save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
                 processed_months += 1
             else:
                 logging.error(error_message)
-                skipped_months += 1
-
-                # if the requested date is outside of the Carbon API date range, the batched API request returns an error
-                #  don't write an empty file
-                # the alternative could be to write a zero entry file
+                if write_empty_object:
+                    logging.warning(f"Unable to process month: {month_str}. Writing empty results")
+                    emissions_data = EMPTY_EMISSIONS_DATA                
+                    save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
+                    processed_months += 1
+                else:
+                    logging.error(f"Unable to process month: {month_str}. Not writing empty results")
+                    skipped_months += 1
             
             # Move to next month
             if current_month == 12:
