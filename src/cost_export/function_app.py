@@ -888,7 +888,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             if success:
                 if success and len(emissions_data["value"]) == 0:
                     # Create empty carbon data for months outside API range
-                    empty_emissions_data = {
+                    emissions_data = {
                         "value": [{
                             "dataType": "MonthlySummaryData",
                             "date": month_str,
@@ -901,7 +901,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
                         }]
                     }
                 
-                save_carbon_data_to_s3(empty_emissions_data, file_name, force_overwrite=force_overwrite)
+                save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
                 processed_months += 1
             else:
                 logging.error(error_message)
