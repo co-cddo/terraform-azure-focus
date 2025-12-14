@@ -123,7 +123,7 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
     except Exception as e:
         return False, None, f"Unexpected error in API request: {str(e)}"
 
-def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeout=300, max_batch_size=100):
+def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeout=300, max_batch_size=10):
     """
     Make Carbon Optimization API requests in batches to handle subscription limits.
     
