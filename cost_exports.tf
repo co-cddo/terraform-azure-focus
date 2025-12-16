@@ -1,7 +1,7 @@
 resource "azapi_resource" "daily_cost_export" {
   for_each = local.billing_accounts_map
 
-  type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
+  type      = "Microsoft.CostManagement/exports@2025-03-01"
   name      = "focus-daily-cost-export-${each.key}"
   parent_id = each.value.scope
   location  = var.location
@@ -60,7 +60,7 @@ resource "azapi_resource" "backfill_cost_exports" {
     ]) : combination.key => combination
   }
 
-  type      = "Microsoft.CostManagement/exports@2023-07-01-preview"
+  type      = "Microsoft.CostManagement/exports@2025-03-01"
   name      = "focus-backfill-${each.value.key}"
   parent_id = each.value.scope
   location  = var.location
@@ -98,7 +98,7 @@ resource "azapi_resource" "backfill_cost_exports" {
         }
       }
       partitionData         = true
-      dataOverwriteBehavior = "CreateNewReport"
+      dataOverwriteBehavior = "OverwritePreviousReport"
       compressionMode       = "None"
     }
   }

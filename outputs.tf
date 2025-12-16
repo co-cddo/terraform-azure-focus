@@ -38,6 +38,11 @@ output "billing_accounts_map" {
   value       = local.billing_accounts_map
 }
 
+output "current_principal_type" {
+  description = "Principal type of the current Azure client (ServicePrincipal or User)"
+  value       = var.current_principal_type
+}
+
 output "publish_code_command" {
   description = "Publish code command for debugging"
   value       = local.publish_code_command

@@ -1,7 +1,23 @@
 import azure.functions as func
 import logging
-from common import Config, getS3FileSystem, is_uuid, extract_subscription_ids_from_billing_scope, extract_billing_account_from_blob_path
+from common import(
+  Config,
+  getS3FileSystem,
+  is_uuid,
+  extract_subscription_ids_from_billing_scope,
+  extract_billing_account_from_blob_path,
+)
+from carbonExport import (
+  get_carbon_api_date_range,
+  is_month_within_api_range,
+  make_carbon_api_request_batched,
+  carbon_export_api_latest_fetch_date,
+  check_carbon_data_exists,
+  empty_emissions_data,
+  save_carbon_data_to_s3,
+)
 import pyarrow.parquet as pq
+import pyarrow.fs as fs
 import io
 import json
 import requests
@@ -10,215 +26,6 @@ from azure.identity import ManagedIdentityCredential
 from datetime import datetime, timezone, timedelta
 
 app = func.FunctionApp()
-
-def get_carbon_api_date_range():
-    """
-    Calculate the available date range for the Carbon Optimization API.
-    
-    Based on Microsoft documentation:
-    - Data for the previous month is available by day 19 of the current month
-    - API provides access to up to 12 months of emissions data (rolling window)
-    - Data is updated monthly with 12-month retention
-    
-    Returns:
-        tuple: (start_date, end_date) as datetime objects representing the available range
-    """
-    today = datetime.now(timezone.utc)
-    
-    # Data for previous month is available by day 19
-    # If today is before the 19th, last available data is from 2 months ago
-    # If today is on/after the 19th, last available data is from last month
-    if today.day >= 19:
-        # Latest data available is from last month
-        latest_available_month = today.replace(day=1) - timedelta(days=1)  # Last day of previous month
-    else:
-        # Latest data available is from 2 months ago
-        last_month = today.replace(day=1) - timedelta(days=1)  # Last day of previous month
-        latest_available_month = last_month.replace(day=1) - timedelta(days=1)  # Last day of month before that
-    
-    # API provides 12 months of data, so earliest available is 12 months before latest
-    earliest_available_month = latest_available_month.replace(day=1)  # First day of latest month
-    for _ in range(11):  # Go back 11 more months (total 12 months)
-        if earliest_available_month.month == 1:
-            earliest_available_month = earliest_available_month.replace(year=earliest_available_month.year - 1, month=12)
-        else:
-            earliest_available_month = earliest_available_month.replace(month=earliest_available_month.month - 1)
-    
-    # Convert to first day of earliest month and last day of latest month
-    start_date = earliest_available_month
-    end_date = latest_available_month
-    
-    return start_date, end_date
-
-def is_month_within_api_range(target_month):
-    """
-    Check if a given month is within the Carbon API's available date range.
-    
-    Args:
-        target_month (datetime): The month to check
-        
-    Returns:
-        bool: True if the month is within the available range
-    """
-    start_date, end_date = get_carbon_api_date_range()
-    
-    # Convert target_month to first day of month for comparison
-    target_first_day = target_month.replace(day=1)
-    start_first_day = start_date.replace(day=1)
-    end_first_day = end_date.replace(day=1)
-    
-    return start_first_day <= target_first_day <= end_first_day
-
-def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
-    """
-    Make a Carbon Optimization API request with proper error handling.
-    
-    Args:
-        headers (dict): Request headers including authorization
-        subscription_ids (list): List of subscription IDs
-        month_str (str): Month string in YYYY-MM-DD format
-        timeout (int): Request timeout in seconds
-        
-    Returns:
-        tuple: (success: bool, data: dict or None, error_message: str or None)
-    """
-    api_url = "https://management.azure.com/providers/Microsoft.Carbon/carbonEmissionReports"
-    api_version = "2025-04-01"
-    
-    request_data = {
-        "reportType": "MonthlySummaryReport",
-        "subscriptionList": subscription_ids,
-        "carbonScopeList": ["Scope1", "Scope3"],
-        "dateRange": {
-            "start": month_str,
-            "end": month_str
-        }
-    }
-    
-    try:
-        response = requests.post(
-            f"{api_url}?api-version={api_version}",
-            headers=headers,
-            json=request_data,
-            timeout=timeout
-        )
-        
-        if response.status_code == 200:
-            return True, response.json(), None
-        else:
-            error_msg = f"API request failed with status {response.status_code}: {response.text}"
-            # Check if it's a date range error
-            if response.status_code == 400 and "InvalidRequestPropertyValue" in response.text:
-                if "should be in available range" in response.text:
-                    error_msg += " - Date is outside the available range for Carbon Optimization API"
-            return False, None, error_msg
-            
-    except requests.exceptions.Timeout:
-        return False, None, f"API request timed out after {timeout} seconds"
-    except requests.exceptions.RequestException as e:
-        return False, None, f"API request failed: {str(e)}"
-    except Exception as e:
-        return False, None, f"Unexpected error in API request: {str(e)}"
-
-@app.function_name(name="CarbonApiDateRangeInfo")
-@app.route(route="carbon-date-range", auth_level=func.AuthLevel.FUNCTION)
-def carbon_api_date_range_info(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP trigger function that returns the current Carbon API available date range
-    
-    Query parameters:
-    - check_existing: Set to 'true' to also check which months already have data in S3 (default: false)
-    """
-    try:
-        # Parse query parameters
-        check_existing = req.params.get('check_existing', 'false').lower() == 'true'
-        
-        # Get current API available date range dynamically
-        api_start_date, api_end_date = get_carbon_api_date_range()
-        
-        # Calculate what month would be processed by the regular exporter
-        today = datetime.now(timezone.utc)
-        last_month = today.replace(day=1) - timedelta(days=1)
-        
-        # Check if last month is within range
-        is_last_month_available = is_month_within_api_range(last_month)
-        
-        # Prepare response data
-        response_data = {
-            "current_date": today.strftime("%Y-%m-%d"),
-            "api_available_range": {
-                "start_date": api_start_date.strftime("%Y-%m-%d"),
-                "end_date": api_end_date.strftime("%Y-%m-%d"),
-                "total_months": ((api_end_date.year - api_start_date.year) * 12 + 
-                               (api_end_date.month - api_start_date.month) + 1)
-            },
-            "last_month_processing": {
-                "target_month": last_month.strftime("%Y-%m-%d"),
-                "is_available": is_last_month_available,
-                "would_be_processed": last_month.strftime("%Y-%m-01") if is_last_month_available else "N/A"
-            },
-            "calculation_logic": {
-                "data_available_by_day": 19,
-                "rolling_window_months": 12,
-                "description": "Data for previous month available by day 19. API provides 12-month rolling window."
-            }
-        }
-        
-        # Optionally check which months already have data
-        if check_existing:
-            existing_data = []
-            missing_data = []
-            
-            # Check a sample of months from 2022 to current API range
-            start_check = datetime(2022, 1, 1, tzinfo=timezone.utc)
-            end_check = api_end_date
-            
-            current = start_check
-            while current <= end_check:
-                file_name = f"carbon-emissions-{current.strftime('%Y-%m')}.json"
-                exists, s3_path = check_carbon_data_exists(file_name)
-                
-                month_info = {
-                    "month": current.strftime("%Y-%m"),
-                    "file_name": file_name,
-                    "within_api_range": is_month_within_api_range(current)
-                }
-                
-                if exists:
-                    month_info["s3_path"] = s3_path
-                    existing_data.append(month_info)
-                else:
-                    missing_data.append(month_info)
-                
-                # Move to next month
-                if current.month == 12:
-                    current = current.replace(year=current.year + 1, month=1)
-                else:
-                    current = current.replace(month=current.month + 1)
-            
-            response_data["existing_data_check"] = {
-                "total_existing": len(existing_data),
-                "total_missing": len(missing_data),
-                "existing_months": [item["month"] for item in existing_data],
-                "missing_months": [item["month"] for item in missing_data],
-                "note": "This check covers 2022-01 through current API range"
-            }
-        
-        logging.info(f"Carbon API date range info requested: check_existing={check_existing}")
-        
-        return func.HttpResponse(
-            json.dumps(response_data, indent=2),
-            status_code=200,
-            headers={"Content-Type": "application/json"}
-        )
-        
-    except Exception as e:
-        error_msg = f"Error getting Carbon API date range info: {str(e)}"
-        logging.error(error_msg)
-        return func.HttpResponse(
-            json.dumps({"error": error_msg}),
-            status_code=500,
-            headers={"Content-Type": "application/json"}
-        )
 
 # Log billing account configuration at startup
 logging.info("=== Billing Account Configuration ===")
@@ -475,6 +282,59 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         logging.error(f"Error in daily cost export processor: {str(e)}")
         raise
 
+def sanitize_recommendations_data(data):
+    """Remove sensitive data from recommendations for security reasons"""
+    if not isinstance(data, dict) or "value" not in data:
+        return data
+    
+    sanitized_data = data.copy()
+    sanitized_recommendations = []
+    
+    for recommendation in data.get("value", []):
+        sanitized_rec = recommendation.copy()
+        
+        # Remove impactedValue from properties
+        if "properties" in sanitized_rec and "impactedValue" in sanitized_rec["properties"]:
+            del sanitized_rec["properties"]["impactedValue"]
+        
+        # Remove resourceMetadata object entirely
+        if "properties" in sanitized_rec and "resourceMetadata" in sanitized_rec["properties"]:
+            del sanitized_rec["properties"]["resourceMetadata"]
+        
+        sanitized_recommendations.append(sanitized_rec)
+    
+    sanitized_data["value"] = sanitized_recommendations
+    return sanitized_data
+
+def save_recommendations_to_s3(data, file_name):
+    """Save Azure Advisor recommendations data to S3"""
+    try:
+        # Sanitize data before saving to remove sensitive information
+        sanitized_data = sanitize_recommendations_data(data)
+        
+        # Convert to JSON string
+        json_data = json.dumps(sanitized_data, indent=2).encode('utf-8')
+        
+        # Get S3 filesystem
+        s3 = getS3FileSystem()
+        
+        # Use current date directly for billing period instead of parsing from filename
+        current_date = datetime.now(timezone.utc)
+        billing_period = current_date.strftime("%Y%m%d")  # Current date as YYYYMMDD (e.g., 20250814)
+        s3_path = f"{Config.s3_recommendations_path.rstrip('/')}/gds-recommendations-v1/billing_period={billing_period}/{file_name}"
+        
+        logging.info(f"Saving recommendations with billing_period={billing_period} to path: {s3_path}")
+        
+        # Upload to S3
+        with s3.open_output_stream(s3_path) as f:
+            f.write(json_data)
+            
+        logging.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
+        
+    except Exception as e:
+        logging.error(f"Error saving recommendations data to S3: {str(e)}")
+        raise
+
 @app.function_name(name="AdvisorRecommendationsExporter")
 @app.timer_trigger(schedule="0 0 2 * * *", arg_name="timer", run_on_startup=False)
 def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
@@ -565,47 +425,131 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
         logging.error(f"Error in Azure Advisor recommendations exporter: {str(e)}")
         raise
 
+@app.function_name(name="CarbonApiDateRangeInfo")
+@app.route(route="carbon-date-range", auth_level=func.AuthLevel.FUNCTION)
+def carbon_api_date_range_info(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP trigger function that returns the current Carbon API available date range
+    
+    Query parameters:
+    - check_existing: Set to 'true' to also check which months already have data in S3 (default: false)
+    """
+    try:
+        # Parse query parameters
+        check_existing = req.params.get('check_existing', 'false').lower() == 'true'
+        
+        # Get current API available date range dynamically
+        api_start_date, api_end_date = get_carbon_api_date_range()
+        
+        # Calculate what month would be processed by the regular exporter
+        today = datetime.now(timezone.utc)
+        last_month = today.replace(day=1) - timedelta(days=1)
+        
+        # Check if last month is within range
+        is_last_month_available = is_month_within_api_range(last_month)
+        
+        # Prepare response data
+        response_data = {
+            "current_date": today.strftime("%Y-%m-%d"),
+            "api_available_range": {
+                "start_date": api_start_date.strftime("%Y-%m-%d"),
+                "end_date": api_end_date.strftime("%Y-%m-%d"),
+                "total_months": ((api_end_date.year - api_start_date.year) * 12 + 
+                               (api_end_date.month - api_start_date.month) + 1)
+            },
+            "last_month_processing": {
+                "target_month": last_month.strftime("%Y-%m-%d"),
+                "is_available": is_last_month_available,
+                "would_be_processed": last_month.strftime("%Y-%m-01") if is_last_month_available else "N/A"
+            },
+            "calculation_logic": {
+                "data_available_by_day": 19,
+                "rolling_window_months": 12,
+                "description": "Data for previous month available by day 19. API provides 12-month rolling window."
+            }
+        }
+        
+        # Optionally check which months already have data
+        if check_existing:
+            existing_data = []
+            missing_data = []
+            
+            # Check a sample of months from 2022 to current API range
+            start_check = datetime(2022, 1, 1, tzinfo=timezone.utc)
+            end_check = api_end_date
+            
+            current = start_check
+            while current <= end_check:
+                file_name = f"carbon-emissions-{current.strftime('%Y-%m')}.json"
+                exists, s3_path = check_carbon_data_exists(file_name)
+                
+                month_info = {
+                    "month": current.strftime("%Y-%m"),
+                    "file_name": file_name,
+                    "within_api_range": is_month_within_api_range(current)
+                }
+                
+                if exists:
+                    month_info["s3_path"] = s3_path
+                    existing_data.append(month_info)
+                else:
+                    missing_data.append(month_info)
+                
+                # Move to next month
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+            
+            response_data["existing_data_check"] = {
+                "total_existing": len(existing_data),
+                "total_missing": len(missing_data),
+                "existing_months": [item["month"] for item in existing_data],
+                "missing_months": [item["month"] for item in missing_data],
+                "note": "This check covers 2022-01 through current API range"
+            }
+        
+        logging.info(f"Carbon API date range info requested: check_existing={check_existing}")
+        
+        return func.HttpResponse(
+            json.dumps(response_data, indent=2),
+            status_code=200,
+            headers={"Content-Type": "application/json"}
+        )
+        
+    except Exception as e:
+        error_msg = f"Error getting Carbon API date range info: {str(e)}"
+        logging.error(error_msg)
+        return func.HttpResponse(
+            json.dumps({"error": error_msg}),
+            status_code=500,
+            headers={"Content-Type": "application/json"}
+        )
+
 @app.function_name(name="CarbonEmissionsExporter")
-@app.timer_trigger(schedule="0 0 20 * *", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 0 12 * * *", arg_name="timer", run_on_startup=False)
 def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports carbon emissions data monthly on the 20th
     
-    Runs on the 20th because Azure Carbon Optimization data for the previous month
-    is available by day 19 of the current month (e.g., February data available by March 19).
+    Runs every day to collect the latest carbon export, if not already existing.
+    But the export data for the previous month is only released on the 19th of next month.
+
+    So each day this timer event runs, it attempts to download the previous months data if
+    not already existing.
+
+    By running every day, it allows for late release of the data by Microsoft.
     """
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
     logging.info(f'Carbon emissions exporter triggered at: {utc_timestamp}')
     
     if timer.past_due:
-        logging.info('The timer is past due!')
+        logging.debug('The timer is past due!')
 
     try:
         # Get previous month date range using dynamic API range calculation
-        today = datetime.now(timezone.utc)
-        last_month = today.replace(day=1) - timedelta(days=1)
-        
-        # Get current API available date range
-        api_start_date, api_end_date = get_carbon_api_date_range()
-        
-        logging.info(f"Current Carbon API available range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
-        
-        # Check if the requested month is within the API range
-        if not is_month_within_api_range(last_month):
-            if last_month < api_start_date:
-                # If before API range, use the earliest available month
-                last_month = api_start_date
-                logging.info(f"Requested month was before API range, using earliest available: {last_month.strftime('%Y-%m-%d')}")
-            elif last_month > api_end_date:
-                # If after API range, use the latest available month
-                last_month = api_end_date
-                logging.info(f"Requested month was after API range, using latest available: {last_month.strftime('%Y-%m-%d')}")
-            
-        start_date = last_month.strftime("%Y-%m-01")
-        end_date = last_month.strftime("%Y-%m-%d")
-        
-        logging.info(f'Exporting carbon data for period: {start_date} to {end_date}')
-        
+        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
+        logging.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
+
         # Get access token using managed identity
         credential = ManagedIdentityCredential()
         token = credential.get_token("https://management.azure.com/.default")
@@ -616,35 +560,37 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             "Content-Type": "application/json"
         }
         
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
-        
-        # Log detailed information about the request
-        logging.info(f"Preparing Carbon API request with {len(subscription_ids)} subscriptions")
-        logging.info(f"First 10 subscription IDs: {subscription_ids[:10]}")
-        if len(subscription_ids) > 10:
-            logging.info(f"... and {len(subscription_ids) - 10} more subscriptions")
-        
-        # Log the full request payload (excluding sensitive headers)
-        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions and date range {start_date} to {end_date}")
-        
         # Save to storage and upload to S3
-        file_name = f"carbon-emissions-{last_month.strftime('%Y-%m')}.json"
+        file_name = f"carbon-emissions-{carbon_api_fetch_date.strftime('%Y-%m')}.json"
         
         # Check if data already exists
         exists, existing_path = check_carbon_data_exists(file_name)
         if exists:
-            logging.info(f"Carbon data for {last_month.strftime('%Y-%m')} already exists at {existing_path}. Skipping API call and upload.")
+            logging.info(f"Carbon data for {carbon_api_fetch_date.strftime('%Y-%m')} already exists at {existing_path}.")
             return  # Exit early if data already exists
         
-        # Call Carbon Optimization API using helper function
-        success, emissions_data, error_message = make_carbon_api_request(
-            headers, subscription_ids, start_date
+        # Extract subscription IDs from billing scope
+        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        
+        # Log the full request payload (excluding sensitive headers)
+        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions target date")
+        
+        # Call Carbon Optimization API using batched helper function
+        success, emissions_data, error_message = make_carbon_api_request_batched(
+            headers, subscription_ids, carbon_api_fetch_date.strftime('%Y-%m-%d')
         )
         
         if success:
             # Log response details for confirmation
             logging.info(f"Carbon API response received successfully")
+            
+            # Log batching information if available
+            if "_batchingMetadata" in emissions_data:
+                metadata = emissions_data["_batchingMetadata"]
+                logging.info(f"Batching summary: {metadata['successful_batches']}/{metadata['total_batches']} batches successful, {metadata['total_subscriptions']} total subscriptions")
+                if metadata['failed_batches'] > 0:
+                    logging.warning(f"Note: {metadata['failed_batches']} batches failed - some subscription data may be missing")
+            
             logging.info(f"Response data structure: {json.dumps(emissions_data, indent=2)[:1000]}...")  # First 1000 chars
             
             if 'value' in emissions_data and len(emissions_data['value']) > 0:
@@ -657,13 +603,12 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             # Save to storage and upload to S3
             save_carbon_data_to_s3(emissions_data, file_name)
             
-            logging.info(f"Successfully exported carbon emissions data for {start_date} to {end_date}")
+            logging.info(f"Successfully exported carbon emissions data for {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
             
         else:
             logging.error(f"Carbon API request failed: {error_message}")
             logging.error(f"Request was for {len(subscription_ids)} subscriptions")
-            logging.error(f"Attempted date range: {start_date} to {end_date}")
-            logging.error(f"Current API available range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
+            logging.error(f"Attempted date: {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
             raise Exception(f"Carbon API request failed: {error_message}")
             
     except Exception as e:
@@ -673,9 +618,10 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
 @app.function_name(name="CarbonEmissionsBackfill")
 @app.route(route="carbon-backfill", auth_level=func.AuthLevel.FUNCTION)
 def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP trigger function for carbon emissions backfill from 2022-01-01
-    
+    """HTTP trigger function for carbon emissions backfill from given start date in ISO format (YYYY-MM-DD)
     Query parameters:
+    - start_date: Required parameter; is the ISO date (YYYY-MM-DD) to start backfill from, e.g. 2024-01-01
+    - write_empty_object: Set to 'false' to skip writing an empty result set - if date range exists Azure API range (default: true)
     - force_overwrite: Set to 'true' to overwrite existing data (default: false)
     - skip_existing: Set to 'false' to process all months regardless of existing data (default: true)
     """
@@ -685,11 +631,20 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
     
     # Parse query parameters
     force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
+    write_empty_object = req.params.get('write_empty_object', 'true').lower() == 'true'
     skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
-    
-    logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}")
+    start_date_param = req.params.get('start_date')
+    logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}, write_empty_object={write_empty_object}")
     
     try:
+        # check parameters
+        try:
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d')
+        except:
+            raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
+            
+        current_year, current_month = start_date.year, start_date.month
+
         # Get access token using managed identity
         credential = ManagedIdentityCredential()
         token = credential.get_token("https://management.azure.com/.default")
@@ -702,23 +657,18 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         # Extract subscription IDs from billing scope
         subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
         
-        logging.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions")
+        logging.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions from {start_date.strftime('%Y-%m-%d')}")
         
-        # Get current API available date range dynamically
-        api_start_date, api_end_date = get_carbon_api_date_range()
-        
-        logging.info(f"Current Carbon API available range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
-        
-        # Generate months from 2022-01 to the start of API range
-        start_year, start_month = 2022, 1
-        api_start_year, api_start_month = api_start_date.year, api_start_date.month
-        
-        current_year, current_month = start_year, start_month
         processed_months = 0
         skipped_months = 0
+
+        # backfill should through until the latest carbon export data is available
+        #  which from "carbon_emissions_exporter" is the around the 19th for the last month
+        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
+        latest_fetch_month, latest_fetch_year = carbon_api_fetch_date.month, carbon_api_fetch_date.year
         
         # Process months before API range (create empty records)
-        while (current_year, current_month) < (api_start_year, api_start_month):
+        while (current_year, current_month) <= (latest_fetch_year, latest_fetch_month):
             month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
             month_str = month_date.strftime("%Y-%m-01")
             file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
@@ -737,70 +687,31 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
                         current_month += 1
                     continue
             
-            logging.info(f"Processing month: {month_str} (outside API range - will create empty record)")
-            
-            # Create empty carbon data for months outside API range
-            empty_emissions_data = {
-                "value": [{
-                    "dataType": "MonthlySummaryData",
-                    "date": month_str,
-                    "carbonIntensity": 0.0,
-                    "latestMonthEmissions": 0.0,
-                    "previousMonthEmissions": 0.0,
-                    "monthOverMonthEmissionsChangeRatio": 0.0,
-                    "monthlyEmissionsChangeValue": 0.0,
-                    "note": "Data not available via API for this period"
-                }]
-            }
-            
-            save_carbon_data_to_s3(empty_emissions_data, file_name, force_overwrite=force_overwrite)
-            processed_months += 1
-            
-            # Move to next month
-            if current_month == 12:
-                current_year += 1
-                current_month = 1
-            else:
-                current_month += 1
-        
-        # Now process months within API range
-        current_year, current_month = api_start_year, api_start_month
-        api_end_year, api_end_month = api_end_date.year, api_end_date.month
-        
-        # Process up to and including the end month of API range
-        while (current_year, current_month) <= (api_end_year, api_end_month):
-            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
-            month_str = month_date.strftime("%Y-%m-01")
-            file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
-            
-            # Check if data already exists
-            if skip_existing:
-                exists, existing_path = check_carbon_data_exists(file_name)
-                if exists:
-                    logging.info(f"Skipping {month_str} - data already exists at {existing_path}")
-                    skipped_months += 1
-                    # Move to next month
-                    if current_month == 12:
-                        current_year += 1
-                        current_month = 1
-                    else:
-                        current_month += 1
-                    continue
-            
-            logging.info(f"Processing month: {month_str} (within API range)")
-            
-            # Call Carbon Optimization API using helper function
-            success, emissions_data, error_message = make_carbon_api_request(
+            logging.info(f"Processing month: {month_str}")
+
+            # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
+            #  will return an empty "value" array
+            success, emissions_data, error_message = make_carbon_api_request_batched(
                 headers, subscription_ids, month_str
             )
-            
+
             if success:
+                if success and len(emissions_data["value"]) == 0:
+                    # Create empty carbon data for months outside API range
+                    emissions_data = empty_emissions_data(month_str)
+                
                 save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
                 processed_months += 1
-                logging.info(f"Successfully processed {month_str}")
             else:
-                logging.error(f"API request failed for {month_str}: {error_message}")
-                # Continue processing other months even if one fails
+                logging.error(error_message)
+                if write_empty_object:
+                    logging.warning(f"Unable to process month: {month_str}. Writing empty results")
+                    emissions_data = empty_emissions_data(month_str)
+                    save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
+                    processed_months += 1
+                else:
+                    logging.error(f"Unable to process month: {month_str}. Not writing empty results")
+                    skipped_months += 1
             
             # Move to next month
             if current_month == 12:
@@ -810,10 +721,9 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
                 current_month += 1
         
         logging.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
-        logging.info(f"API range used: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}")
         
         return func.HttpResponse(
-            f"Carbon backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months. API range: {api_start_date.strftime('%Y-%m-%d')} to {api_end_date.strftime('%Y-%m-%d')}",
+            f"Carbon backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
             status_code=200
         )
         
@@ -824,121 +734,3 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             error_msg,
             status_code=500
         )
-
-def sanitize_recommendations_data(data):
-    """Remove sensitive data from recommendations for security reasons"""
-    if not isinstance(data, dict) or "value" not in data:
-        return data
-    
-    sanitized_data = data.copy()
-    sanitized_recommendations = []
-    
-    for recommendation in data.get("value", []):
-        sanitized_rec = recommendation.copy()
-        
-        # Remove impactedValue from properties
-        if "properties" in sanitized_rec and "impactedValue" in sanitized_rec["properties"]:
-            del sanitized_rec["properties"]["impactedValue"]
-        
-        # Remove resourceMetadata object entirely
-        if "properties" in sanitized_rec and "resourceMetadata" in sanitized_rec["properties"]:
-            del sanitized_rec["properties"]["resourceMetadata"]
-        
-        sanitized_recommendations.append(sanitized_rec)
-    
-    sanitized_data["value"] = sanitized_recommendations
-    return sanitized_data
-
-def save_recommendations_to_s3(data, file_name):
-    """Save Azure Advisor recommendations data to S3"""
-    try:
-        # Sanitize data before saving to remove sensitive information
-        sanitized_data = sanitize_recommendations_data(data)
-        
-        # Convert to JSON string
-        json_data = json.dumps(sanitized_data, indent=2).encode('utf-8')
-        
-        # Get S3 filesystem
-        s3 = getS3FileSystem()
-        
-        # Use current date directly for billing period instead of parsing from filename
-        current_date = datetime.now(timezone.utc)
-        billing_period = current_date.strftime("%Y%m%d")  # Current date as YYYYMMDD (e.g., 20250814)
-        s3_path = f"{Config.s3_recommendations_path.rstrip('/')}/gds-recommendations-v1/billing_period={billing_period}/{file_name}"
-        
-        logging.info(f"Saving recommendations with billing_period={billing_period} to path: {s3_path}")
-        
-        # Upload to S3
-        with s3.open_output_stream(s3_path) as f:
-            f.write(json_data)
-            
-        logging.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
-        
-    except Exception as e:
-        logging.error(f"Error saving recommendations data to S3: {str(e)}")
-        raise
-
-def check_carbon_data_exists(file_name):
-    """Check if carbon data file already exists in S3"""
-    try:
-        # Get S3 filesystem
-        s3 = getS3FileSystem()
-        
-        # Create S3 path with billing period structure matching the data month
-        # Extract YYYY-MM from filename like "carbon-emissions-2025-05.json"
-        filename_parts = file_name.replace('.json', '').split('-')
-        year_month = f"{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05"
-        data_month = datetime.strptime(year_month, '%Y-%m')
-        billing_period = data_month.strftime("%Y%m01")  # First day of data month
-        s3_path = f"{Config.s3_carbon_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={billing_period}/{file_name}"
-        
-        # Check if file exists
-        file_info = s3.get_file_info(s3_path)
-        exists = file_info.type != 'not_found'
-        
-        if exists:
-            logging.info(f"Carbon data file already exists: {s3_path}")
-        
-        return exists, s3_path
-        
-    except Exception as e:
-        logging.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
-        # If we can't check, assume it doesn't exist to be safe
-        return False, None
-
-def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
-    """Save carbon emissions data to S3 with idempotency check"""
-    try:
-        # Check if file already exists (unless forcing overwrite)
-        if not force_overwrite:
-            exists, s3_path = check_carbon_data_exists(file_name)
-            if exists:
-                logging.info(f"Skipping upload - carbon data already exists: {s3_path}")
-                return True  # Return success since data already exists
-        
-        # Convert to JSON string
-        json_data = json.dumps(data, indent=2).encode('utf-8')
-        
-        # Get S3 filesystem
-        s3 = getS3FileSystem()
-        
-        # Create S3 path with billing period structure matching the data month
-        # Use the same month as the data we're exporting, not the current month
-        # Extract YYYY-MM from filename like "carbon-emissions-2025-05.json"
-        filename_parts = file_name.replace('.json', '').split('-')
-        year_month = f"{filename_parts[-2]}-{filename_parts[-1]}"  # Get "2025-05"
-        data_month = datetime.strptime(year_month, '%Y-%m')
-        billing_period = data_month.strftime("%Y%m01")  # First day of data month
-        s3_path = f"{Config.s3_carbon_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={billing_period}/{file_name}"
-        
-        # Upload to S3
-        with s3.open_output_stream(s3_path) as f:
-            f.write(json_data)
-            
-        action = "Overwritten" if force_overwrite else "Uploaded"
-        logging.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
-        return True
-        
-    except Exception as e:
-        logging.error(f"Error saving carbon data to S3: {str(e)}")
-        raise

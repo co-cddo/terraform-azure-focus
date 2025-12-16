@@ -6,6 +6,7 @@
 -->
 
 ![Github Actions](../../actions/workflows/terraform.yml/badge.svg)
+![Python Tests](../../actions/workflows/python-tests.yml/badge.svg)
 
 # terraform-azure-focus
 
@@ -100,10 +101,15 @@ The module creates three distinct export pipelines for each of the data sets:
 4. **Upload**: JSON data uploaded to S3 in partitioned structure: `gds-recommendations-v1/billing_period=YYYYMMDD/`
 
 #### Carbon Emissions Pipeline
-1. **Monthly Trigger**: `CarbonEmissionsExporter` function runs monthly on the 20th (timer trigger)
-2. **API Call**: Function calls Azure Carbon Optimization API for previous month's Scope 1 & 3 emissions
-3. **Processing**: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
-4. **Upload**: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+- **Monthly Trigger**: `CarbonEmissionsExporter` function runs every day to download the latest data as soon as it becomes available (around the 19th of each month)
+  - API Call: Function calls Azure Carbon Optimization API against `MonthlySummaryReport` for previous month's Scope 1 & 3 emissions
+    - Batches the API call per 100 subscriptions, and merges all each of the datasets into one - refer to "subscription batching" below.
+  - Processing: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
+  - Upload: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+- **Backfill** - called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD, called the same API as the monthly trigger but for each month from the
+given start date.
+  - If data is not available (see "rolling window" below), will upload a default "zero" dataset.
+    - Optionally, takes a parameter called `write_empty_object`, which when set to "False", skips each month with no data.
 
 ##### Carbon API Date Range Calculation
 The Carbon Optimization API provides a rolling 12-month window of emissions data. The available date range is calculated dynamically based on Microsoft's data availability policy:
@@ -113,9 +119,24 @@ The Carbon Optimization API provides a rolling 12-month window of emissions data
 - **Dynamic Calculation**: Date ranges are recalculated on each function execution (no hard-coded dates)
 - **Automatic Adjustment**: Functions automatically use the most recent available data within the API's current range
 
-**Example**: On October 30, 2024 (day ≥19), the API would provide data for September 2023 through September 2024. The same function running on January 15, 2025 would provide data for November 2023 through November 2024.
+**Example**: On October 30, 2024 (day ≥19), the API would provide data for September 2024. The same function running on January 15, 2025 would provide data for November 2025.
 
 A test endpoint is available at `/api/carbon-date-range` to view the current calculated date range.
+
+##### Carbon API Subscription Batching
+The Carbon Optimization API has a maximum limit of 100 subscriptions per request. The functions automatically handle large subscription lists through intelligent batching:
+
+- **Automatic Batching**: Subscription lists >100 are automatically split into batches of 100 or fewer
+- **Result Merging**: Responses from multiple batches are seamlessly merged into a single result
+- **Error Handling**: Partial failures are handled gracefully - successful batches are preserved even if some fail
+- **Transparent Operation**: Batching is completely transparent to users and maintains all existing functionality
+- **Enhanced Logging**: Detailed logs show batch progress and any issues
+
+**Example**: For 131 subscriptions (like GDS), the system automatically:
+1. Creates 2 batches: 100 + 31 subscriptions
+2. Makes 2 separate API calls
+3. Merges the results automatically
+4. Provides complete data as if from a single request
 
 #### Common Authentication Flow
 - Function Apps use Managed Identity to authenticate with Entra ID Application  
@@ -165,6 +186,9 @@ module "example" {
   resource_group_name                 = "rg-cost-export"
   # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network        = false
+  
+  # Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
+  # current_principal_type = "ServicePrincipal"
 }
 ```
 
@@ -216,6 +240,48 @@ Run the function named 'CarbonEmissionsExporter' once. Note that you will need t
 
 We don't provide a backfill for this dataset.
 
+## Testing
+
+This module includes comprehensive tests for the carbon export functionality, including dynamic date range calculations, idempotency features, and subscription batching logic.
+
+### Running Tests Locally
+
+Use the Makefile targets for easy test execution:
+
+```bash
+# Run all Python tests
+make tests-python
+
+# Quick validation (syntax check + unit tests)
+make python-test-quick
+
+# Run individual test suites
+cd src/cost_export
+python3 test_carbon_date_range.py      # Date range calculation tests
+python3 test_carbon_idempotency.py     # Idempotency behavior tests  
+python3 test_carbon_batching.py        # Subscription batching integration tests
+python3 test_carbon_batching_unit.py   # Subscription batching unit tests
+```
+
+### Test Coverage
+
+The test suite covers:
+
+- **Dynamic Date Range Calculation**: Validates that carbon API date ranges are calculated correctly based on Microsoft's data availability rules
+- **Idempotency**: Ensures carbon export functions can be safely re-run without duplicate processing
+- **Subscription Batching**: Tests the automatic batching logic that handles large subscription lists (>100) for the Carbon API
+- **Error Handling**: Validates graceful handling of API limits and failures
+- **Syntax Validation**: Ensures all Python code compiles correctly
+
+### GitHub Actions
+
+The `.github/workflows/python-tests.yml` workflow automatically runs all tests on:
+- Pull requests modifying carbon export code
+- Pushes to the main branch
+- Multiple Python versions (3.9, 3.10, 3.11)
+
+Tests include both functional validation and code quality checks (linting, formatting, security).
+
 ## Update Documentation
 
 The `terraform-docs` utility is used to generate this README. Follow the below steps to update:
@@ -250,6 +316,7 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the existing resource group where the virtual network is located | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | `"uk-gov-gds-cost-inbound-azure"` | no |
+| <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
@@ -263,6 +330,7 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | <a name="output_billing_accounts_map"></a> [billing\_accounts\_map](#output\_billing\_accounts\_map) | Map of billing account indices to IDs and scopes |
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
 | <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
+| <a name="output_current_principal_type"></a> [current\_principal\_type](#output\_current\_principal\_type) | Principal type of the current Azure client (ServicePrincipal or User) |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |
 | <a name="output_publish_code_command"></a> [publish\_code\_command](#output\_publish\_code\_command) | Publish code command for debugging |
 | <a name="output_recommendations_export_name"></a> [recommendations\_export\_name](#output\_recommendations\_export\_name) | The name of the Azure Advisor recommendations export (timer-triggered function) |
