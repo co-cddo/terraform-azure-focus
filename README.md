@@ -101,10 +101,15 @@ The module creates three distinct export pipelines for each of the data sets:
 4. **Upload**: JSON data uploaded to S3 in partitioned structure: `gds-recommendations-v1/billing_period=YYYYMMDD/`
 
 #### Carbon Emissions Pipeline
-1. **Monthly Trigger**: `CarbonEmissionsExporter` function runs monthly on the 20th (timer trigger)
-2. **API Call**: Function calls Azure Carbon Optimization API for previous month's Scope 1 & 3 emissions
-3. **Processing**: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
-4. **Upload**: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+- **Monthly Trigger**: `CarbonEmissionsExporter` function runs every day to download the latest data as soon as it becomes available (around the 19th of each month)
+  - API Call: Function calls Azure Carbon Optimization API against `MonthlySummaryReport` for previous month's Scope 1 & 3 emissions
+    - Batches the API call per 100 subscriptions, and merges all each of the datasets into one - refer to "subscription batching" below.
+  - Processing: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
+  - Upload: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+- **Backfill** - called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD, called the same API as the monthly trigger but for each month from the
+given start date.
+  - If data is not available (see "rolling window" below), will upload a default "zero" dataset.
+    - Optionally, takes a parameter called `write_empty_object`, which when set to "False", skips each month with no data.
 
 ##### Carbon API Date Range Calculation
 The Carbon Optimization API provides a rolling 12-month window of emissions data. The available date range is calculated dynamically based on Microsoft's data availability policy:
@@ -114,7 +119,7 @@ The Carbon Optimization API provides a rolling 12-month window of emissions data
 - **Dynamic Calculation**: Date ranges are recalculated on each function execution (no hard-coded dates)
 - **Automatic Adjustment**: Functions automatically use the most recent available data within the API's current range
 
-**Example**: On October 30, 2024 (day ≥19), the API would provide data for September 2023 through September 2024. The same function running on January 15, 2025 would provide data for November 2023 through November 2024.
+**Example**: On October 30, 2024 (day ≥19), the API would provide data for September 2024. The same function running on January 15, 2025 would provide data for November 2025.
 
 A test endpoint is available at `/api/carbon-date-range` to view the current calculated date range.
 
