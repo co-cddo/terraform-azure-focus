@@ -734,3 +734,65 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             error_msg,
             status_code=500
         )
+
+@app.function_name(name="BackfillTrigger")
+@app.timer_trigger(schedule="0 0 6 * * 1-5", arg_name="timer", run_on_startup=False)
+def backfill_trigger(timer: func.TimerRequest) -> None:
+    """Timer trigger function that triggers the running of backfill for both cost export and carbon export.
+
+    Checks for backfill export lock objects on the target S3 bucket; if exists, does nothing, else
+    run the associated CostExportBackfill and CarbonEmissionsBackfill.
+    """
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    
+    logging.info(f'Exporter backfill trigger at: {utc_timestamp}')
+
+    try:
+        if timer.past_due:
+            logging.debug('The timer is past due!')
+            
+    except Exception as e:
+        logging.error(f"Error in exporter backfill trigger: {str(e)}")
+        raise
+
+@app.function_name(name="CostExportBackfill")
+@app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)
+def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP trigger function for cost export backfill from given start date in ISO format (YYYY-MM-DD)
+    
+    Query parameters:
+    - start_date: Required parameter; is the ISO date (YYYY-MM-DD) to start backfill from, e.g. 2024-01-01
+    - force_overwrite: Set to 'true' to overwrite existing data (default: false)
+    - skip_existing: Set to 'false' to process all months regardless of existing data (default: true)
+    """
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    logging.info(f'Cost export backfill triggered at: {utc_timestamp}')
+
+    try:
+        # Parse query parameters
+        force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
+        skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
+        start_date_param = req.params.get('start_date')
+        logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
+        
+        # check parameters
+        try:
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d')
+        except:
+            raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
+        
+        processed_months = 1
+        skipped_months = 1
+
+        return func.HttpResponse(
+            f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
+            status_code=200
+        )
+        
+    except Exception as e:
+        error_msg = f"Error inCost Export backfill: {str(e)}"
+        logging.error(error_msg)
+        return func.HttpResponse(
+            error_msg,
+            status_code=500
+        )

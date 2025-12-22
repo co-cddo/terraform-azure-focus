@@ -57,6 +57,20 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     #     action     = "Allow"
     #   }
     # }
+
+    # apologies from Warren - temporarily setting cors and ip access
+    # cors {
+    #   allowed_origins = ["https://portal.azure.com"]
+    #   support_credentials = false
+    # }
+
+    # ip_restriction {
+    #   action                    = "Allow"
+    #   headers                   = []
+    #   ip_address                = "149.22.163.195/32"
+    #   name                      = "From Warren's home"
+    #   priority                  = 300
+    # }
   }
 
   app_settings = {
@@ -79,6 +93,10 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
     # Mapping of billing account index to billing account ID for S3 path organization
     "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
+
+    "BACKFILL_START_DATE"                       = var.backfill_start_date
+    "BACKFILL_END_DATE"                         = var.backfill_end_date
+    "BACKFILL_DEPLOYMENT_DATE"                  = timeadd(timestamp(formatdate('YYYY-MM-01Thh:mm:ss', time_static.recurrence.id)), "-1m")
   }
 }
 
