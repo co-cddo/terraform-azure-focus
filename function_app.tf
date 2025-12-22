@@ -96,7 +96,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
 
     "BACKFILL_START_DATE"                       = var.backfill_start_date
     "BACKFILL_END_DATE"                         = var.backfill_end_date
-    "BACKFILL_DEPLOYMENT_DATE"                  = timeadd(timestamp(formatdate('YYYY-MM-01Thh:mm:ss', time_static.recurrence.id)), "-1m")
+    # "BACKFILL_DEPLOYMENT_DATE"                  = timeadd(timestamp(formatdate("YYYY-MM-01T00:00:00", time_static.recurrence.id)), "-1m")
   }
 }
 

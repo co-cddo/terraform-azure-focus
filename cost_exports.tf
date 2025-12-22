@@ -108,12 +108,12 @@ resource "azapi_resource" "backfill_cost_exports" {
 # Create a single one-time backfill exports for historical data - but with a super extended from/to
 resource "azapi_resource" "backfill_cost_exports_singular" {
   for_each = {
-    for account_idx, account in local.billing_accounts_map : [
-      {
+    for combination in flatten([
+      for account_idx, account in local.billing_accounts_map : {
         key   = "${account_idx}"
         scope = account.scope
       }
-    ]
+    ]) : combination.key => combination
   }
 
   type      = "Microsoft.CostManagement/exports@2025-03-01"
@@ -138,7 +138,7 @@ resource "azapi_resource" "backfill_cost_exports_singular" {
         timeframe = "Custom"
         timePeriod = {
           from = "${var.backfill_start_date}-01T00:00:00Z"
-          to   = "${var.backfill_end_date]}T23:59:59Z"
+          to   = "${var.backfill_end_date}T23:59:59Z"
         }
       }
       schedule = {
