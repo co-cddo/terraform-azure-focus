@@ -758,8 +758,11 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
 @app.function_name(name="CostExportBackfill")
 @app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)
 def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP trigger function for cost export backfill from given start date in ISO format (YYYY-MM-DD)
-    
+    """HTTP trigger function for cost export backfill from given start date in ISO format (YYYY-MM-DD).
+
+    The Cost Management API supports up to 7 years of data, so the start_date will be no older than 7 years:
+      https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports.
+
     Query parameters:
     - start_date: Required parameter; is the ISO date (YYYY-MM-DD) to start backfill from, e.g. 2024-01-01
     - force_overwrite: Set to 'true' to overwrite existing data (default: false)

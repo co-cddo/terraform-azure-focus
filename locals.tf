@@ -27,7 +27,7 @@ locals {
   # Generate backfill exports for each month from January 2022 to last complete month
   # Generate a list of year-month combinations from 2022-01 to 2025-07 (July 2025, last complete month)
   backfill_months = [
-    for month_offset in range(0, (2025 - 2022) * 12 + 7) : # From 2022-01 to 2025-07
+    for month_offset in range(0, (2025 - 2019) * 12 + 7) : # From 2022-01 to 2025-07
     format("%04d-%02d",
       2022 + floor(month_offset / 12),
       (month_offset % 12) + 1
