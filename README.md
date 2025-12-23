@@ -144,58 +144,6 @@ The Carbon Optimization API has a maximum limit of 100 subscriptions per request
 - All data transfers secured with cross-cloud federation (no long-lived AWS credentials)
 - Application Insights provides telemetry and monitoring for all pipelines
 
-### Security Features
-
-- **Private Networking**: All components use private endpoints and VNet integration
-- **Zero Trust**: No public network access (except during deployment if `deploy_from_external_network=true`)
-- **Managed Identity**: Azure resources authenticate using system-assigned managed identities
-- **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
-
-## Prerequisites
-
-- An existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments (`function_app_subnet_id`)
-- Role assignments:
-  - Azure RBAC:
-    - `Reader and Data Access`, `User Access Administrator` and `Contributor` at the subscription scope (where you will be provisioning resources)
-    - `User Access Administrator` at the Tenant Root Group management group scope*
-  - Billing:
-    - Enterprise Agreement (EA): `EnrollmentReader` at the billing account scope (see [Assign Enterprise Agreement roles to service principals](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals))
-    - Microsoft Customer Agreement (MCA): `Billing account contributor` at the billing account scope
-
-> [!TIP]
-> \* *Role assignment privileges can be constrained to `Carbon Optimization Reader`, `Management Group Reader` and `Reader`*
-
-## Usage
-
-```hcl
-provider "azurerm" {
-  # These need to be explicitly registered
-  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  features {}
-}
-
-module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
-
-  aws_account_id                      = "<aws-account-id>"
-  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
-  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
-  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
-  virtual_network_name                = "existing-vnet"
-  virtual_network_resource_group_name = "existing-infra"
-  resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
-  deploy_from_external_network        = false
-  
-  # Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
-  # current_principal_type = "ServicePrincipal"
-}
-```
-
-> [!TIP]
-> If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
-> please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
-
 ## Backfill
 
 ### FOCUS Cost Data
@@ -204,7 +152,7 @@ When the terraform apply has completed, exports in each billing account should a
 ![focus-backfill-exports](images/focus-backfill-exports.png)
 
 **TBC Warren - this need to be confirmed if this is required approach.** Moreso, the intention is to run
-the backfill automatically via the backfill_timer and if we can't do it via a single export job.
+the backfill automatically via the backfill_timer. Have already proven we cannot create a single historic  export job, with a from/to more than a month. Currently investigating whether it is easier to go direct by API - because generating the backfil export jobs is cumbersome in terraform.
 
 > [!NOTE]  
 > An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
@@ -259,8 +207,59 @@ The backfill timer's behaviour can be overridden with two additional module vari
 * `force_overwrite` - defaults to false, but when set to true, will force overwrite on existing backfill datasets; set `skip_existing` to false when using this setting.
 
 
-## Testing
+## Security Features
 
+- **Private Networking**: All components use private endpoints and VNet integration
+- **Zero Trust**: No public network access (except during deployment if `deploy_from_external_network=true`)
+- **Managed Identity**: Azure resources authenticate using system-assigned managed identities
+- **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
+
+## Prerequisites
+
+- An existing virtual network with two subnets, one of which has a delegation for Microsoft.App.environments (`function_app_subnet_id`)
+- Role assignments:
+  - Azure RBAC:
+    - `Reader and Data Access`, `User Access Administrator` and `Contributor` at the subscription scope (where you will be provisioning resources)
+    - `User Access Administrator` at the Tenant Root Group management group scope*
+  - Billing:
+    - Enterprise Agreement (EA): `EnrollmentReader` at the billing account scope (see [Assign Enterprise Agreement roles to service principals](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals))
+    - Microsoft Customer Agreement (MCA): `Billing account contributor` at the billing account scope
+
+> [!TIP]
+> \* *Role assignment privileges can be constrained to `Carbon Optimization Reader`, `Management Group Reader` and `Reader`*
+
+## Usage
+
+```hcl
+provider "azurerm" {
+  # These need to be explicitly registered
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  features {}
+}
+
+module "example" {
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
+
+  aws_account_id                      = "<aws-account-id>"
+  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
+  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
+  virtual_network_name                = "existing-vnet"
+  virtual_network_resource_group_name = "existing-infra"
+  resource_group_name                 = "rg-cost-export"
+  # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
+  deploy_from_external_network        = false
+  
+  # Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
+  # current_principal_type = "ServicePrincipal"
+}
+```
+
+> [!TIP]
+> If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
+> please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
+
+## Testing
 This module includes comprehensive tests for the carbon export functionality, including dynamic date range calculations, idempotency features, and subscription batching logic.
 
 ### Running Tests Locally
