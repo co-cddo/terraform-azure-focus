@@ -94,3 +94,15 @@ variable "backfill_end_date" {
     error_message = "backfill_end_date must be given and in the format'YYYY-MM-01'"
   }
 }
+
+variable "force_overwrite" {
+  description = "Defaults to false, but if set true will overwrite existing export"
+  type        = bool
+  default     = false
+}
+
+variable "skip_existing" {
+  description = "Defaults to true, but if set false will not skip existing exports (best used with 'force_overwrite' set to true"
+  type        = bool
+  default     = true
+}
