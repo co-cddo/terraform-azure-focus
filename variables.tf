@@ -106,3 +106,9 @@ variable "skip_existing" {
   type        = bool
   default     = true
 }
+
+variable "cost_export_daily_schedule_to_years" {
+  description = "The number of years from initial deployment to set the end date of the daily schedule for cost export"
+  type        = number
+  default     = 15
+}
