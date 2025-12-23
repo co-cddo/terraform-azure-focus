@@ -87,10 +87,10 @@ variable "backfill_start_date" {
 }
 
 variable "backfill_end_date" {
-  description = "The year and month to end backfill - no default value - in the format 'YYYY-MM-01"
+  description = "The year and month to end backfill - no default value - in the format 'YYYY-MM-DD"
   type       = string
   validation {
-    condition     = can(regex("^(19|20|21|22|23|24|25)\\d{2}-(0?[1-9]|1[012])-01$", var.backfill_end_date))
+    condition     = can(regex("^(19|20|21|22|23|24|25)\\d{2}-(0?[1-9]|1[012])-(0[1-9]|1[0-9]|2[0-9]|3[01])$", var.backfill_end_date))
     error_message = "backfill_end_date must be given and in the format'YYYY-MM-01'"
   }
 }

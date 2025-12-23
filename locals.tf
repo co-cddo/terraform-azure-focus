@@ -29,7 +29,7 @@ locals {
   backfill_months = [
     for month_offset in range(0, (2025 - 2019) * 12 + 7) : # From 2022-01 to 2025-07
     format("%04d-%02d",
-      2022 + floor(month_offset / 12),
+      2019 + floor(month_offset / 12),
       (month_offset % 12) + 1
     )
   ]

@@ -58,19 +58,19 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     #   }
     # }
 
-    # apologies from Warren - temporarily setting cors and ip access
-    # cors {
-    #   allowed_origins = ["https://portal.azure.com"]
-    #   support_credentials = false
-    # }
+    # WA DEBUG - apologies from Warren - temporarily setting cors and ip access
+    cors {
+      allowed_origins = ["https://portal.azure.com"]
+      support_credentials = false
+    }
 
-    # ip_restriction {
-    #   action                    = "Allow"
-    #   headers                   = []
-    #   ip_address                = "149.22.163.195/32"
-    #   name                      = "From Warren's home"
-    #   priority                  = 300
-    # }
+    ip_restriction {
+      action                    = "Allow"
+      headers                   = []
+      ip_address                = "149.22.163.195/32"
+      name                      = "From Warren's home"
+      priority                  = 300
+    }
   }
 
   app_settings = {
