@@ -137,7 +137,7 @@ resource "azapi_resource" "backfill_cost_exports_singular" {
         }
         timeframe = "Custom"
         timePeriod = {
-          from = "${var.backfill_start_date}-01T00:00:00Z"
+          from = "${substr(var.backfill_start_date, 0, 7)}-01T00:00:00Z"
           to   = "${var.backfill_end_date}T23:59:59Z"
         }
       }

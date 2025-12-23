@@ -199,10 +199,12 @@ module "example" {
 ## Backfill
 
 ### FOCUS Cost Data
-
 When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select reports and click 'Run now' in small batches:
 
 ![focus-backfill-exports](images/focus-backfill-exports.png)
+
+**TBC Warren - this need to be confirmed if this is required approach.** Moreso, the intention is to run
+the backfill automatically via the backfill_timer and if we can't do it via a single export job.
 
 > [!NOTE]  
 > An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
@@ -239,6 +241,23 @@ Run the function named 'CarbonEmissionsExporter' once. Note that you will need t
 ### Recommendations
 
 We don't provide a backfill for this dataset.
+
+### Backfill timer
+Runs every day at 6AM GMT to automatically run the backfill for cost exports and carbon exports.
+
+Uses independent lockfiles on the target S3 bucket for each of cost and carbon export for each tenant.
+If lock object does not exist, the backfill will run. If lock object does exist, the backfill does not run.
+
+The appvia analytics teams can delete the associated lockfile for each tenant to force re-running the backfill.
+
+The backfill start date is set by the `backfill_start_date` module terraform variable. The backfill end date is set by the `backfill_end_date` (TBC Warren - if the backfill end date can be assumed from the
+time the backfill runs up to the last month - this works for carbon export - need to confirm if it
+works for the cost export).
+
+The backfill timer's behaviour can be overridden with two additional module variables:
+* `skip_existing` - defaults to true, but when set to false, will not skip existing backfill datasets.
+* `force_overwrite` - defaults to false, but when set to true, will force overwrite on existing backfill datasets; set `skip_existing` to false when using this setting.
+
 
 ## Testing
 
