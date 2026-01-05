@@ -789,15 +789,16 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         # check parameters
         try:
             start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
+            processed_months, skipped_months = cost_export_backfill(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
+
+            return func.HttpResponse(
+                f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
+                status_code=200
+            )
+
         except:
             raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
 
-        processed_months, skipped_months = cost_export_backfill(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
-
-        return func.HttpResponse(
-            f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
-            status_code=200
-        )
         
     except Exception as e:
         error_msg = f"Error inCost Export backfill: {str(e)}"
