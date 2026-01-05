@@ -95,8 +95,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
 
     "BACKFILL_START_DATE"                       = var.backfill_start_date
-    "BACKFILL_END_DATE"                         = var.backfill_end_date
-    # "BACKFILL_DEPLOYMENT_DATE"                  = timeadd(timestamp(formatdate("YYYY-MM-01T00:00:00", time_static.recurrence.id)), "-1m")
 
     "STORAGE_RESOURCE_ID"                       = azurerm_storage_account.cost_export.id
     "STORAGE_CONTAINER"                         = azapi_resource.cost_export.name
