@@ -1,7 +1,32 @@
 import logging
 from typing import Tuple
+from common import Config, getS3FileSystem
 
 def cost_export_backfill_lock_exists() -> bool:
+  # try:
+  #   # Get S3 filesystem
+  #   s3 = getS3FileSystem()
+
+  #   # the cost export can be one of more objects in a given path
+  #   # the specific name of the export can not be predicted
+
+  #   # the best way to know if the export exists or not is to check
+  #   # for the "path" (directory) not the actual objects.
+  #   s3_path = f"{Config.s3_carbon_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={billing_period}/{file_name}"
+    
+  #   # Check if file exists
+  #   file_info = s3.get_file_info(s3_path)
+  #   exists = file_info.type != fs.FileType.NotFound
+    
+  #   if exists:
+  #       logging.info(f"Carbon data file already exists: {s3_path}")
+    
+  #   return exists
+        
+  # except Exception as e:
+  #     logging.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
+  #     # If we can't check, assume it doesn't exist to be safe
+  #     return False
   return False
 
 def create_cost_export_backfill_tasks(start_date: str) -> None:
