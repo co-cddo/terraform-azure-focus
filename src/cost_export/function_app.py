@@ -752,9 +752,11 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
     
     logging.info(f'Exporter backfill trigger at: {utc_timestamp}')
 
+    # get the backfill start date from ENV VAR on the function
+    start_date = get_required_env("BACKFILL_START_DATE")
+
     try:
-        if timer.past_due:
-            logging.debug('The timer is past due!')
+        cost_export_backfill(start_date)
             
     except Exception as e:
         logging.error(f"Error in exporter backfill trigger: {str(e)}")
@@ -785,20 +787,11 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         
         # check parameters
         try:
-            start_date = datetime.strptime(start_date_param, '%Y-%m-%d')
-
-            # first check if the cost export backill lock exists
-            if not cost_export_backfill_lock_exists():
-                create_cost_export_backfill_tasks(start_date)
-                run_cost_export_backfill(start_date)
-            else:
-                logging.info("Cost export backfill lock exists. Skipping backfill.")
-            
+            start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
         except:
             raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
-        
-        processed_months = 1
-        skipped_months = 1
+
+        processed_months, skipped_months = cost_export_backfill(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
 
         return func.HttpResponse(
             f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
