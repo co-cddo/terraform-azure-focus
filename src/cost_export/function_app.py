@@ -6,6 +6,7 @@ from common import(
   is_uuid,
   extract_subscription_ids_from_billing_scope,
   extract_billing_account_from_blob_path,
+  _get_required_env,
 )
 from carbonExport import (
   get_carbon_api_date_range,
