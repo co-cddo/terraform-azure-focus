@@ -16,6 +16,11 @@ from carbonExport import (
   empty_emissions_data,
   save_carbon_data_to_s3,
 )
+from costExport import (
+    cost_export_backfill_lock_exists,
+    create_cost_export_backfill_tasks,
+    run_cost_export_backfill,
+)
 import pyarrow.parquet as pq
 import pyarrow.fs as fs
 import io
@@ -766,7 +771,7 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
     Query parameters:
     - start_date: Required parameter; is the ISO date (YYYY-MM-DD) to start backfill from, e.g. 2024-01-01
     - force_overwrite: Set to 'true' to overwrite existing data (default: false)
-    - skip_existing: Set to 'false' to process all months regardless of existing data (default: true)
+    - backfill_skip_existing: Set to 'false' to process all months regardless of existing data (default: true)
     """
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     logging.info(f'Cost export backfill triggered at: {utc_timestamp}')
@@ -775,12 +780,20 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         # Parse query parameters
         force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
         skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
-        start_date_param = req.params.get('start_date')
+        start_date_param = req.params.get('backfill_start_date')
         logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
         
         # check parameters
         try:
             start_date = datetime.strptime(start_date_param, '%Y-%m-%d')
+
+            # first check if the cost export backill lock exists
+            if not cost_export_backfill_lock_exists():
+                create_cost_export_backfill_tasks(start_date)
+                run_cost_export_backfill(start_date)
+            else:
+                logging.info("Cost export backfill lock exists. Skipping backfill.")
+            
         except:
             raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
         
