@@ -35,7 +35,7 @@ def create_cost_export_backfill_tasks(start_date: str) -> None:
 def run_cost_export_backfill(start_date: str) -> None:
   logging.info(f"WA DEBUG - run_cost_export_backfill: from {start_date}")
 
-def cost_export_backfill(start_date: str, force_overwrite: bool = False, skip_existing: bool = True) -> Tuple[bool, bool]:
+def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, skip_existing: bool = True) -> Tuple[bool, bool]:
   logging.debug(f"cost_export_backfill: from {start_date}, overwrite({force_overwrite}), skip({skip_existing})")
 
   processed_months = 1

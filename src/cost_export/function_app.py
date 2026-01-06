@@ -21,6 +21,7 @@ from costExport import (
     cost_export_backfill_lock_exists,
     create_cost_export_backfill_tasks,
     run_cost_export_backfill,
+    cost_export_backfill_impl,
 )
 import pyarrow.parquet as pq
 import pyarrow.fs as fs
@@ -761,7 +762,7 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
         logging.debug(f"Backfill start date from ENV VAR: {start_date_env}")
 
         start_date = datetime.strptime(start_date_env, '%Y-%m-%d')
-        processed_months, skipped_months = cost_export_backfill(start_date=start_date, force_overwrite=False, skip_existing=True)
+        processed_months, skipped_months = cost_export_backfill_impl(start_date=start_date, force_overwrite=False, skip_existing=True)
         logging.debug(f"processed/skipped: {processed_months}/{skipped_months}")
     except Exception as e:
         error_msg = f"Error in backfill_trigger: {str(e)}"
@@ -791,7 +792,7 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
         
         start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
-        processed_months, skipped_months = cost_export_backfill(start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
+        processed_months, skipped_months = cost_export_backfill_impl(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
 
         return func.HttpResponse(
             f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
