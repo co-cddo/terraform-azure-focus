@@ -7,6 +7,8 @@ import json
 from pyarrow.fs import S3FileSystem
 from azure.identity import ManagedIdentityCredential
 
+logger = logging.getLogger("cost_export")
+
 def _get_required_env(name):
     value = os.environ.get(name)
     if not value:
@@ -43,7 +45,7 @@ class Config:
     try:
         billing_account_mapping = json.loads(_billing_account_mapping_json)
     except:
-        logging.warning(f"Failed to parse BILLING_ACCOUNT_MAPPING: {_billing_account_mapping_json}")
+        logger.warning(f"Failed to parse BILLING_ACCOUNT_MAPPING: {_billing_account_mapping_json}")
         billing_account_mapping = {}
 
 def getS3FileSystem():
@@ -95,22 +97,22 @@ def extract_subscription_ids_from_billing_scope(scope):
             # Single subscription scope - extract the subscription ID directly
             subscription_id = scope.split("/")[2]
             subscription_ids = [subscription_id]
-            logging.info(f"Single subscription scope detected: {subscription_id}")
+            logger.info(f"Single subscription scope detected: {subscription_id}")
         elif "subscriptions/" in scope and scope.count("/") == 1:
             # Single subscription scope without leading slash - extract the subscription ID directly
             subscription_id = scope.split("/")[1]
             subscription_ids = [subscription_id]
-            logging.info(f"Single subscription scope detected (no leading slash): {subscription_id}")
+            logger.info(f"Single subscription scope detected (no leading slash): {subscription_id}")
             
         else:
-            logging.error(f"Unsupported billing scope format: {scope}")
+            logger.error(f"Unsupported billing scope format: {scope}")
             return []
         
-        logging.info(f"Found {len(subscription_ids)} subscriptions in billing scope")
+        logger.info(f"Found {len(subscription_ids)} subscriptions in billing scope")
         return subscription_ids
         
     except Exception as e:
-        logging.error(f"Error extracting subscription IDs: {str(e)}")
+        logger.error(f"Error extracting subscription IDs: {str(e)}")
         return []
 
 def get_subscriptions_from_billing_account(scope, headers):
@@ -140,15 +142,15 @@ def get_subscriptions_from_billing_account(scope, headers):
                 if sub_id:
                     subscription_ids.append(sub_id)
                     
-            logging.info(f"Retrieved {len(subscription_ids)} subscriptions from billing account {billing_account_id}")
+            logger.info(f"Retrieved {len(subscription_ids)} subscriptions from billing account {billing_account_id}")
             return subscription_ids
             
         else:
-            logging.error(f"Failed to get subscriptions from billing account: {response.status_code} - {response.text}")
+            logger.error(f"Failed to get subscriptions from billing account: {response.status_code} - {response.text}")
             return []
             
     except Exception as e:
-        logging.error(f"Error getting subscriptions from billing account: {str(e)}")
+        logger.error(f"Error getting subscriptions from billing account: {str(e)}")
         return []
 
 def get_subscriptions_from_management_group(scope, headers):
@@ -161,11 +163,11 @@ def get_subscriptions_from_management_group(scope, headers):
         # Use Resource Graph API to get subscriptions under management group
         subscription_ids = get_subscriptions_via_resource_graph(mg_id, headers)
         
-        logging.info(f"Retrieved {len(subscription_ids)} subscriptions from management group {mg_id}")
+        logger.info(f"Retrieved {len(subscription_ids)} subscriptions from management group {mg_id}")
         return subscription_ids
             
     except Exception as e:
-        logging.error(f"Error getting subscriptions from management group: {str(e)}")
+        logger.error(f"Error getting subscriptions from management group: {str(e)}")
         return []
 
 def get_subscriptions_via_resource_graph(mg_id, headers):
@@ -196,15 +198,15 @@ def get_subscriptions_via_resource_graph(mg_id, headers):
                 if "subscriptionId" in row:
                     subscription_ids.append(row["subscriptionId"])
                     
-            logging.info(f"Resource Graph API found {len(subscription_ids)} subscriptions under management group {mg_id}")
+            logger.info(f"Resource Graph API found {len(subscription_ids)} subscriptions under management group {mg_id}")
             return subscription_ids
             
         else:
-            logging.error(f"Resource Graph API failed: {response.status_code} - {response.text}")
+            logger.error(f"Resource Graph API failed: {response.status_code} - {response.text}")
             return []
             
     except Exception as e:
-        logging.error(f"Error using Resource Graph API: {str(e)}")
+        logger.error(f"Error using Resource Graph API: {str(e)}")
         return []
 
 def extract_billing_account_from_blob_path(blob_name):
@@ -237,7 +239,7 @@ def extract_billing_account_from_blob_path(blob_name):
                             logging.debug(f"Failed to parse blob path part '{part}': {str(e)}")
                             continue
         
-        logging.warning(f"Could not extract billing account index from blob path: {blob_name}")
+        logger.warning(f"Could not extract billing account index from blob path: {blob_name}")
         return None
         
     except Exception as e:

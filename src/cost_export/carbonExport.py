@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timezone, timedelta
 from common import Config, getS3FileSystem
 
+logger = logging.getLogger("cost_export")
+
 def get_carbon_api_date_range():
     """
     Calculate the available date range for the Carbon Optimization API.
@@ -136,7 +138,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         return False, None, "No subscription IDs provided"
     
     total_subscriptions = len(subscription_ids)
-    logging.info(f"Carbon API request for {total_subscriptions} subscriptions (batching with max {max_batch_size} per request)")
+    logger.info(f"Carbon API request for {total_subscriptions} subscriptions (batching with max {max_batch_size} per request)")
     
     # If within limit, use single request
     if total_subscriptions <= max_batch_size:
@@ -148,7 +150,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         batch = subscription_ids[i:i + max_batch_size]
         batches.append(batch)
     
-    logging.info(f"Splitting into {len(batches)} batches: {[len(batch) for batch in batches]} subscriptions each")
+    logger.info(f"Splitting into {len(batches)} batches: {[len(batch) for batch in batches]} subscriptions each")
     
     # Collect results from all batches
     merged_subscription_access_decisions = []
@@ -157,7 +159,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
     failed_batches = []
     
     for batch_num, batch_subscription_ids in enumerate(batches, 1):
-        logging.info(f"Processing batch {batch_num}/{len(batches)} with {len(batch_subscription_ids)} subscriptions")
+        logger.info(f"Processing batch {batch_num}/{len(batches)} with {len(batch_subscription_ids)} subscriptions")
         
         success, batch_data, error_message = make_carbon_api_request(
             headers, batch_subscription_ids, month_str, timeout
@@ -173,19 +175,19 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
                 merged_value_data.extend(batch_data["value"])
             
             successful_batches += 1
-            logging.info(f"Batch {batch_num} completed successfully")
+            logger.info(f"Batch {batch_num} completed successfully")
         else:
             failed_batches.append({"batch": batch_num, "error": error_message, "subscription_count": len(batch_subscription_ids)})
-            logging.error(f"Batch {batch_num} failed: {error_message}")
+            logger.error(f"Batch {batch_num} failed: {error_message}")
        
     # Log summary
-    logging.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
+    logger.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
     if failed_batches:
         failed_summary = []
         for fb in failed_batches[:3]:  # Show first 3 failures
             error_preview = fb['error'][:100] + "..." if len(fb['error']) > 100 else fb['error']
             failed_summary.append(f"Batch {fb['batch']} ({fb['subscription_count']} subs): {error_preview}")
-        logging.warning(f"Failed batches: {len(failed_batches)} - {failed_summary}")
+        logger.warning(f"Failed batches: {len(failed_batches)} - {failed_summary}")
 
     # aggregate the set of batch results
     countOfBatchDataItems = len(merged_value_data)
@@ -222,7 +224,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         "batch_size_used": max_batch_size
     }
 
-    logging.info(f"Merged response: {merged_response}")
+    logger.info(f"Merged response: {merged_response}")
     
     # success is True only if no failed batches - will force an error
     return merged_response["_batchingMetadata"]["failed_batches"] == 0, merged_response, None
@@ -246,12 +248,12 @@ def check_carbon_data_exists(file_name):
         exists = file_info.type != fs.FileType.NotFound
         
         if exists:
-            logging.info(f"Carbon data file already exists: {s3_path}")
+            logger.info(f"Carbon data file already exists: {s3_path}")
         
         return exists, s3_path
         
     except Exception as e:
-        logging.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
+        logger.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
         # If we can't check, assume it doesn't exist to be safe
         return False, None
 
@@ -289,7 +291,7 @@ def carbon_export_api_latest_fetch_date() -> datetime:
     carbon_api_fetch_date = today.replace(year=fetch_year, month=fetch_month, day=1)
     print('API fetch date is: ', carbon_api_fetch_date.strftime('%Y-%m-%d'))
     
-    logging.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
+    logger.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
     return carbon_api_fetch_date
 
@@ -314,14 +316,14 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
         if not force_overwrite:
             exists, s3_path = check_carbon_data_exists(file_name)
             if exists:
-                logging.info(f"Skipping upload - carbon data already exists: {s3_path}")
+                logger.info(f"Skipping upload - carbon data already exists: {s3_path}")
                 return True  # Return success since data already exists
         
         # Remove batching metadata before saving (internal use only)
         data_to_save = data.copy()
         if "_batchingMetadata" in data_to_save:
             batching_info = data_to_save.pop("_batchingMetadata")
-            logging.info(f"Removed batching metadata before saving: {batching_info}")
+            logger.info(f"Removed batching metadata before saving: {batching_info}")
         
         # Convert to JSON string
         json_data = json.dumps(data_to_save, indent=2).encode('utf-8')
@@ -343,10 +345,10 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
             f.write(json_data)
             
         action = "Overwritten" if force_overwrite else "Uploaded"
-        logging.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
+        logger.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
         return True
         
     except Exception as e:
-        logging.error(f"Error saving carbon data to S3: {str(e)}")
+        logger.error(f"Error saving carbon data to S3: {str(e)}")
         raise
 

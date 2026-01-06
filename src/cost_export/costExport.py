@@ -2,6 +2,8 @@ import logging
 from typing import Tuple
 from common import Config, getS3FileSystem
 
+logger = logging.getLogger("cost_export")
+
 def cost_export_backfill_lock_exists() -> bool:
   # try:
   #   # Get S3 filesystem
@@ -19,21 +21,21 @@ def cost_export_backfill_lock_exists() -> bool:
   #   exists = file_info.type != fs.FileType.NotFound
     
   #   if exists:
-  #       logging.info(f"Carbon data file already exists: {s3_path}")
+  #       logger.info(f"Carbon data file already exists: {s3_path}")
     
   #   return exists
         
   # except Exception as e:
-  #     logging.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
+  #     logger.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
   #     # If we can't check, assume it doesn't exist to be safe
   #     return False
   return False
 
 def create_cost_export_backfill_tasks(start_date: str) -> None:
-  logging.info(f"WA DEBUG - create_cost_export_backfill_tasks: from {start_date}")
+  logger.info(f"WA DEBUG - create_cost_export_backfill_tasks: from {start_date}")
 
 def run_cost_export_backfill(start_date: str) -> None:
-  logging.info(f"WA DEBUG - run_cost_export_backfill: from {start_date}")
+  logger.info(f"WA DEBUG - run_cost_export_backfill: from {start_date}")
 
 def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, skip_existing: bool = True) -> Tuple[bool, bool]:
   logging.debug(f"cost_export_backfill: from {start_date}, overwrite({force_overwrite}), skip({skip_existing})")
@@ -46,6 +48,6 @@ def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, sk
       create_cost_export_backfill_tasks(start_date)
       run_cost_export_backfill(start_date)
   else:
-      logging.info("Cost export backfill lock exists. Skipping backfill.")
+      logger.info("Cost export backfill lock exists. Skipping backfill.")
 
   return (processed_months, skipped_months)
