@@ -6,7 +6,7 @@ from common import(
   is_uuid,
   extract_subscription_ids_from_billing_scope,
   extract_billing_account_from_blob_path,
-  get_required_env,
+  _get_required_env,
 )
 from carbonExport import (
   get_carbon_api_date_range,
@@ -757,7 +757,7 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
 
     try:
         # get the backfill start date from ENV VAR on the function
-        start_date_env = get_required_env("BACKFILL_START_DATE")
+        start_date_env = _get_required_env("BACKFILL_START_DATE")
         logging.debug(f"Backfill start date from ENV VAR: {start_date_env}")
 
         start_date = datetime.strptime(start_date_env, '%Y-%m-%d')
