@@ -764,7 +764,8 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
         processed_months, skipped_months = cost_export_backfill(start_date=start_date, force_overwrite=False, skip_existing=True)
         logging.debug(f"processed/skipped: {processed_months}/{skipped_months}")
     except Exception as e:
-        raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
+        error_msg = f"Error in backfill_trigger: {str(e)}"
+        logging.error(error_msg)
 
 @app.function_name(name="CostExportBackfill")
 @app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)
