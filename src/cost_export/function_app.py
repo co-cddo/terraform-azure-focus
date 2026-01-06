@@ -6,7 +6,7 @@ from common import(
   is_uuid,
   extract_subscription_ids_from_billing_scope,
   extract_billing_account_from_blob_path,
-  _get_required_env,
+  get_required_env,
 )
 from carbonExport import (
   get_carbon_api_date_range,
@@ -791,7 +791,7 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
         
         start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
-        processed_months, skipped_months = cost_export_backfill(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
+        processed_months, skipped_months = cost_export_backfill(start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
 
         return func.HttpResponse(
             f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
