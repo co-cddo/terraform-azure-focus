@@ -760,12 +760,11 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
 
     try:
         # get the backfill start date from ENV VAR on the function
-        start_date_env = _get_required_env("BACKFILL_START_DATE")
-        logging.debug(f"Backfill start date from ENV VAR: {start_date_env}")
+        logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
 
-        start_date = datetime.strptime(start_date_env, '%Y-%m-%d')
-        processed_months, skipped_months = cost_export_backfill_impl(start_date=start_date, force_overwrite=False, skip_existing=True)
-        logging.debug(f"processed/skipped: {processed_months}/{skipped_months}")
+        start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
+        cost_export_backfill_impl(start_date=start_date, force_overwrite=False, skip_existing=True)
+
     except Exception as e:
         error_msg = f"Error in backfill_trigger: {str(e)}"
         logger.error(error_msg)
@@ -794,10 +793,10 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         logger.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
         
         start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
-        processed_months, skipped_months = cost_export_backfill_impl(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
+        cost_export_backfill_impl(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
 
         return func.HttpResponse(
-            f"Cost Export backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
+            f"Cost Export backfill completed successfully.",
             status_code=200
         )
         

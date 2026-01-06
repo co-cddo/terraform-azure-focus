@@ -31,10 +31,14 @@ class Config:
     aws_region = _get_required_env("AWS_REGION")  # Example: "eu-west-2"
     storage_connection_string = _get_required_env("STORAGE_CONNECTION_STRING")
     container_name = _get_required_env("CONTAINER_NAME")
+    s3_cost_directory_name = _get_required_env("ROOT_FOLDER_PATH")
     s3_utilization_path = _get_required_env("S3_UTILIZATION_PATH")
     s3_recommendations_path = _get_required_env("S3_RECOMMENDATIONS_PATH")
     s3_carbon_path = _get_required_env("S3_CARBON_PATH")
     carbon_directory_name = _get_required_env("CARBON_DIRECTORY_NAME")
+
+    # backfill
+    backfill_start_date = _get_required_env("BACKFILL_START_DATE")
 
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
