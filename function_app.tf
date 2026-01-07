@@ -71,6 +71,8 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
       name                      = "From Warren's home"
       priority                  = 300
     }
+
+    scm_use_main_ip_restriction = true
   }
 
   app_settings = {
