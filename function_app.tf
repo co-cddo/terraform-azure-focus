@@ -60,16 +60,16 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
 
     # WA DEBUG - apologies from Warren - temporarily setting cors and ip access
     cors {
-      allowed_origins = ["https://portal.azure.com"]
+      allowed_origins     = ["https://portal.azure.com"]
       support_credentials = false
     }
 
     ip_restriction {
-      action                    = "Allow"
-      headers                   = []
-      ip_address                = "149.22.163.195/32"
-      name                      = "From Warren's home"
-      priority                  = 300
+      action     = "Allow"
+      headers    = []
+      ip_address = "149.22.163.195/32"
+      name       = "From Warren's home"
+      priority   = 300
     }
 
     scm_use_main_ip_restriction = true
@@ -96,11 +96,11 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     # Mapping of billing account index to billing account ID for S3 path organization
     "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
 
-    "BACKFILL_START_DATE"                       = var.backfill_start_date
+    "BACKFILL_START_DATE" = var.backfill_start_date
 
-    "STORAGE_RESOURCE_ID"                       = azurerm_storage_account.cost_export.id
-    "STORAGE_CONTAINER"                         = azapi_resource.cost_export.name
-    "ROOT_FOLDER_PATH"                          = local.focus_directory_name
+    "STORAGE_RESOURCE_ID" = azurerm_storage_account.cost_export.id
+    "STORAGE_CONTAINER"   = azapi_resource.cost_export.name
+    "ROOT_FOLDER_PATH"    = local.focus_directory_name
   }
 }
 
