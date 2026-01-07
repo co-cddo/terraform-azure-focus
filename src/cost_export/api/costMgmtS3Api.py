@@ -29,7 +29,7 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
   #     logger.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
   #     # If we can't check, assume it doesn't exist to be safe
   #     return False
-  return False
+  return True
 
 def cost_export_backfill_run_lock_exists() -> bool:
   # try:

@@ -76,6 +76,9 @@ def create_cost_export_backfill_tasks(start_date: str, account_id: str, account_
       logger.debug("....{account_idx}: {current_month}/{current_year} export task already exists")
 
     current_month, current_year = increment_month_year(current_month, current_year)
+  
+  # if we get this far, then we have created the full schedule of backfill Cost Management export jobs
+  cost_export_backfill_schedule_lock_create()
 
 def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int) -> None:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 10
@@ -109,7 +112,11 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int)
         logger.info(f"....{account_idx}: {current_month}/{current_year} export already exists, skipping...")
 
     current_month, current_year = decrement_month_year(current_month, current_year)
-
+  
+  # if we get this far, and we've added zero job to run, then we can conclude we have ran all jobs
+  #  as all data exists
+  if number_of_jobs_running == 0:
+    cost_export_backfill_run_lock_create()
 
 def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, skip_existing: bool = True) -> None:
   logging.debug(f"cost_export_backfill: from {start_date}, overwrite({force_overwrite}), skip({skip_existing})")  
