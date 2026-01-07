@@ -86,18 +86,6 @@ variable "backfill_start_date" {
   }
 }
 
-variable "force_overwrite" {
-  description = "Defaults to false, but if set true will overwrite existing export"
-  type        = bool
-  default     = false
-}
-
-variable "skip_existing" {
-  description = "Defaults to true, but if set false will not skip existing exports (best used with 'force_overwrite' set to true"
-  type        = bool
-  default     = true
-}
-
 variable "cost_export_daily_schedule_to_years" {
   description = "The number of years from initial deployment to set the end date of the daily schedule for cost export"
   type        = number
