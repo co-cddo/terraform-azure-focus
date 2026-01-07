@@ -18,9 +18,6 @@ from carbonExport import (
   save_carbon_data_to_s3,
 )
 from costExport import (
-    cost_export_backfill_lock_exists,
-    create_cost_export_backfill_tasks,
-    run_cost_export_backfill,
     cost_export_backfill_impl,
 )
 import pyarrow.parquet as pq
