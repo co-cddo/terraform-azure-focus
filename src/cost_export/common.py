@@ -39,7 +39,8 @@ class Config:
 
     # backfill
     backfill_start_date = _get_required_env("BACKFILL_START_DATE")
-    cost_mgmt_export_destination_id = _get_required_env("STORAGE_CONTAINER")    
+    cost_mgmt_export_container = _get_required_env("STORAGE_CONTAINER")
+    cost_mgmt_export_destination_id = _get_required_env("STORAGE_RESOURCE_ID")
 
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
