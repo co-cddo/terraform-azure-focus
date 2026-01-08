@@ -49,7 +49,7 @@ def cost_export_backfill_run_lock_exists() -> bool:
     exists = file_info.type != fs.FileType.NotFound
     
     if not exists:
-      logger.debug(f"Cost Export run lock does not exists: {s3_path}")
+      logger.info(f"Cost Export run lock does not exists: {s3_path}")
     
     return exists
         
@@ -58,7 +58,7 @@ def cost_export_backfill_run_lock_exists() -> bool:
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
-      logger.debug(f"Cost Export run lock does not exists: {s3_path}")
+      logger.info(f"Cost Export run lock does not exists: {s3_path}")
       return False
 
     logger.warning(f"Failed to check for cost export run lock file: {exceptionStr}. Assuming it exists...")
@@ -73,14 +73,18 @@ def cost_export_backfill_schedule_lock_create() -> None:
     logger.debug(f"cost_export_backfill_schedule_lock_create path: {s3_path}")
 
     today = datetime.now(timezone.utc)
+    todayStr = datetime.strptime(today, "%Y-%m-%d %H:%M:%S")
+    logger.info(f"WA DEBUG cost_export_backfill_schedule_lock_create: todayStr({todayStr}")
+
     with s3.open_output_stream(s3_path) as f:
-      f.write(str(today))
+      f.write(str(todayStr))
       f.close()
 
     logger.info("cost export backfill schedule lock created")
     
   except Exception as e:
     logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    raise e
 
 def cost_export_backfill_run_lock_create() -> None:
   try:
@@ -89,14 +93,16 @@ def cost_export_backfill_run_lock_create() -> None:
     logger.debug(f"cost_export_backfill_run_lock_create path: {s3_path}")
 
     today = datetime.now(timezone.utc)
+    todayStr = datetime.strptime(today, "%Y-%m-%d %H:%M:%S")
     with s3.open_output_stream(s3_path) as f:
-      f.write(str(today))
+      f.write(str(todayStr))
       f.close()
 
     logger.info("cost export backfill run lock created")
     
   except Exception as e:
     logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    raise e
 
 def cost_export_exists(account_id:str, month: int, year:int) -> bool:
   ###
@@ -111,11 +117,11 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     # the object name will always start with the account id (the string), but replacing the ":" with a "-"
     object_account_id = account_id.replace(":", "-")
 
-    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year}{month}/{object_account_id}*"
-    logger.debug(f"Cost Export data check: {s3_path}")
+    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}/{object_account_id}*"
+    logger.info(f"Cost Export data check: {s3_path}")
     
     objects = s3.get_file_info(s3_path)
-    logger.warning(f"cost_export_exists: file_info{objects}")
+    logger.warning(f"cost_export_exists: objects: {objects}")
 
     # expected to return a list of file_info - https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     #  can be an empty list
@@ -136,6 +142,13 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       return assume_exists
 
   except Exception as e:
-      logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
-      # If we can't check, assume it does not exist to force generating it
+    # throws exception with ACCESS_DENIED if object does not exist
+    #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+    exceptionStr = str(e)
+    if "ACCESS_DENIED" in exceptionStr:
+      logger.info(f"Cost Export data does not exists: {s3_path}")
       return False
+  
+    logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
+    # If we can't check, assume it does not exist to force generating it
+    return False
