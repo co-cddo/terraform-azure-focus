@@ -19,11 +19,10 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
     logger.debug(f"Cost Export schedule lock check: {s3_path}")
     
     file_info = s3.get_file_info(s3_path)
-    logger.debug(f"WA DEBUG - cost_export_backfill_schedule_lock_exists: file_info{file_info}")
     exists = file_info.type != fs.FileType.NotFound
     
     if not exists:
-      logger.debug(f"Cost Export schedule lock does not exists: {s3_path}")
+      logger.info(f"Cost Export schedule lock does not exists: {s3_path}")
     
     return exists
         
@@ -32,6 +31,7 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
+      logger.info(f"Cost Export schedule lock does not exists: {s3_path}")
       return False
 
     logger.warning(f"Failed to check for cost export schedule lock file: {exceptionStr}. Assuming it exists...")
@@ -58,6 +58,7 @@ def cost_export_backfill_run_lock_exists() -> bool:
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
+      logger.debug(f"Cost Export run lock does not exists: {s3_path}")
       return False
 
     logger.warning(f"Failed to check for cost export run lock file: {exceptionStr}. Assuming it exists...")
@@ -73,7 +74,7 @@ def cost_export_backfill_schedule_lock_create() -> None:
 
     today = datetime.now(timezone.utc)
     with s3.open_output_stream(s3_path) as f:
-      f.write(today)
+      f.write(str(today))
       f.close()
 
     logger.info("cost export backfill schedule lock created")
@@ -89,7 +90,7 @@ def cost_export_backfill_run_lock_create() -> None:
 
     today = datetime.now(timezone.utc)
     with s3.open_output_stream(s3_path) as f:
-      f.write(today)
+      f.write(str(today))
       f.close()
 
     logger.info("cost export backfill run lock created")
@@ -114,12 +115,12 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     logger.debug(f"Cost Export data check: {s3_path}")
     
     objects = s3.get_file_info(s3_path)
-    logger.debug(f"cost_export_exists: file_info{objects}")
+    logger.warning(f"cost_export_exists: file_info{objects}")
 
     # expected to return a list of file_info - https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     #  can be an empty list
     if len(objects) == 0:
-      logger.debug(f"Cost Export data does exist - path returned no objects: {s3_path}")
+      logger.info(f"Cost Export data does exist - path returned no objects: {s3_path}")
       return False
     else:
       assume_exists = True
@@ -128,7 +129,9 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
           assume_exists = False
     
       if assume_exists:
-        logger.debug(f"Cost Export data does exist: {s3_path}")
+        logger.info(f"Cost Export data does exist: {s3_path}")
+      else:
+        logger.info(f"Cost Export data does not exist: {s3_path}")
     
       return assume_exists
 

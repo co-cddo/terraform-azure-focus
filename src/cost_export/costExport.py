@@ -102,7 +102,7 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int)
     logger.debug(f"....{account_idx}: {current_month}/{current_year}")
 
     # check if the cost export task already exists; only create if not exists
-    if not cost_export_exists(account_idx=account_idx, month=current_month, year=current_year):
+    if not cost_export_exists(account_id=account_id, month=current_month, year=current_year):
       if cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
         cost_mgmt_export_run(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
         number_of_jobs_running += 1;
