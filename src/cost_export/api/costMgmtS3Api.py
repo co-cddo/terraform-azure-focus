@@ -73,7 +73,7 @@ def cost_export_backfill_schedule_lock_create() -> None:
     logger.debug(f"cost_export_backfill_schedule_lock_create path: {s3_path}")
 
     today = datetime.now(timezone.utc)
-    todayStr = datetime.strptime(today, "%Y-%m-%d %H:%M:%S")
+    todayStr = datetime.strftime(today, "%Y-%m-%d %H:%M:%S")
     logger.info(f"WA DEBUG cost_export_backfill_schedule_lock_create: todayStr({todayStr}")
 
     with s3.open_output_stream(s3_path) as f:
@@ -93,7 +93,7 @@ def cost_export_backfill_run_lock_create() -> None:
     logger.debug(f"cost_export_backfill_run_lock_create path: {s3_path}")
 
     today = datetime.now(timezone.utc)
-    todayStr = datetime.strptime(today, "%Y-%m-%d %H:%M:%S")
+    todayStr = datetime.strftime(today, "%Y-%m-%d %H:%M:%S")
     with s3.open_output_stream(s3_path) as f:
       f.write(str(todayStr))
       f.close()
