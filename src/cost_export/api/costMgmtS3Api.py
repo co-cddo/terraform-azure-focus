@@ -88,7 +88,7 @@ def cost_export_backfill_schedule_lock_create() -> None:
 def cost_export_backfill_run_lock_create() -> None:
   try:
     s3 = getS3FileSystem()
-    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}-{COST_EXPORT_BACKFILL_SCHEDULE_LOCK_NAME}"
+    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}-{COST_EXPORT_BACKFILL_RUN_LOCK_NAME}"
     logger.debug(f"cost_export_backfill_run_lock_create path: {s3_path}")
 
     today = datetime.now(timezone.utc)
@@ -205,7 +205,7 @@ def cost_export_exists_lock_create(account_id:str, month: int, year:int) -> None
       f.write(str(todayStr).encode('utf-8'))
       f.close()
 
-    logger.info("cost export backfill data lock created for {month}/{year} on account '{account_id}'")
+    logger.info(f"cost export backfill data lock created for {month}/{year} on account '{account_id}'")
     
   except Exception as e:
     logger.error(f"Failed to create cost export backfill data lock: {str(e)}")
