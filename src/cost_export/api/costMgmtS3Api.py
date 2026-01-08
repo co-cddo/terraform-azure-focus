@@ -30,10 +30,11 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
   except Exception as e:
     # throws exception with ACCESS_DENIED if object does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
-    if "ACCESS_DENIED" in str(e):
+    exceptionStr = str(e)
+    if "ACCESS_DENIED" in exceptionStr:
       return False
 
-    logger.warning(f"Failed to check for cost export schedule lock file: {str(e)}\n\\nAssuming it exists...")
+    logger.warning(f"Failed to check for cost export schedule lock file: {exceptionStr}. Assuming it exists...")
 
     # If we can't check, assume it exists to not unnecessary run through backfill
     return True
@@ -55,11 +56,12 @@ def cost_export_backfill_run_lock_exists() -> bool:
   except Exception as e:
     # throws exception with ACCESS_DENIED if object does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
-    if "ACCESS_DENIED" in str(e):
+    exceptionStr = str(e)
+    if "ACCESS_DENIED" in exceptionStr:
       return False
 
-    logger.warning(f"Failed to check for cost export run lock file: {str(e)}\n\\nAssuming it exists...")
-    
+    logger.warning(f"Failed to check for cost export run lock file: {exceptionStr}. Assuming it exists...")
+
     # If we can't check, assume it exists to not unnecessary run through backfill
     return True
 
