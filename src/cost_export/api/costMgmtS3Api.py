@@ -117,10 +117,16 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     # the object name will always start with the account id (the string), but replacing the ":" with a "-"
     object_account_id = account_id.replace(":", "-")
 
-    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}/{object_account_id}*"
+    # tried using a wildcard on the account id - but fails with "pyarrow.fs"
+    # s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{object_account_id}*"
+
+    # so fetching with the dated billing path - to get a list of objects with that path
+    # that didn't work either. So createing an explicit "selector", allow not found to return empty list and recursing through folder
+    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01"
     logger.info(f"Cost Export data check: {s3_path}")
     
-    objects = s3.get_file_info(s3_path)
+    selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
+    objects = s3.get_file_info(selector)
     logger.warning(f"cost_export_exists: objects: {objects}")
 
     # expected to return a list of file_info - https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
@@ -131,6 +137,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     else:
       assume_exists = True
       for thisObject in objects:
+        logger.warning(f"WA DEBUG - thisObject: {thisObject}")
         if thisObject.type != fs.FileType.NotFound:
           assume_exists = False
     
@@ -142,7 +149,8 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       return assume_exists
 
   except Exception as e:
-    # throws exception with ACCESS_DENIED if object does not exist
+    logger.error("WA DEBUG: exception", e)
+    # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
