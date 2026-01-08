@@ -1,4 +1,5 @@
 import logging
+import json
 logger = logging.getLogger("cost_export")
 
 from datetime import datetime, timezone
@@ -28,9 +29,10 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
         
   except Exception as e:
       logger.warning(f"Failed to check for cost export schedule lock file: {str(e)}\n\\nAssuming it exists...")
-      print(e)
+      logger.error(json.dump(e))
 
       # throws exception with ACCESS_DENIED if object does not exist
+      #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
 
       # If we can't check, assume it exists to not unnecessary run through backfill
       return True
@@ -102,15 +104,25 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year}{month}/{object_account_id}*"
     logger.debug(f"Cost Export data check: {s3_path}")
     
-    file_info = s3.get_file_info(s3_path)
-    logger.debug(f"cost_export_exists: file_info{file_info}")
-    exists = file_info.type != fs.FileType.NotFound
+    objects = s3.get_file_info(s3_path)
+    logger.debug(f"cost_export_exists: file_info{objects}")
+
+    # expected to return a list of file_info - https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+    #  can be an empty list
+    if len(objects) == 0:
+      logger.debug(f"Cost Export data does exist - path returned no objects: {s3_path}")
+      return False
+    else:
+      assume_exists = True
+      for thisObject in objects:
+        if thisObject.type != fs.FileType.NotFound:
+          assume_exists = False
     
-    if exists:
-      logger.debug(f"Cost Export data does exist: {s3_path}")
+      if assume_exists:
+        logger.debug(f"Cost Export data does exist: {s3_path}")
     
-    return exists
-        
+      return assume_exists
+
   except Exception as e:
       logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
       # If we can't check, assume it does not exist to force generating it
