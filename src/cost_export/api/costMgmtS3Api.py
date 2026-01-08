@@ -149,7 +149,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       return assume_exists
 
   except Exception as e:
-    logger.error("WA DEBUG: exception", e)
+    logger.error(e)
     # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
