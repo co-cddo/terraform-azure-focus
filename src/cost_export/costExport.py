@@ -15,6 +15,8 @@ from api.costMgmtS3Api import (
   cost_export_backfill_schedule_lock_create,
   cost_export_backfill_run_lock_create,
   cost_export_exists,
+  cost_export_exists_as_lock_object,
+  cost_export_exists_lock_create,
 )
 
 logger = logging.getLogger("cost_export")
@@ -102,10 +104,14 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int)
     logger.debug(f"....{account_idx}: {current_month}/{current_year}")
 
     # check if the cost export task already exists; only create if not exists
-    if not cost_export_exists(account_id=account_id, month=current_month, year=current_year):
+    ## TODO: workaround in place because can't listobjects on focus data
+    # if not cost_export_exists(account_id=account_id, month=current_month, year=current_year):
+    if not cost_export_exists_as_lock_object(account_id=account_id, month=current_month, year=current_year):
       if cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
         cost_mgmt_export_run(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
-        number_of_jobs_running += 1;
+        number_of_jobs_running += 1
+
+        cost_export_exists_lock_create(account_id=account_id, month=current_month, year=current_year)
       else:
         logger.warning("....{account_idx}: {current_month}/{current_year} export task does not yet exist; release the backfill schedule lock")
     else:
