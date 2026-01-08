@@ -28,14 +28,15 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
     return exists
         
   except Exception as e:
-      logger.warning(f"Failed to check for cost export schedule lock file: {str(e)}\n\\nAssuming it exists...")
-      logger.error(json.dump(e))
+    # throws exception with ACCESS_DENIED if object does not exist
+    #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+    if "ACCESS_DENIED" in str(e):
+      return False
 
-      # throws exception with ACCESS_DENIED if object does not exist
-      #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+    logger.warning(f"Failed to check for cost export schedule lock file: {str(e)}\n\\nAssuming it exists...")
 
-      # If we can't check, assume it exists to not unnecessary run through backfill
-      return True
+    # If we can't check, assume it exists to not unnecessary run through backfill
+    return True
 
 def cost_export_backfill_run_lock_exists() -> bool:
   try:
@@ -52,9 +53,15 @@ def cost_export_backfill_run_lock_exists() -> bool:
     return exists
         
   except Exception as e:
-      logger.warning(f"Failed to check for cost export run lock file: {str(e)}\n\\nAssuming it exists...")
-      # If we can't check, assume it exists to not unnecessary run through backfill
-      return True
+    # throws exception with ACCESS_DENIED if object does not exist
+    #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+    if "ACCESS_DENIED" in str(e):
+      return False
+
+    logger.warning(f"Failed to check for cost export run lock file: {str(e)}\n\\nAssuming it exists...")
+    
+    # If we can't check, assume it exists to not unnecessary run through backfill
+    return True
 
 def cost_export_backfill_schedule_lock_create() -> None:
   try:
