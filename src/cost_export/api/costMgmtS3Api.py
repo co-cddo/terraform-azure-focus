@@ -18,6 +18,7 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
     logger.debug(f"Cost Export schedule lock check: {s3_path}")
     
     file_info = s3.get_file_info(s3_path)
+    logger.debug(f"WA DEBUG - cost_export_backfill_schedule_lock_exists: file_info{file_info}")
     exists = file_info.type != fs.FileType.NotFound
     
     if not exists:
@@ -27,6 +28,10 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
         
   except Exception as e:
       logger.warning(f"Failed to check for cost export schedule lock file: {str(e)}\n\\nAssuming it exists...")
+      print(e)
+
+      # throws exception with ACCESS_DENIED if object does not exist
+
       # If we can't check, assume it exists to not unnecessary run through backfill
       return True
 
@@ -37,7 +42,6 @@ def cost_export_backfill_run_lock_exists() -> bool:
     logger.debug(f"Cost Export schedule lock check: {s3_path}")
     
     file_info = s3.get_file_info(s3_path)
-    logger.debug(f"cost_export_backfill_run_lock_exists: file_info{file_info}")
     exists = file_info.type != fs.FileType.NotFound
     
     if not exists:
