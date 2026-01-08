@@ -77,7 +77,7 @@ def cost_export_backfill_schedule_lock_create() -> None:
     logger.info(f"WA DEBUG cost_export_backfill_schedule_lock_create: todayStr({todayStr}")
 
     with s3.open_output_stream(s3_path) as f:
-      f.write(str(todayStr.encode('utf-8')))
+      f.write(str(todayStr).encode('utf-8'))
       f.close()
 
     logger.info("cost export backfill schedule lock created")
@@ -95,7 +95,7 @@ def cost_export_backfill_run_lock_create() -> None:
     today = datetime.now(timezone.utc)
     todayStr = datetime.strftime(today, "%Y-%m-%d %H:%M:%S")
     with s3.open_output_stream(s3_path) as f:
-      f.write(str(todayStr.encode('utf-8')))
+      f.write(str(todayStr).encode('utf-8'))
       f.close()
 
     logger.info("cost export backfill run lock created")
