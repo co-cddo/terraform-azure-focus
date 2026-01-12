@@ -1,25 +1,5 @@
 import azure.functions as func
 import logging
-from common import(
-  Config,
-  is_uuid,
-  extract_subscription_ids_from_billing_scope,
-  extract_billing_account_from_blob_path,
-  _get_required_env,
-)
-from api.s3Api import getS3FileSystem
-from carbonExport import (
-  get_carbon_api_date_range,
-  is_month_within_api_range,
-  make_carbon_api_request_batched,
-  carbon_export_api_latest_fetch_date,
-  check_carbon_data_exists,
-  empty_emissions_data,
-  save_carbon_data_to_s3,
-)
-from costExport import (
-    cost_export_backfill_impl,
-)
 import pyarrow.parquet as pq
 import pyarrow.fs as fs
 import io
@@ -28,6 +8,28 @@ import requests
 from azure.storage.blob import BlobServiceClient
 from azure.identity import ManagedIdentityCredential
 from datetime import datetime, timezone, timedelta
+from common import(
+  Config,
+  is_uuid,
+)
+from api.s3Api import getS3FileSystem
+from carbonExport import (
+  get_carbon_api_date_range,
+  is_month_within_api_range,
+  make_carbon_api_request_batched,
+  carbon_export_api_latest_fetch_date,
+  check_carbon_data_exists,
+  save_carbon_data_to_s3,
+  carbon_emissions_backfill_imp,
+)
+from costExport import (
+    cost_export_backfill_impl,
+)
+from billing import (
+    extract_subscription_ids_from_billing_scope,
+    extract_billing_account_from_blob_path,
+)
+from api.tokens import TokenManager
 
 logger = logging.getLogger("cost_export")
 
@@ -354,11 +356,10 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
 
     try:
         # Get access token using managed identity
-        credential = ManagedIdentityCredential()
-        token = credential.get_token("https://management.azure.com/.default")
+        token = TokenManager().azure_token
         
         headers = {
-            "Authorization": f"Bearer {token.token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         
@@ -557,12 +558,12 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         logger.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
         # Get access token using managed identity
-        credential = ManagedIdentityCredential()
-        token = credential.get_token("https://management.azure.com/.default")
+        token = TokenManager().azure_token
+        logger.debug(f"cost_mgmt_export_exists: token: {token}")
         
         # Prepare the API request
         headers = {
-            "Authorization": f"Bearer {token.token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         
@@ -649,83 +650,12 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         except:
             raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
             
-        current_year, current_month = start_date.year, start_date.month
-
-        # Get access token using managed identity
-        credential = ManagedIdentityCredential()
-        token = credential.get_token("https://management.azure.com/.default")
-        
-        headers = {
-            "Authorization": f"Bearer {token.token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
-        
-        logger.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions from {start_date.strftime('%Y-%m-%d')}")
-        
-        processed_months = 0
-        skipped_months = 0
-
-        # backfill should through until the latest carbon export data is available
-        #  which from "carbon_emissions_exporter" is the around the 19th for the last month
-        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
-        latest_fetch_month, latest_fetch_year = carbon_api_fetch_date.month, carbon_api_fetch_date.year
-        
-        # Process months before API range (create empty records)
-        while (current_year, current_month) <= (latest_fetch_year, latest_fetch_month):
-            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
-            month_str = month_date.strftime("%Y-%m-01")
-            file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
-            
-            # Check if data already exists
-            if skip_existing:
-                exists, existing_path = check_carbon_data_exists(file_name)
-                if exists:
-                    logger.info(f"Skipping {month_str} - data already exists at {existing_path}")
-                    skipped_months += 1
-                    # Move to next month
-                    if current_month == 12:
-                        current_year += 1
-                        current_month = 1
-                    else:
-                        current_month += 1
-                    continue
-            
-            logger.info(f"Processing month: {month_str}")
-
-            # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
-            #  will return an empty "value" array
-            success, emissions_data, error_message = make_carbon_api_request_batched(
-                headers, subscription_ids, month_str
-            )
-
-            if success:
-                if success and len(emissions_data["value"]) == 0:
-                    # Create empty carbon data for months outside API range
-                    emissions_data = empty_emissions_data(month_str)
-                
-                save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
-                processed_months += 1
-            else:
-                logger.error(error_message)
-                if write_empty_object:
-                    logger.warning(f"Unable to process month: {month_str}. Writing empty results")
-                    emissions_data = empty_emissions_data(month_str)
-                    save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
-                    processed_months += 1
-                else:
-                    logger.error(f"Unable to process month: {month_str}. Not writing empty results")
-                    skipped_months += 1
-            
-            # Move to next month
-            if current_month == 12:
-                current_year += 1
-                current_month = 1
-            else:
-                current_month += 1
-        
+        processed_months, skipped_months = carbon_emissions_backfill_imp(
+            start_date=start_date,
+            skip_existing=skip_existing,
+            force_overwrite=force_overwrite,
+            write_empty_object=write_empty_object,
+        )
         logger.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
         
         return func.HttpResponse(
@@ -753,14 +683,20 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
     
     logger.info(f'Exporter backfill trigger at: {utc_timestamp}')
 
-
-
     try:
         # get the backfill start date from ENV VAR on the function
         logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
 
         start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
         cost_export_backfill_impl(start_date=start_date, force_overwrite=False, skip_existing=True)
+
+        processed_months, skipped_months = carbon_emissions_backfill_imp(
+            start_date=start_date,
+            skip_existing=True,
+            force_overwrite=False,
+            write_empty_object=True,
+        )
+        logger.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
 
     except Exception as e:
         error_msg = f"Error in backfill_trigger: {str(e)}"
