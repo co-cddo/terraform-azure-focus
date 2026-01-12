@@ -120,7 +120,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     # s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{object_account_id}*"
 
     # so fetching with the dated billing path - to get a list of objects with that path
-    # that didn't work either. So createing an explicit "selector", allow not found to return empty list and recursing through folder
+    # that didn't work either. So creating an explicit "selector", allow not found to return empty list and recursing through folder
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01"
     logger.info(f"Cost Export data check: {s3_path}")
     
