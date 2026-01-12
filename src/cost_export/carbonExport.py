@@ -2,7 +2,8 @@ import json
 import requests
 import logging
 from datetime import datetime, timezone, timedelta
-from common import Config, getS3FileSystem
+from common import Config
+from api.s3Api import getS3FileSystem
 
 logger = logging.getLogger("cost_export")
 

@@ -1,13 +1,16 @@
 ###
 # uses two local ENV VAR to override default behaviour allowing code to be ran locally
-#  AWS_TOKEN
+#  AWS:
+#    AWS_ACCESS_KEY_ID
+#    AWS_SECRET_ACCESS_KEY
+#    AWS_SESSION_TOKEN
 #  AZURE_TOKEN
 ###
+import os
 import logging
+import boto3
 from azure.identity import ManagedIdentityCredential
 from common import (
-  _get_required_env,
-  getS3FileSystem,
   Config,
 )
 
@@ -15,7 +18,9 @@ logger = logging.getLogger("cost_export")
 
 class TokenManager:
   _instance = None
-  _s3FileSystem = None
+  _aws_access_key_id: str = None
+  _aws_access_key_secret: str = None
+  _aws_session_token: str = None
   _azureToken: str = None
   
   def __new__(cls):
@@ -24,23 +29,46 @@ class TokenManager:
     return cls._instance
 
   @property
-  def s3_token(self):
-    AWS_TOKEN = _get_required_env("AWS_TOKEN")
-    if AWS_TOKEN:
-       return AWS_TOKEN
+  def aws_identity(self):
+    AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+    AWS_ACCESS_KEY_SECRET = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    AWS_SESSION_TOKEN = os.environ.get("AWS_SESSION_TOKEN")
 
-    if self._s3FileSystem is None:
+    if AWS_ACCESS_KEY_ID:
+      return {
+        "aws_access_key_id": AWS_ACCESS_KEY_ID,
+        "aws_secret_access_key": AWS_ACCESS_KEY_SECRET,
+        "aws_session_token": AWS_SESSION_TOKEN,
+      }
+    
+    if self._aws_access_key_id is None:
       try:
-        self._s3FileSystem = getS3FileSystem()
+        default_credential = ManagedIdentityCredential()
+        token = default_credential.get_token(Config.urn)
+
+        role = boto3.client('sts').assume_role_with_web_identity(
+          RoleArn=Config.arn,
+          RoleSessionName='session1',
+          WebIdentityToken=token.token
+          )
+        credentials = role['Credentials']
+        self._aws_access_key_id = credentials['AccessKeyId']
+        self._aws_access_key_secret = credentials['SecretAccessKey']
+        self._aws_session_token = credentials['SessionToken']
+           
       except Exception as e:
         logger.error(f"Failed to get S3 file system: {e}")
     
-    logger.debug(f"s3_token: AWS token: ", self._azureToken)
-    return self._s3FileSystem
+    logger.debug(f"aws_identity: AWS token: ", self._azureToken)
+    return {
+      "aws_access_key_id": self._aws_access_key_id,
+      "aws_secret_access_key": self._aws_access_key_secret,
+      "aws_session_token": self._aws_session_token,
+    }
   
   @property
   def azure_token(self) -> str:
-    AZURE_TOKEN = _get_required_env("AZURE_TOKEN")
+    AZURE_TOKEN = os.environ.get("AZURE_TOKEN")
     if AZURE_TOKEN:
        return AZURE_TOKEN
     

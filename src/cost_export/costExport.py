@@ -2,7 +2,8 @@ import logging
 from typing import Tuple
 from datetime import datetime, timezone, timedelta
 
-from common import Config, getS3FileSystem
+from common import Config
+from api.s3Api import getS3FileSystem
 from api.costMgmtApi import(
   cost_mgmt_export_exists,
   cost_mgmt_export_create,

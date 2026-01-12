@@ -5,9 +5,9 @@ logger = logging.getLogger("cost_export")
 from datetime import datetime, timezone
 import pyarrow.fs as fs
 from common import (
-   getS3FileSystem,
    Config,
 )
+from api.s3Api import getS3FileSystem
 
 COST_EXPORT_BACKFILL_RUN_LOCK_NAME = "cost-backfill-run.lock"
 COST_EXPORT_BACKFILL_SCHEDULE_LOCK_NAME = "cost-backfill-schedule.lock"

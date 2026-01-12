@@ -4,7 +4,6 @@ import logging
 import requests
 import uuid
 import json
-from pyarrow.fs import S3FileSystem
 from azure.identity import ManagedIdentityCredential
 
 logger = logging.getLogger("cost_export")
@@ -45,6 +44,7 @@ class Config:
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
     billing_scope = os.environ.get("BILLING_SCOPE")
+    billing_azure_location = os.environ.get("BILLING_AZURE_LOCATION")
     
     # Billing account mapping for S3 path organization
     _billing_account_mapping_json = os.environ.get("BILLING_ACCOUNT_MAPPING", "{}")
@@ -53,28 +53,6 @@ class Config:
     except:
         logger.warning(f"Failed to parse BILLING_ACCOUNT_MAPPING: {_billing_account_mapping_json}")
         billing_account_mapping = {}
-
-def getS3FileSystem():
-    default_credential = ManagedIdentityCredential()
-    token = default_credential.get_token(Config.urn)
-
-    role = boto3.client('sts').assume_role_with_web_identity(
-        RoleArn=Config.arn,
-        RoleSessionName='session1',
-        WebIdentityToken=token.token
-        )
-        
-    credentials = role['Credentials']
-    aws_access_key_id = credentials['AccessKeyId']
-    aws_secret_access_key = credentials['SecretAccessKey']
-    aws_session_token = credentials['SessionToken']
-        
-    return S3FileSystem(
-        access_key=aws_access_key_id,
-        secret_key=aws_secret_access_key,
-        session_token=aws_session_token,
-        region=Config.aws_region
-    )
 
 def extract_subscription_ids_from_billing_scope(scope):
     """Extract all subscription IDs that belong to the billing scope"""

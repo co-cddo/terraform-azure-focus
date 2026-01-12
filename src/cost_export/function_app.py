@@ -2,12 +2,12 @@ import azure.functions as func
 import logging
 from common import(
   Config,
-  getS3FileSystem,
   is_uuid,
   extract_subscription_ids_from_billing_scope,
   extract_billing_account_from_blob_path,
   _get_required_env,
 )
+from api.s3Api import getS3FileSystem
 from carbonExport import (
   get_carbon_api_date_range,
   is_month_within_api_range,
