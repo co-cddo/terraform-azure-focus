@@ -3,6 +3,7 @@ import requests
 import logging
 from datetime import datetime, timezone, timedelta
 from common import Config
+import pyarrow.fs as fs
 from api.s3Api import getS3FileSystem
 
 logger = logging.getLogger("cost_export")
