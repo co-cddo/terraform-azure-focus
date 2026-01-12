@@ -5,6 +5,7 @@ import requests
 from azure.identity import ManagedIdentityCredential
 
 from common import Config
+from api.tokens import TokenManager
 
 COST_MGMT_EXPORT_BACKFILL_JOB_PREFIX: str = "focus-backfill"
 
@@ -22,6 +23,9 @@ def get_mgmt_base_url(account_id: str) -> str:
 def get_mgmt_export_task_url(account_idx: int, account_id: str, month: int, year: int) -> str:
   return "%s/%s?api-version=2025-03-01" % (get_mgmt_base_url(account_id), get_export_task_name(account_idx, month, year))
 
+# slighly different URL to run a task (requires "/run" on the URL endpoint)
+def get_mgmt_export_run_task_url(account_idx: int, account_id: str, month: int, year: int) -> str:
+  return "%s/%s/run?api-version=2025-03-01" % (get_mgmt_base_url(account_id), get_export_task_name(account_idx, month, year))
 
 def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
 ###
@@ -31,17 +35,15 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
   logger.debug(f"cost_mgmt_export_exists: {export_task_name}")
 
   url = get_mgmt_export_task_url(account_idx, account_id, month, year)
-  logger.info(f"cost_mgmt_export_exists: GET {url}")
+  logger.debug(f"cost_mgmt_export_exists: GET {url}")
 
   try:
-    # Get access token using managed identity
-    credential = ManagedIdentityCredential()
-    token = credential.get_token("https://management.azure.com/.default")
+    token = TokenManager().azure_token
+    logger.debug(f"cost_mgmt_export_exists: token: {token}")
     
     # Prepare the API request
     headers = {
-      "Authorization": f"Bearer {token.token}",
-      "Content-Type": "application/json"
+      "Authorization": f"Bearer {token}",
     }
     response = requests.get(
         url,
@@ -49,18 +51,17 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
         timeout=timeout
     )
     
-    if response.status_code == 200:
-      logger.info(f"WA DEBUG - the response: {str(response)}")
+    ### NOT FOUND
+    if response.status_code == 404:
+      return False
+
+    # FOUND    
+    elif response.status_code == 200:
       return True
 
     else:
-      error_msg = f"API request failed with status {response.status_code}: {response.text}"
-      # Check if it's a date range error
-      if response.status_code == 400 and "InvalidRequestPropertyValue" in response.text:
-          if "should be in available range" in response.text:
-              error_msg += " - Date is outside the available range for Carbon Optimization API"
-      elif response.status_code == 400 and "InvalidNumberOfSubscriptions" in response.text:
-          error_msg += " - Too many subscriptions in request (max 100 allowed)"
+      error_msg = f"cost_mgmt_export_exists (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
+      logger.error(error_msg)
       return False
             
   except requests.exceptions.Timeout:
@@ -73,7 +74,7 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
     logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}")
     return False
 
-def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year: int, timeout=60) -> None:
+def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year: int, timeout=120) -> None:
 ### Example payload to PUT https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 # {
 #   "location": "uksouth",
@@ -122,7 +123,10 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
   payload_resource_id = f"{Config.cost_mgmt_export_destination_id}"
   payload_container = f"{Config.cost_mgmt_export_container}"
   payload_folder_path = f"{Config.s3_cost_directory_name}"
+  payload_location = f"{Config.billing_azure_location}"
+
   payload = {
+    "location": payload_location,
     "identity": {
       "type": "SystemAssigned"
     },
@@ -161,13 +165,12 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
   logger.debug(f"....PUT export payload: {payload}")
 
   try:
-    # Get access token using managed identity
-    credential = ManagedIdentityCredential()
-    token = credential.get_token("https://management.azure.com/.default")
-    
+    token = TokenManager().azure_token
+    logger.debug(f"cost_mgmt_export_exists: token: {token}")
+  
     # Prepare the API request
     headers = {
-      "Authorization": f"Bearer {token.token}",
+      "Authorization": f"Bearer {token}",
       "Content-Type": "application/json"
     }
     response = requests.put(
@@ -176,33 +179,28 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
         headers=headers,
         timeout=timeout
     )
-    
-    if response.status_code == 200:
-      logger.info(f"WA DEBUG - the response: {str(response)}")
+
+    # Can "PUT" the same export object multiple times - 201 on first create, then 200
+    if response.status_code == 201 or response.status_code == 200:
       return True
 
     else:
-      error_msg = f"API request failed with status {response.status_code}: {response.text}"
-      # Check if it's a date range error
-      if response.status_code == 400 and "InvalidRequestPropertyValue" in response.text:
-          if "should be in available range" in response.text:
-              error_msg += " - Date is outside the available range for Carbon Optimization API"
-      elif response.status_code == 400 and "InvalidNumberOfSubscriptions" in response.text:
-          error_msg += " - Too many subscriptions in request (max 100 allowed)"
+      error_msg = f"cost_mgmt_export_create (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
+      logger.error(error_msg)
       return False
             
   except requests.exceptions.Timeout:
-    logger.error(f"cost_mgmt_export_exists timeout: {str(e)}")
+    logger.error(f"cost_mgmt_export_create timeout: {str(e)}")
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_exists request: {str(e)}")
+    logger.error(f"cost_mgmt_export_create request: {str(e)}")
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_create unexpected: {str(e)}")
     return False
     
 
-def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: int) -> bool:
+def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
 ###
 # POST https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 # >>>> no body required
@@ -210,7 +208,43 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
   export_task_name = get_export_task_name(account_idx, month, year)
   logger.debug(f"cost_mgmt_export_run: {export_task_name}")
 
-  url = get_mgmt_export_task_url(account_idx, account_id, month, year)
-  logger.info(f"cost_mgmt_export_exists: POST {url}")
+  url = get_mgmt_export_run_task_url(account_idx, account_id, month, year)
+  logger.debug(f"cost_mgmt_export_run: GET {url}")
 
-  return True
+  try:
+    token = TokenManager().azure_token
+    logger.debug(f"cost_mgmt_export_run: token: {token}")
+    
+    # Prepare the API request
+    headers = {
+      "Authorization": f"Bearer {token}",
+      "Content-Type": "application/json"
+    }
+    response = requests.post(
+        url,
+        headers=headers,
+        timeout=timeout
+    )
+    
+    ### NOT FOUND
+    if response.status_code == 404:
+      return False
+
+    # FOUND    
+    elif response.status_code == 200:
+      return True
+
+    else:
+      error_msg = f"cost_mgmt_export_run (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
+      logger.error(error_msg)
+      return False
+            
+  except requests.exceptions.Timeout:
+    logger.error(f"cost_mgmt_export_run timeout: {str(e)}")
+    return False
+  except requests.exceptions.RequestException as e:
+    logger.error(f"cost_mgmt_export_run request: {str(e)}")
+    return False
+  except Exception as e:
+    logger.error(f"cost_mgmt_export_run unexpected: {str(e)}")
+    return False
