@@ -16,6 +16,7 @@ from common import (
 )
 
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 class TokenManager:
   _instance = None
