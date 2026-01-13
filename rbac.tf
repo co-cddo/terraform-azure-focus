@@ -74,9 +74,9 @@ resource "azurerm_role_assignment" "advisor_reader" {
   principal_type       = "ServicePrincipal"
 }
 
-resource "azurerm_role_assignment" "cost_management_contributor" {
-  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  role_definition_name = "Cost Management Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
-}
+# resource "azurerm_role_assignment" "cost_management_contributor" {
+#   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+#   role_definition_name = "Cost Management Contributor"
+#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#   principal_type       = "ServicePrincipal"
+# }
