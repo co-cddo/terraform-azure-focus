@@ -59,6 +59,8 @@ class TokenManager:
         self._aws_access_key_id = credentials['AccessKeyId']
         self._aws_access_key_secret = credentials['SecretAccessKey']
         self._aws_session_token = credentials['SessionToken']
+
+        self._aws_token_timestamp = current_timestamp
            
       except Exception as e:
         logger.error(f"Failed to get S3 file system: {e}")
@@ -77,11 +79,13 @@ class TokenManager:
        return AZURE_TOKEN
     
     current_timestamp = datetime.now().timestamp()  # in epoch seconds
-    if (self._aws_token_timestamp is None) or ((current_timestamp - self._aws_token_timestamp) > Config.azure_token_timeout_in_seconds):
+    if (self._azure_token_timestamp is None) or ((current_timestamp - self._azure_token_timestamp) > Config.azure_token_timeout_in_seconds):
       try:
         credential = ManagedIdentityCredential()
         token = credential.get_token("https://management.azure.com/.default")
         self._azure_token = token.token
+      
+        self._azure_token_timestamp = current_timestamp
       except Exception as e:
         logger.error(f"Failed to get azure api token: {e}")
 
