@@ -89,7 +89,6 @@ def get_last_day_month_date(month: int, year: int) -> int:
   end_of_month = datetime(year, month, 1) - timedelta(seconds=1)
 
   return end_of_month.day
-  
 
 def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year: int, timeout=120) -> None:
 ### Example payload to PUT https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
@@ -217,7 +216,6 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
   except Exception as e:
     logger.error(f"cost_mgmt_export_create unexpected: {str(e)}")
     return False
-    
 
 def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
 ###

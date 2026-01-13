@@ -126,25 +126,24 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     
     selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
     objects = s3.get_file_info(selector)
-    logger.warning(f"cost_export_exists: objects: {objects}")
 
     # expected to return a list of file_info - https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     #  can be an empty list
     if len(objects) == 0:
-      logger.info(f"Cost Export data does exist - path returned no objects: {s3_path}")
+      logger.info(f"Cost Export data does NOT exist - path returned no objects: {s3_path}")
       return False
     else:
       # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
-      assume_exists = True
+      assume_exists = False
       for thisObject in objects:
-        logger.warning(f"WA DEBUG - thisObject: {thisObject}")
+        # logger.warning(f"WA DEBUG - thisObject: {thisObject}")
         if thisObject.type != fs.FileType.NotFound:
-          assume_exists = False
+          assume_exists = True
     
       if assume_exists:
         logger.info(f"Cost Export data does exist: {s3_path}")
       else:
-        logger.info(f"Cost Export data does not exist: {s3_path}")
+        logger.info(f"Cost Export data does NOT exist: {s3_path}")
     
       return assume_exists
 
