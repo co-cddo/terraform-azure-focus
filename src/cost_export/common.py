@@ -53,3 +53,6 @@ class Config:
     except:
         logger.warning(f"Failed to parse BILLING_ACCOUNT_MAPPING: {_billing_account_mapping_json}")
         billing_account_mapping = {}
+    
+    azure_token_timeout_in_seconds = 1800   # 30 minutes
+    aws_token_timeout_in_seconds = 900   # 15 minutes

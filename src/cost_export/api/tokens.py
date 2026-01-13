@@ -10,6 +10,7 @@ import os
 import logging
 import boto3
 from azure.identity import ManagedIdentityCredential
+from datetime import datetime
 from common import (
   Config,
 )
@@ -21,7 +22,9 @@ class TokenManager:
   _aws_access_key_id: str = None
   _aws_access_key_secret: str = None
   _aws_session_token: str = None
-  _azureToken: str = None
+  _azure_token: str = None
+  _azure_token_timestamp = None
+  _aws_token_timestamp = None
   
   def __new__(cls):
     if cls._instance is None:
@@ -41,7 +44,8 @@ class TokenManager:
         "aws_session_token": AWS_SESSION_TOKEN,
       }
     
-    if self._aws_access_key_id is None:
+    current_timestamp = datetime.now().timestamp()  # in epoch seconds
+    if (self._aws_token_timestamp is None) or ((current_timestamp - self._aws_token_timestamp) > Config.aws_token_timeout_in_seconds):
       try:
         default_credential = ManagedIdentityCredential()
         token = default_credential.get_token(Config.urn)
@@ -59,7 +63,7 @@ class TokenManager:
       except Exception as e:
         logger.error(f"Failed to get S3 file system: {e}")
     
-    logger.debug(f"aws_identity: AWS token: ", self._azureToken)
+    logger.debug(f"aws_identity: AWS token: ", self._azure_token)
     return {
       "aws_access_key_id": self._aws_access_key_id,
       "aws_secret_access_key": self._aws_access_key_secret,
@@ -72,13 +76,14 @@ class TokenManager:
     if AZURE_TOKEN:
        return AZURE_TOKEN
     
-    if self._azureToken is None:
+    current_timestamp = datetime.now().timestamp()  # in epoch seconds
+    if (self._aws_token_timestamp is None) or ((current_timestamp - self._aws_token_timestamp) > Config.azure_token_timeout_in_seconds):
       try:
         credential = ManagedIdentityCredential()
         token = credential.get_token("https://management.azure.com/.default")
-        self._azureToken = token.token
+        self._azure_token = token.token
       except Exception as e:
         logger.error(f"Failed to get azure api token: {e}")
 
-    logger.debug(f"azure_token: management API token: ", self._azureToken)
-    return self._azureToken
+    logger.debug(f"azure_token: management API token: ", self._azure_token)
+    return self._azure_token

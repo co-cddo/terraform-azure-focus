@@ -2,7 +2,7 @@ import logging
 logger = logging.getLogger("cost_export")
 
 import requests
-from azure.identity import ManagedIdentityCredential
+from datetime import datetime, timedelta
 
 from common import Config
 from api.tokens import TokenManager
@@ -74,6 +74,23 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
     logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}")
     return False
 
+def get_last_day_month_date(month: int, year: int) -> int:
+  # import calendar
+  # last_day = calendar.monthrange(year, month)[1]
+  # return "%04d-%02d-%02d" % (year, month, last_day)
+
+  # first increment the month by one
+  month += 1
+  if (month > 12):
+    month = 1
+    year += 1
+
+  # using the datetime for the 1st of the next month, subtract one second
+  end_of_month = datetime(year, month, 1) - timedelta(seconds=1)
+
+  return end_of_month.day
+  
+
 def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year: int, timeout=120) -> None:
 ### Example payload to PUT https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 # {
@@ -125,6 +142,8 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
   payload_folder_path = f"{Config.s3_cost_directory_name}"
   payload_location = f"{Config.billing_azure_location}"
 
+  month_last_day = get_last_day_month_date(month, year)
+
   payload = {
     "location": payload_location,
     "identity": {
@@ -142,7 +161,7 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
         "timeframe": "Custom",
         "timePeriod": {
           "from": f"{year:04d}-{month:02d}-01T00:00:00Z",
-          "to": f"{year:04d}-{month:02d}-01T00:00:00Z"
+          "to": f"{year:04d}-{month:02d}-{month_last_day:02d}T23:59:59Z"
         }
       },
       "schedule": {
