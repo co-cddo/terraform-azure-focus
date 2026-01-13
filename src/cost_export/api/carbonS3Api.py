@@ -1,6 +1,7 @@
 import logging
-import json
+import os
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 from datetime import datetime, timezone
 import pyarrow.fs as fs

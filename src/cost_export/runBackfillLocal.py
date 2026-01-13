@@ -13,18 +13,19 @@ Install python packages into virtual environment: `python -m pip install -r ./sr
 
 And to run:
 ```
-ENTRA_APP_CLIENT_ID="a103d73e-xxxx-xxxx-xxxx-aabbccddeeff" ENTRA_APP_URN="api://7a770e35-xxxx-xxxx-xxxx-aabbccddeeff/GDS-AWS-Cost-Forwarding" AWS_ROLE_ARN="arn:aws:iam::123456:role/AzureFederated-7a770e35-xxxx-xxxx-xxxx-aabbccddeeff" S3_FOCUS_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" AWS_REGION="eu-west-2" STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=stcostexportabc1234;AccountKey=IkC+bob4675+3784/base64==;EndpointSuffix=core.windows.net" CONTAINER_NAME="cost-exports" S3_UTILIZATION_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" S3_RECOMMENDATIONS_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" S3_CARBON_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" CARBON_DIRECTORY_NAME="gds-carbon-v1" CARBON_API_TENANT_ID="7a770e35-xxx-xxxx-xxxx-aabbccddeeff" BILLING_SCOPE="/providers/Microsoft.Management/managementGroups/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" BILLING_ACCOUNT_MAPPING='{"0":"bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"}' ROOT_FOLDER_PATH="gds-focus-v1"  STORAGE_RESOURCE_ID="/subscriptions/c365d2c4-xxxx-xxxx-xxxx-aabbccddeeff/resourceGroups/rg-cost-export/providers/Microsoft.Storage/storageAccounts/stcostexportabc123" STORAGE_CONTAINER="cost-exports" BILLING_AZURE_LOCATION="uksouth" BACKFILL_START_DATE="2025-10-01"   python3 ./src/cost_export/runBackfillLocal.py
+ENTRA_APP_CLIENT_ID="a103d73e-xxxx-xxxx-xxxx-aabbccddeeff" ENTRA_APP_URN="api://7a770e35-xxxx-xxxx-xxxx-aabbccddeeff/GDS-AWS-Cost-Forwarding" AWS_ROLE_ARN="arn:aws:iam::123456:role/AzureFederated-7a770e35-xxxx-xxxx-xxxx-aabbccddeeff" S3_FOCUS_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" AWS_REGION="eu-west-2" STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=stcostexportabc1234;AccountKey=IkC+bob4675+3784/base64==;EndpointSuffix=core.windows.net" CONTAINER_NAME="cost-exports" S3_UTILIZATION_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" S3_RECOMMENDATIONS_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" S3_CARBON_PATH="uk-gov-appvia-cost-inbound/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" CARBON_DIRECTORY_NAME="gds-carbon-v1" CARBON_API_TENANT_ID="7a770e35-xxx-xxxx-xxxx-aabbccddeeff" BILLING_SCOPE="/providers/Microsoft.Management/managementGroups/7a770e35-xxx-xxxx-xxxx-aabbccddeeff" BILLING_ACCOUNT_MAPPING='{"0":"bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"}' ROOT_FOLDER_PATH="gds-focus-v1"  STORAGE_RESOURCE_ID="/subscriptions/c365d2c4-xxxx-xxxx-xxxx-aabbccddeeff/resourceGroups/rg-cost-export/providers/Microsoft.Storage/storageAccounts/stcostexportabc123" STORAGE_CONTAINER="cost-exports" BILLING_AZURE_LOCATION="uksouth" BACKFILL_START_DATE="2025-10-01"  LOGGING_LEVEL="DEBUG" python3 ./src/cost_export/runBackfillLocal.py
 ```
 
 You will get the value of all the env vars from the deployed function config in Azure web console.
 Be sure to set the backfill "BACKFILL_START_DATE" o something sensible.
+LOG_LEVEL env var defaults to "DEBUG" above but can be noisy; set to "INFO" if required.
 '''
 
 import logging
-logger = logging.getLogger("cost_export")
-logger.setLevel(logging.INFO)
-
 import os
+logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
+
 from function_app import (
     backfill_trigger,
 )

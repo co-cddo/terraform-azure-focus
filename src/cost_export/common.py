@@ -7,6 +7,7 @@ import json
 from azure.identity import ManagedIdentityCredential
 
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 def _get_required_env(name):
     value = os.environ.get(name)

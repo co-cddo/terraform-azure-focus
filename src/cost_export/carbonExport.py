@@ -2,6 +2,7 @@ import json
 from typing import Dict
 import requests
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from common import Config
 from api.tokens import TokenManager
@@ -16,6 +17,7 @@ from billing import (
 )
 
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 def get_carbon_api_date_range():
     """

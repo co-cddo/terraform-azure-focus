@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Tuple
 from datetime import datetime, timezone, timedelta
 
@@ -21,6 +22,7 @@ from api.costMgmtS3Api import (
 )
 
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 def cost_export_backfill_lock_create() -> None:
   logger.debug("cost_export_backfill_lock_create")
@@ -83,7 +85,7 @@ def create_cost_export_backfill_tasks(start_date: str, account_id: str, account_
   # if we get this far, then we have created the full schedule of backfill Cost Management export jobs
   cost_export_backfill_schedule_lock_create()
 
-def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int) -> None:
+def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> None:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 6
 
   logger.debug(f"run_cost_export_backfill ({account_idx}) from {start_date} for account: {account_id}")
@@ -107,17 +109,30 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int)
     # check if the cost export task already exists; only create if not exists
     ## TODO: workaround in place because can't ListBucket on focus data
     # if not cost_export_exists(account_id=account_id, month=current_month, year=current_year):
-    if not cost_export_exists(account_id=account_id, month=current_month, year=current_year):
-      if cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
-        cost_mgmt_export_run(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
-        number_of_jobs_running += 1
+    current_month_year_data_exists = cost_export_exists(account_id=account_id, month=current_month, year=current_year)
+    if not (skip_existing and current_month_year_data_exists):
+      if not current_month_year_data_exists:
+        logger.info(f"....{account_idx}: {current_month}/{current_year} export does NOT yet exist")
 
-        ## TODO: workaround in place because can't ListBucket on focus data - so have to assume the export has worked
-        # cost_export_exists_lock_create(account_id=account_id, month=current_month, year=current_year)
+      if current_month_year_data_exists and not skip_existing:
+        logger.info(f"....{account_idx}: {current_month}/{current_year} export does exist but skip exist is false")
+
+      if cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
+        if (current_month_year_data_exists and force_overwrite == True) or (not current_month_year_data_exists):
+          if current_month_year_data_exists:
+            logger.info(f"....{account_idx}: {current_month}/{current_year} export does exist but force overwrite is true")
+
+          cost_mgmt_export_run(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
+          number_of_jobs_running += 1
+
+          ## TODO: workaround in place because can't ListBucket on focus data - so have to assume the export has worked
+          # cost_export_exists_lock_create(account_id=account_id, month=current_month, year=current_year)
+        else:
+          logger.info("....{account_idx}: {current_month}/{current_year} skip existing is false but force overwrite is also false")
       else:
         logger.warning("....{account_idx}: {current_month}/{current_year} export task does not yet exist; release the backfill schedule lock")
     else:
-        logger.info(f"....{account_idx}: {current_month}/{current_year} export already exists, skipping...")
+      logger.info(f"....{account_idx}: {current_month}/{current_year} export already exists and skipping is enabled...")
 
     current_month, current_year = decrement_month_year(current_month, current_year)
   
@@ -143,7 +158,7 @@ def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, sk
   if not cost_export_backfill_run_lock_exists():
     for idx, account_id in Config.billing_account_mapping.items():
       logger.info(f"Run backfill for Billing Account ({idx}): {account_id}")
-      run_cost_export_backfill(start_date=start_date, account_idx=int(idx), account_id=account_id)
+      run_cost_export_backfill(start_date=start_date, account_idx=int(idx), account_id=account_id, skip_existing=skip_existing, force_overwrite=force_overwrite)
 
   else:
     logger.info("Cost export backfill run lock exists. Skipping backfill run.")

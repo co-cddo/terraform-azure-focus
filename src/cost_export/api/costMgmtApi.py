@@ -1,5 +1,7 @@
 import logging
+import os
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 import requests
 from datetime import datetime, timedelta
@@ -130,6 +132,8 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
 # 		"compressionMode": "None"
 # 	}
 # }
+  logger.info(f"...creating cost export task for account id ({account_id} on {month:02d}/{year:04d}...")
+
   export_task_name = get_export_task_name(account_idx, month, year)
   logger.debug(f"cost_mgmt_export_create: export_task_name ({export_task_name})")
 
@@ -222,6 +226,8 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
 # POST https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 # >>>> no body required
 ###
+  logger.info(f"...running cost export for account id ({account_id} on {month:02d}/{year:04d}...")
+
   export_task_name = get_export_task_name(account_idx, month, year)
   logger.debug(f"cost_mgmt_export_run: {export_task_name}")
 
@@ -230,7 +236,6 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
 
   try:
     token = TokenManager().azure_token
-    logger.debug(f"cost_mgmt_export_run: token: {token}")
     
     # Prepare the API request
     headers = {

@@ -1,5 +1,6 @@
 import azure.functions as func
 import logging
+import os
 import pyarrow.parquet as pq
 import pyarrow.fs as fs
 import io
@@ -32,6 +33,7 @@ from billing import (
 from api.tokens import TokenManager
 
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 app = func.FunctionApp()
 

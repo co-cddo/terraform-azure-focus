@@ -1,8 +1,10 @@
 import logging
+import os
 import requests
 from api.tokens import TokenManager
 
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 def extract_subscription_ids_from_billing_scope(scope):
     """Extract all subscription IDs that belong to the billing scope"""

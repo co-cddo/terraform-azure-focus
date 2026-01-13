@@ -91,3 +91,9 @@ variable "cost_export_daily_schedule_to_years" {
   type        = number
   default     = 15
 }
+
+variable "logging_level" {
+  description = "Logging level for the app; can be DEBUG or INFO (default)"
+  type        = string
+  default     = "INFO"
+}

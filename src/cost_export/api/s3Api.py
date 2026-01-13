@@ -6,7 +6,9 @@ from api.tokens import (
     TokenManager,
 )
 import logging
+import os
 logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 def getS3FileSystem():
   credentials = TokenManager().aws_identity

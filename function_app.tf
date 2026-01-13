@@ -102,6 +102,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "STORAGE_RESOURCE_ID" = azurerm_storage_account.cost_export.id
     "STORAGE_CONTAINER"   = azapi_resource.cost_export.name
     "ROOT_FOLDER_PATH"    = local.focus_directory_name
+    "LOGGING_LEVEL"       = var.logging_level
   }
 }
 
