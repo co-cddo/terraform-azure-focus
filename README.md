@@ -92,7 +92,7 @@ The module creates three distinct export pipelines for each of the data sets:
 1. **Daily Export**: Cost Management exports daily FOCUS-format cost data (Parquet files) to Azure Storage
 2. **Event Trigger**: Blob creation events trigger the `CostExportProcessor` function via storage queue
 3. **Processing**: Function processes and transforms the data (removes sensitive columns, restructures paths)
-4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`; all billing account cost data written to the same folder each parquet object prefixed with the billing account name
 
 #### Azure Advisor Recommendations Pipeline  
 1. **Daily Trigger**: `AdvisorRecommendationsExporter` function runs daily at 2 AM (timer trigger)
@@ -106,10 +106,6 @@ The module creates three distinct export pipelines for each of the data sets:
     - Batches the API call per 100 subscriptions, and merges all each of the datasets into one - refer to "subscription batching" below.
   - Processing: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
   - Upload: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
-- **Backfill** - called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD, called the same API as the monthly trigger but for each month from the
-given start date.
-  - If data is not available (see "rolling window" below), will upload a default "zero" dataset.
-    - Optionally, takes a parameter called `write_empty_object`, which when set to "False", skips each month with no data.
 
 ##### Carbon API Date Range Calculation
 The Carbon Optimization API provides a rolling 12-month window of emissions data. The available date range is calculated dynamically based on Microsoft's data availability policy:
@@ -147,65 +143,67 @@ The Carbon Optimization API has a maximum limit of 100 subscriptions per request
 ## Backfill
 
 ### FOCUS Cost Data
-When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select reports and click 'Run now' in small batches:
+**Endpoint**: `POST /api/cost-export-backfill`
+Can be called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD.
 
-![focus-backfill-exports](images/focus-backfill-exports.png)
+The cost export has two separate lock files; one for the schedule (which creates the backfill of Cost Mgmt Export tasks for each month)
+and the run (the executing of those exports) - in batches of six (half year). Lock objects are created only after successfully creating
+the schedule or once a full run across all tasks has completed successfully.
 
-**TBC Warren - this need to be confirmed if this is required approach.** Moreso, the intention is to run
-the backfill automatically via the backfill_timer. Have already proven we cannot create a single historic  export job, with a from/to more than a month. Currently investigating whether it is easier to go direct by API - because generating the backfil export jobs is cumbersome in terraform.
+To run the full backfill of tasks, simply repeatedly run this cost export backfill task. If a task is already running, it will not
+interrupting the running task but it will count as one of the batch of six. It takes around 15 minutes for each task to run - and
+will run concurrently.
 
-> [!NOTE]  
-> An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
+The schedule will be created from the given backfill start date for every month up to until last month.
 
-### Carbon Emissions Data
-
-#### Initial Backfill
-For historical carbon emissions data, use the backfill HTTP endpoint instead of running the timer function:
-
-**Endpoint**: `POST /api/carbon-backfill`
+To remove the lock object, contact appvia support.
 
 **Query Parameters**:
-- `force_overwrite=true` - Overwrite existing data files (default: false)
+- `force_overwrite=true` - Overwrite existing data files (default: false); set `skip_existing` to False
 - `skip_existing=false` - Process all months regardless of existing data (default: true)
+
+**Examples**:
+- `POST /api/cost-export-backfill` - Skip months that already have data (idempotent)
+- `POST /api/cost-export-backfill?force_overwrite=true` - Overwrite all existing data
+- `POST /api/cost-export-backfill?skip_existing=false` - Process all months, but don't skip if carbon export already exists
+
+
+### Carbon Emissions Data
+**Endpoint**: `POST /api/carbon-backfill`
+Can be called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD, called the same API as the monthly
+trigger but for each month from the given start date.
+
+Uses a "carbon export" lock object on the target S3 bucket as semaphore; the lock object exists
+then Carbon data backfill is skipped. Lock object is created only once a full carbon export backfill has
+completed successfully.
+
+The Carbon Mgmt API only provides up to 12 months of archive data; where the backfill start date precedes the 12 months
+it will write an empty file. The backfill will run from start date up until the month prior to current Carbon Export (note
+the 19th of the month - see above).
+
+To remove the lock object, contact appvia support.
+
+**Query Parameters**:
+- `force_overwrite=true` - Overwrite existing data files (default: false); set `skip_existing` to False
+- `skip_existing=false` - Process all months regardless of existing data (default: true)
+- `write_empty_object` - If no data exists for given month will write an empty export (default: true)
 
 **Examples**:
 - `POST /api/carbon-backfill` - Skip months that already have data (idempotent)
 - `POST /api/carbon-backfill?force_overwrite=true` - Overwrite all existing data
-- `POST /api/carbon-backfill?skip_existing=false` - Process all months, but don't overwrite existing
+- `POST /api/carbon-backfill?skip_existing=false` - Process all months, but don't skip if carbon export already exists
 
-#### Date Range Information
-Check current API availability and existing data:
-
-**Endpoint**: `GET /api/carbon-date-range`
-
-**Query Parameters**:
-- `check_existing=true` - Also check which months already have data in S3
-
-#### Manual Monthly Export
-Run the function named 'CarbonEmissionsExporter' once. Note that you will need to temporarily configure the firewall and CORS rules to allow this (add an entry for https://portal.azure.com).
-
-**Idempotency**: Both the timer function and backfill endpoint are idempotent - they will skip processing if data already exists for a given month.
 
 ### Recommendations
-
 We don't provide a backfill for this dataset.
 
 ### Backfill timer
-Runs every day at 6AM GMT to automatically run the backfill for cost exports and carbon exports.
+Runs every weekday at 6AM GMT automatically run the backfill for cost exports and carbon exports; first costs then carbon.
 
-Uses independent lockfiles on the target S3 bucket for each of cost and carbon export for each tenant.
-If lock object does not exist, the backfill will run. If lock object does exist, the backfill does not run.
+The appvia analytics teams can delete the associated lockfile for each tenant to force re-running the backfill. And because
+the Cost Export backfill will only run batches of six, it will take multiple days to export a full backfill schedule.
 
-The appvia analytics teams can delete the associated lockfile for each tenant to force re-running the backfill.
-
-The backfill start date is set by the `backfill_start_date` module terraform variable. The backfill end date is set by the `backfill_end_date` (TBC Warren - if the backfill end date can be assumed from the
-time the backfill runs up to the last month - this works for carbon export - need to confirm if it
-works for the cost export).
-
-The backfill timer's behaviour can be overridden with two additional module variables:
-* `skip_existing` - defaults to true, but when set to false, will not skip existing backfill datasets.
-* `force_overwrite` - defaults to false, but when set to true, will force overwrite on existing backfill datasets; set `skip_existing` to false when using this setting.
-
+The backfill start date ()`backfill_start_date`) module terraform variable must be explicitly set.
 
 ## Security Features
 
