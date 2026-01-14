@@ -137,7 +137,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
       assume_exists = False
       for thisObject in objects:
-        if thisObject.type != fs.FileType.NotFound:
+        if (thisObject.type != fs.FileType.NotFound) and (object_account_id in thisObject.path):
           assume_exists = True
     
       if assume_exists:
