@@ -122,7 +122,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
 
     # so fetching with the dated billing path - to get a list of objects with that path
     # that didn't work either. So creating an explicit "selector", allow not found to return empty list and recursing through folder
-    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01"
+    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/"
     logger.info(f"Cost Export data check: {s3_path}")
     
     selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
@@ -137,7 +137,6 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
       assume_exists = False
       for thisObject in objects:
-        # logger.warning(f"WA DEBUG - thisObject: {thisObject}")
         if thisObject.type != fs.FileType.NotFound:
           assume_exists = True
     
@@ -210,3 +209,62 @@ def cost_export_exists_lock_create(account_id:str, month: int, year:int) -> None
   except Exception as e:
     logger.error(f"Failed to create cost export backfill data lock: {str(e)}")
     raise e
+  
+  def cost_export_test_IAM_permissions() -> bool:
+    ###
+    # bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d-16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31_OC35-AR3W-BG7-PGB_part_0_0001.parquet
+    # bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d-16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31_part_1_0001.parquet
+    ###
+    try:
+      s3 = getS3FileSystem()
+
+      # tried using a wildcard on the account id - but fails with "pyarrow.fs"
+      # s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{object_account_id}*"
+
+      # fetch the root path
+      s3_path = f"{Config.s3_focus_path.rstrip('/')}/"
+      logger.info(f"cost_export_test_IAM_permissions root path: {s3_path}")
+      
+      selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
+      objects = s3.get_file_info(selector)
+
+      if len(objects) == 0:
+        logger.info(f"cost_export_test_IAM_permissions - path returned no objects: {s3_path}")
+        return False
+      else:
+        # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
+        assume_exists = False
+        for thisObject in objects:
+          logger.info(f"cost_export_test_IAM_permissions: root path object: {thisObject}")
+      
+      # fetch the root path
+      s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/"
+      logger.info(f"cost_export_test_IAM_permissions cost export v1 path: {s3_path}")
+      
+      selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
+      objects = s3.get_file_info(selector)
+
+      if len(objects) == 0:
+        logger.info(f"cost_export_test_IAM_permissions - path returned no objects: {s3_path}")
+        return False
+      else:
+        # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
+        assume_exists = False
+        for thisObject in objects:
+          logger.info(f"cost_export_test_IAM_permissions: cost export v1 path object: {thisObject}")
+      
+      return True
+
+    except Exception as e:
+      logger.error(e)
+      # throws exception with ACCESS_DENIED if object path does not exist
+      #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+      exceptionStr = str(e)
+      if "ACCESS_DENIED" in exceptionStr:
+        logger.info(f"Cost Export data does not exists: {s3_path}")
+        return False
+    
+      logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
+      # If we can't check, assume it does not exist to force generating it
+      return False
+  

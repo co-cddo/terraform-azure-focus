@@ -15,8 +15,8 @@ CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME = "carbon-backfill-run.lock"
 def carbon_export_backfill_lock_exists() -> bool:
   try:
     logger.debug(f"carbon_export_backfill_lock_exists: s3_focus_path({Config.s3_focus_path}), carbon_directory_name ({Config.carbon_directory_name}), CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME({CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME})")
-
     s3 = getS3FileSystem()
+    
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.carbon_directory_name}-{CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME}"
     logger.debug(f"Carbon Export lock check: {s3_path}")
     

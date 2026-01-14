@@ -67,7 +67,6 @@ class TokenManager:
       except Exception as e:
         logger.error(f"Failed to get S3 file system: {e}")
     
-    logger.debug(f"aws_identity: AWS token: ", self._azure_token)
     return {
       "aws_access_key_id": self._aws_access_key_id,
       "aws_secret_access_key": self._aws_access_key_secret,
@@ -93,5 +92,4 @@ class TokenManager:
       except Exception as e:
         logger.error(f"Failed to get azure api token: {e}")
 
-    logger.debug(f"azure_token: management API token: ", self._azure_token)
     return self._azure_token

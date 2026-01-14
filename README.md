@@ -159,6 +159,7 @@ The schedule will be created from the given backfill start date for every month 
 To remove the lock object, contact appvia support.
 
 **Query Parameters**:
+- `start_date` - the backifill start date in format YYYY-MM-DD (e.g. 2025-01-01); no default must be given
 - `force_overwrite=true` - Overwrite existing data files (default: false); set `skip_existing` to False
 - `skip_existing=false` - Process all months regardless of existing data (default: true)
 
@@ -184,6 +185,7 @@ the 19th of the month - see above).
 To remove the lock object, contact appvia support.
 
 **Query Parameters**:
+- `start_date` - the backifill start date in format YYYY-MM-DD (e.g. 2025-01-01); no default must be given
 - `force_overwrite=true` - Overwrite existing data files (default: false); set `skip_existing` to False
 - `skip_existing=false` - Process all months regardless of existing data (default: true)
 - `write_empty_object` - If no data exists for given month will write an empty export (default: true)

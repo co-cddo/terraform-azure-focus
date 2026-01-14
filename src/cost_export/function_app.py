@@ -728,7 +728,7 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
         # Parse query parameters
         force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
         skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
-        start_date_param = req.params.get('backfill_start_date')
+        start_date_param = req.params.get('start_date')
         logger.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
         
         start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
