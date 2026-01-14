@@ -225,7 +225,7 @@ def cost_export_test_IAM_permissions() -> bool:
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/"
     logger.info(f"cost_export_test_IAM_permissions root path: {s3_path}")
     
-    selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
+    selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=False)
     objects = s3.get_file_info(selector)
 
     if len(objects) == 0:
@@ -241,7 +241,7 @@ def cost_export_test_IAM_permissions() -> bool:
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/"
     logger.info(f"cost_export_test_IAM_permissions cost export v1 path: {s3_path}")
     
-    selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
+    selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=False)
     objects = s3.get_file_info(selector)
 
     if len(objects) == 0:
