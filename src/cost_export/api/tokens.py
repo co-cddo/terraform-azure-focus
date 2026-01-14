@@ -62,6 +62,7 @@ class TokenManager:
         self._aws_session_token = credentials['SessionToken']
 
         self._aws_token_timestamp = current_timestamp
+        logger.info(f"AWS Identity refreshed; expires in {Config.aws_token_timeout_in_seconds} seconds")
            
       except Exception as e:
         logger.error(f"Failed to get S3 file system: {e}")
@@ -87,6 +88,8 @@ class TokenManager:
         self._azure_token = token.token
       
         self._azure_token_timestamp = current_timestamp
+        logger.info(f"Azure API token refreshed; expires in {Config.azure_token_timeout_in_seconds} seconds")
+
       except Exception as e:
         logger.error(f"Failed to get azure api token: {e}")
 
