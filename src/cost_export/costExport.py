@@ -88,7 +88,7 @@ def create_cost_export_backfill_tasks(start_date: str, account_id: str, account_
 def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> None:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 6
 
-  logger.debug(f"run_cost_export_backfill ({account_idx}) from {start_date} for account: {account_id}")
+  logger.debug(f"run_cost_export_backfill ({account_idx}) from {start_date} for account: {account_id}; skip existing ({skip_existing}) with forced overwrite ({force_overwrite})")
 
   # iterate over month/year in reverse to backfill start date
   current_month, current_year = get_backfill_until_month_year()

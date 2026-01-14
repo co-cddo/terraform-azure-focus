@@ -41,7 +41,6 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
 
   try:
     token = TokenManager().azure_token
-    logger.debug(f"cost_mgmt_export_exists: token: {token}")
     
     # Prepare the API request
     headers = {
@@ -188,7 +187,6 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
 
   try:
     token = TokenManager().azure_token
-    logger.debug(f"cost_mgmt_export_exists: token: {token}")
   
     # Prepare the API request
     headers = {

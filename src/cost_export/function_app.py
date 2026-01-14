@@ -690,7 +690,11 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
         logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
 
         start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
-        cost_export_backfill_impl(start_date=start_date, force_overwrite=False, skip_existing=True)
+        cost_export_backfill_impl(
+            start_date=start_date,
+            force_overwrite=False,
+            skip_existing=True,
+        )
 
         processed_months, skipped_months = carbon_emissions_backfill_imp(
             start_date=start_date,

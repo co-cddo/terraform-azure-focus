@@ -11,7 +11,6 @@ def extract_subscription_ids_from_billing_scope(scope):
     try:
         # Get access token using managed identity
         token = TokenManager().azure_token
-        logger.debug(f"cost_mgmt_export_exists: token: {token}")
         
         headers = {
             "Authorization": f"Bearer {token}",

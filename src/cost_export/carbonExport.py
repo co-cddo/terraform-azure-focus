@@ -377,7 +377,6 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
 
         # Get access token using managed identity
         token = TokenManager().azure_token
-        logger.debug(f"cost_mgmt_export_exists: token: {token}")
         
         headers = {
             "Authorization": f"Bearer {token}",
