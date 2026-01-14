@@ -14,6 +14,8 @@ CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME = "carbon-backfill-run.lock"
 
 def carbon_export_backfill_lock_exists() -> bool:
   try:
+    logger.debug(f"carbon_export_backfill_lock_exists: s3_focus_path({Config.s3_focus_path}), carbon_directory_name ({Config.carbon_directory_name}), CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME({CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME})")
+
     s3 = getS3FileSystem()
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.carbon_directory_name}-{CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME}"
     logger.debug(f"Carbon Export lock check: {s3_path}")
@@ -41,6 +43,8 @@ def carbon_export_backfill_lock_exists() -> bool:
 
 def carbon_export_backfill_lock_create() -> None:
   try:
+    logger.debug(f"carbon_export_backfill_lock_create: s3_focus_path({Config.s3_focus_path}), carbon_directory_name ({Config.carbon_directory_name}), CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME({CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME})")
+
     s3 = getS3FileSystem()
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.carbon_directory_name}-{CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME}"
     logger.debug(f"cost_export_backfill_schedule_lock_create path: {s3_path}")
@@ -63,6 +67,8 @@ def carbon_export_exists(month: int, year:int) -> bool:
   # s3://uk-gov-appvia-cost-inbound/7a770e35-b455-4df2-a276-b07408438d9a/gds-carbon-v1/billing_period=20240201/carbon-emissions-2024-02.json
   ###
   try:
+    logger.debug(f"carbon_export_exists: s3_focus_path({Config.s3_focus_path}), carbon_directory_name ({Config.carbon_directory_name}), CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME({CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME}), month({month}), year({year})")
+
     s3 = getS3FileSystem()
 
     # the cost export can be one or more objects in a given month/year path
