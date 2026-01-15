@@ -249,9 +249,24 @@ def cost_export_test_IAM_permissions() -> bool:
       return False
     else:
       # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
-      assume_exists = False
       for thisObject in objects:
         logger.info(f"cost_export_test_IAM_permissions: cost export v1 path object: {thisObject}")
+
+
+    # fetch the dated path
+    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period=20250501/"
+    logger.info(f"cost_export_test_IAM_permissions cost export specific billing date path: {s3_path}")
+    
+    selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=False)
+    objects = s3.get_file_info(selector)
+
+    if len(objects) == 0:
+      logger.info(f"cost_export_test_IAM_permissions - path returned no objects: {s3_path}")
+      return False
+    else:
+      # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
+      for thisObject in objects:
+        logger.info(f"cost_export_test_IAM_permissions: cost export specific billing date path object: {thisObject}")
     
     return True
 
