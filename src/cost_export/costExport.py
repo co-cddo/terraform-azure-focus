@@ -17,9 +17,6 @@ from api.costMgmtS3Api import (
   cost_export_backfill_schedule_lock_create,
   cost_export_backfill_run_lock_create,
   cost_export_exists,
-  cost_export_exists_as_lock_object,
-  cost_export_exists_lock_create,
-  cost_export_test_IAM_permissions,
 )
 
 logger = logging.getLogger("cost_export")
@@ -108,8 +105,6 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int,
     logger.debug(f"....{account_idx}: {current_month}/{current_year}")
 
     # check if the cost export task already exists; only create if not exists
-    ## TODO: workaround in place because can't ListBucket on focus data
-    # if not cost_export_exists(account_id=account_id, month=current_month, year=current_year):
     current_month_year_data_exists = cost_export_exists(account_id=account_id, month=current_month, year=current_year)
     if not (skip_existing and current_month_year_data_exists):
       if not current_month_year_data_exists:
@@ -126,8 +121,6 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int,
           cost_mgmt_export_run(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
           number_of_jobs_running += 1
 
-          ## TODO: workaround in place because can't ListBucket on focus data - so have to assume the export has worked
-          # cost_export_exists_lock_create(account_id=account_id, month=current_month, year=current_year)
         else:
           logger.info(f"....{account_idx}: {current_month}/{current_year} skip existing is false but force overwrite is also false")
       else:
@@ -144,9 +137,6 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int,
 
 def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, skip_existing: bool = True) -> None:
   logging.debug(f"cost_export_backfill: from {start_date}, overwrite({force_overwrite}), skip({skip_existing})")
-
-  # to test S3 IAM permissions
-  cost_export_test_IAM_permissions()
 
   # first check if the cost export backill schedule lock exists
   if not cost_export_backfill_schedule_lock_exists():

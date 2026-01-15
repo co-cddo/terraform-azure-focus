@@ -159,57 +159,60 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
     # If we can't check, assume it does not exist to force generating it
     return False
-  
-def cost_export_exists_as_lock_object(account_id:str, month: int, year:int) -> bool:
-  ###
-  # The assume role in AWS does not allow ListBucket action on the gds focus paths.
-  # Until that can be fixed, adding a horrible lock file approach
-  ###
-  try:
-    s3 = getS3FileSystem()
-    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{account_id}.lock"
-    logger.debug(f"Cost Export data lock check: {s3_path}")
+
+# no longer used - workaround for cost_export_exists and initial IAM S3 policy permission issue
+# def cost_export_exists_as_lock_object(account_id:str, month: int, year:int) -> bool:
+#   ###
+#   # The assume role in AWS does not allow ListBucket action on the gds focus paths.
+#   # Until that can be fixed, adding a horrible lock file approach
+#   ###
+#   try:
+#     s3 = getS3FileSystem()
+#     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{account_id}.lock"
+#     logger.debug(f"Cost Export data lock check: {s3_path}")
     
-    file_info = s3.get_file_info(s3_path)
-    exists = file_info.type != fs.FileType.NotFound
+#     file_info = s3.get_file_info(s3_path)
+#     exists = file_info.type != fs.FileType.NotFound
     
-    if not exists:
-      logger.info(f"Cost Export data lock does not exists: {s3_path}")
+#     if not exists:
+#       logger.info(f"Cost Export data lock does not exists: {s3_path}")
     
-    return exists
+#     return exists
         
-  except Exception as e:
-    # throws exception with ACCESS_DENIED if object does not exist
-    #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
-    exceptionStr = str(e)
-    if "ACCESS_DENIED" in exceptionStr:
-      logger.info(f"Cost Export data lock does not exists: {s3_path}")
-      return False
+#   except Exception as e:
+#     # throws exception with ACCESS_DENIED if object does not exist
+#     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
+#     exceptionStr = str(e)
+#     if "ACCESS_DENIED" in exceptionStr:
+#       logger.info(f"Cost Export data lock does not exists: {s3_path}")
+#       return False
 
-    logger.warning(f"Failed to check for cost export data lock file: {exceptionStr}. Assuming it exists...")
+#     logger.warning(f"Failed to check for cost export data lock file: {exceptionStr}. Assuming it exists...")
 
-    # If we can't check, assume it exists to not unnecessary run through backfill
-    return True
+#     # If we can't check, assume it exists to not unnecessary run through backfill
+#     return True
 
-def cost_export_exists_lock_create(account_id:str, month: int, year:int) -> None:
-  try:
-    s3 = getS3FileSystem()
-    s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{account_id}.lock"
-    logger.debug(f"cost_export_exists_lock_create path: {s3_path}")
+# no longer used - workaround for cost_export_exists and initial IAM S3 policy permission issue
+# def cost_export_exists_lock_create(account_id:str, month: int, year:int) -> None:
+#   try:
+#     s3 = getS3FileSystem()
+#     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{account_id}.lock"
+#     logger.debug(f"cost_export_exists_lock_create path: {s3_path}")
 
-    today = datetime.now(timezone.utc)
-    todayStr = datetime.strftime(today, "%Y-%m-%d %H:%M:%S")
+#     today = datetime.now(timezone.utc)
+#     todayStr = datetime.strftime(today, "%Y-%m-%d %H:%M:%S")
 
-    with s3.open_output_stream(s3_path) as f:
-      f.write(str(todayStr).encode('utf-8'))
-      f.close()
+#     with s3.open_output_stream(s3_path) as f:
+#       f.write(str(todayStr).encode('utf-8'))
+#       f.close()
 
-    logger.info(f"cost export backfill data lock created for {month}/{year} on account '{account_id}'")
+#     logger.info(f"cost export backfill data lock created for {month}/{year} on account '{account_id}'")
     
-  except Exception as e:
-    logger.error(f"Failed to create cost export backfill data lock: {str(e)}")
-    raise e
-  
+#   except Exception as e:
+#     logger.error(f"Failed to create cost export backfill data lock: {str(e)}")
+#     raise e
+
+# used only for testing the S3 IAM role for assumed azure role
 def cost_export_test_IAM_permissions() -> bool:
   ###
   # bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d-16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31_OC35-AR3W-BG7-PGB_part_0_0001.parquet

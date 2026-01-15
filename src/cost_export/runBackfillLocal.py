@@ -49,8 +49,6 @@ from api.costMgmtS3Api import (
   cost_export_backfill_schedule_lock_create,
   cost_export_backfill_run_lock_create,
   cost_export_exists,
-  cost_export_exists_as_lock_object,
-  cost_export_exists_lock_create,
 )
 
 try:
