@@ -117,3 +117,17 @@ resource "azapi_resource_action" "add_role_assignment" {
 #   method      = "DELETE"
 #   when        = "destroy"
 # }
+
+# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
+resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "User Access Administrator"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
