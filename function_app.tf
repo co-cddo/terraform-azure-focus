@@ -21,7 +21,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   storage_container_endpoint    = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
   service_plan_id               = azurerm_service_plan.cost_export.id
   runtime_name                  = "python"
-  runtime_version               = "3.12"
+  runtime_version               = "3.13"
   maximum_instance_count        = 50
   instance_memory_in_mb         = 2048
   https_only                    = true
