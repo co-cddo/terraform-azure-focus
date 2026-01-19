@@ -127,7 +127,7 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
 }
 resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
   scope                = azurerm_storage_account.cost_export.id
-  role_definition_name = "User Access Administrator"
+  role_definition_name = "Owner"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
