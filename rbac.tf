@@ -94,7 +94,7 @@ resource "azapi_resource_action" "add_role_assignment" {
 
 # resource "azapi_resource_action" "remove_role_assignment" {
 #   for_each    = toset(var.billing_account_ids)
-  
+
 #   type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2019-10-01-preview"
 
 #   # why not just use 'resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"' as above
