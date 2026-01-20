@@ -59,7 +59,7 @@ def decrement_month_year(month: int, year: int) -> Tuple[int, int]:
 
   return month, year
 
-def create_cost_export_backfill_tasks(start_date: str, account_id: str, account_idx: int) -> None:
+def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, account_idx: int) -> None:
   logger.info(f"create_cost_export_backfill_tasks ({account_idx}) for billing account: {account_id}")
 
   # iterate over month/year from backfill start date
@@ -83,7 +83,7 @@ def create_cost_export_backfill_tasks(start_date: str, account_id: str, account_
   # if we get this far, then we have created the full schedule of backfill Cost Management export jobs
   cost_export_backfill_schedule_lock_create()
 
-def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> None:
+def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> None:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 6
 
   logger.debug(f"run_cost_export_backfill ({account_idx}) from {start_date} for account: {account_id}; skip existing ({skip_existing}) with forced overwrite ({force_overwrite})")
@@ -135,8 +135,15 @@ def run_cost_export_backfill(start_date: str, account_id: str, account_idx: int,
   if number_of_jobs_running == 0:
     cost_export_backfill_run_lock_create()
 
-def cost_export_backfill_impl(start_date: str, force_overwrite: bool = False, skip_existing: bool = True) -> None:
+def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = False, skip_existing: bool = True) -> None:
   logging.debug(f"cost_export_backfill: from {start_date}, overwrite({force_overwrite}), skip({skip_existing})")
+
+  # Azure only stores up to seven years of cost data; if backfill exceeds this, then
+  #  start from seven years go
+  now = datetime.now()
+  if (now - start_date).days > 2555:  # 7 years * 365 days
+      logger.info(f"Cost Export Start date {start_date} is more than 7 years old. Setting start date to 7 years ago.")
+      start_date = (now - timedelta(days=2555)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
   # first check if the cost export backill schedule lock exists
   if not cost_export_backfill_schedule_lock_exists():
