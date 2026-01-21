@@ -131,26 +131,14 @@ resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
   role_definition_name = "Owner"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
   principal_type       = "ServicePrincipal"
-  # condition_version    = "2.0"
-  # condition            = <<-EOT
-  # (
-  #  (
-  #   !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
-  #  )
-  #  OR
-  #  (
-  #   @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${basename(data.azurerm_role_definition.builtin.role_definition_id)}}
-  #  )
-  # )
-  # AND
-  # (
-  #  (
-  #   !(ActionMatches{'Microsoft.Authorization/permissions/read'})
-  #  )
-  #  OR
-  #  (
-  #   @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${basename(data.azurerm_role_definition.builtin.role_definition_id)}}
-  #  )
-  # )
-  # EOT
+  condition_version    = "2.0"
+  condition            = <<-EOT
+  (
+    ActionMatches{'Microsoft.Authorization/roleAssignments/write'}
+  )
+  OR
+  (
+    ActionMatches{'Microsoft.Authorization/permissions/read'}
+  )
+  EOT
 }
