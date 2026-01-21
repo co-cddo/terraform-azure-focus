@@ -134,11 +134,11 @@ resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
   condition_version    = "2.0"
   condition            = <<-EOT
   (
-    ActionMatches{'Microsoft.Authorization/roleAssignments/write'}
+    !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
   )
   OR
   (
-    ActionMatches{'Microsoft.Authorization/permissions/read'}
+    !(ActionMatches{'Microsoft.Authorization/permissions/read'})
   )
   EOT
 }

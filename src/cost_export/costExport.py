@@ -70,7 +70,7 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
   logger.info(f"From {current_month}/{current_year} to {until_month}/{until_year}...")
   
   while (current_year, current_month) <= (until_year, until_month):
-    logger.debug(f"....{account_idx}: {current_month}/{current_year}")
+    logger.info(f"....{account_idx}: {current_month}/{current_year}")
 
     # check if the cost export task already exists; only create if not exists
     if not cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
