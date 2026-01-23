@@ -21,7 +21,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   storage_container_endpoint    = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
   service_plan_id               = azurerm_service_plan.cost_export.id
   runtime_name                  = "python"
-  runtime_version               = "3.12"
+  runtime_version               = "3.13"
   maximum_instance_count        = 50
   instance_memory_in_mb         = 2048
   https_only                    = true
@@ -79,6 +79,14 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
     # Mapping of billing account index to billing account ID for S3 path organization
     "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
+    "BILLING_AZURE_LOCATION"  = var.location
+
+    "BACKFILL_START_DATE" = var.backfill_start_date
+
+    "STORAGE_RESOURCE_ID" = azurerm_storage_account.cost_export.id
+    "STORAGE_CONTAINER"   = azapi_resource.cost_export.name
+    "ROOT_FOLDER_PATH"    = local.focus_directory_name
+    "LOGGING_LEVEL"       = var.logging_level
   }
 }
 

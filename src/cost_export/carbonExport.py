@@ -1,8 +1,23 @@
 import json
+from typing import Dict
 import requests
 import logging
+import os
 from datetime import datetime, timezone, timedelta
-from common import Config, getS3FileSystem
+from common import Config
+from api.tokens import TokenManager
+import pyarrow.fs as fs
+from api.s3Api import getS3FileSystem
+from api.carbonS3Api import (
+    carbon_export_backfill_lock_exists,
+    carbon_export_backfill_lock_create,
+)
+from billing import (
+    extract_subscription_ids_from_billing_scope,
+)
+
+logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 def get_carbon_api_date_range():
     """
@@ -136,7 +151,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         return False, None, "No subscription IDs provided"
     
     total_subscriptions = len(subscription_ids)
-    logging.info(f"Carbon API request for {total_subscriptions} subscriptions (batching with max {max_batch_size} per request)")
+    logger.info(f"Carbon API request for {total_subscriptions} subscriptions (batching with max {max_batch_size} per request)")
     
     # If within limit, use single request
     if total_subscriptions <= max_batch_size:
@@ -148,7 +163,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         batch = subscription_ids[i:i + max_batch_size]
         batches.append(batch)
     
-    logging.info(f"Splitting into {len(batches)} batches: {[len(batch) for batch in batches]} subscriptions each")
+    logger.info(f"Splitting into {len(batches)} batches: {[len(batch) for batch in batches]} subscriptions each")
     
     # Collect results from all batches
     merged_subscription_access_decisions = []
@@ -157,7 +172,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
     failed_batches = []
     
     for batch_num, batch_subscription_ids in enumerate(batches, 1):
-        logging.info(f"Processing batch {batch_num}/{len(batches)} with {len(batch_subscription_ids)} subscriptions")
+        logger.info(f"Processing batch {batch_num}/{len(batches)} with {len(batch_subscription_ids)} subscriptions")
         
         success, batch_data, error_message = make_carbon_api_request(
             headers, batch_subscription_ids, month_str, timeout
@@ -173,19 +188,19 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
                 merged_value_data.extend(batch_data["value"])
             
             successful_batches += 1
-            logging.info(f"Batch {batch_num} completed successfully")
+            logger.info(f"Batch {batch_num} completed successfully")
         else:
             failed_batches.append({"batch": batch_num, "error": error_message, "subscription_count": len(batch_subscription_ids)})
-            logging.error(f"Batch {batch_num} failed: {error_message}")
+            logger.error(f"Batch {batch_num} failed: {error_message}")
        
     # Log summary
-    logging.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
+    logger.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
     if failed_batches:
         failed_summary = []
         for fb in failed_batches[:3]:  # Show first 3 failures
             error_preview = fb['error'][:100] + "..." if len(fb['error']) > 100 else fb['error']
             failed_summary.append(f"Batch {fb['batch']} ({fb['subscription_count']} subs): {error_preview}")
-        logging.warning(f"Failed batches: {len(failed_batches)} - {failed_summary}")
+        logger.warning(f"Failed batches: {len(failed_batches)} - {failed_summary}")
 
     # aggregate the set of batch results
     countOfBatchDataItems = len(merged_value_data)
@@ -222,7 +237,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         "batch_size_used": max_batch_size
     }
 
-    logging.info(f"Merged response: {merged_response}")
+    logger.info(f"Merged response: {merged_response}")
     
     # success is True only if no failed batches - will force an error
     return merged_response["_batchingMetadata"]["failed_batches"] == 0, merged_response, None
@@ -246,12 +261,12 @@ def check_carbon_data_exists(file_name):
         exists = file_info.type != fs.FileType.NotFound
         
         if exists:
-            logging.info(f"Carbon data file already exists: {s3_path}")
+            logger.info(f"Carbon data file already exists: {s3_path}")
         
         return exists, s3_path
         
     except Exception as e:
-        logging.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
+        logger.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
         # If we can't check, assume it doesn't exist to be safe
         return False, None
 
@@ -289,7 +304,7 @@ def carbon_export_api_latest_fetch_date() -> datetime:
     carbon_api_fetch_date = today.replace(year=fetch_year, month=fetch_month, day=1)
     print('API fetch date is: ', carbon_api_fetch_date.strftime('%Y-%m-%d'))
     
-    logging.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
+    logger.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
     return carbon_api_fetch_date
 
@@ -314,14 +329,14 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
         if not force_overwrite:
             exists, s3_path = check_carbon_data_exists(file_name)
             if exists:
-                logging.info(f"Skipping upload - carbon data already exists: {s3_path}")
+                logger.info(f"Skipping upload - carbon data already exists: {s3_path}")
                 return True  # Return success since data already exists
         
         # Remove batching metadata before saving (internal use only)
         data_to_save = data.copy()
         if "_batchingMetadata" in data_to_save:
             batching_info = data_to_save.pop("_batchingMetadata")
-            logging.info(f"Removed batching metadata before saving: {batching_info}")
+            logger.info(f"Removed batching metadata before saving: {batching_info}")
         
         # Convert to JSON string
         json_data = json.dumps(data_to_save, indent=2).encode('utf-8')
@@ -343,10 +358,111 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
             f.write(json_data)
             
         action = "Overwritten" if force_overwrite else "Uploaded"
-        logging.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
+        logger.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
         return True
         
     except Exception as e:
-        logging.error(f"Error saving carbon data to S3: {str(e)}")
+        logger.error(f"Error saving carbon data to S3: {str(e)}")
         raise
 
+def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = True, force_overwrite: bool = False, write_empty_object: bool = True) -> Dict[int, int]:
+    try:
+        # Azure only allows up to 12 months of carbon data (thirteen months minus now)
+        now = datetime.now()
+        if (now - start_date).days > 400:  # 366 (leap year) days plus 31 (largest month) plus a few
+            logger.info(f"Carbon Export Start date {start_date} is more than 1 year old. Setting start date to just over 1 year.")
+            start_date = (now - timedelta(days=400)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # first check if carbon export lock object exists
+        if carbon_export_backfill_lock_exists():
+            logger.info(f"Carbon Export backfill lock object exists. Skipping Carbon Export backfill")
+            return (0, 0)
+
+        logger.info(f"carbon_emissions_backfill_imp: start_date({start_date}), skip_existing({skip_existing}), force_overwrite({force_overwrite}), write_empty_object({write_empty_object})")
+        current_year, current_month = start_date.year, start_date.month
+
+        # Get access token using managed identity
+        token = TokenManager().azure_token
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Extract subscription IDs from billing scope
+        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
+        
+        logger.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions from {start_date.strftime('%Y-%m-%d')}")
+        
+        processed_months = 0
+        skipped_months = 0
+
+        # backfill should through until the latest carbon export data is available
+        #  which from "carbon_emissions_exporter" is the around the 19th for the last month
+        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
+        latest_fetch_month, latest_fetch_year = carbon_api_fetch_date.month, carbon_api_fetch_date.year
+        
+        # Process months before API range (create empty records)
+        while (current_year, current_month) <= (latest_fetch_year, latest_fetch_month):
+            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
+            month_str = month_date.strftime("%Y-%m-01")
+            file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
+            
+            # Check if data already exists
+            if skip_existing:
+                exists, existing_path = check_carbon_data_exists(file_name)
+                if exists:
+                    logger.info(f"Skipping {month_str} - data already exists at {existing_path}")
+                    skipped_months += 1
+                    # Move to next month
+                    if current_month == 12:
+                        current_year += 1
+                        current_month = 1
+                    else:
+                        current_month += 1
+                    continue
+            
+            logger.info(f"Processing month: {month_str}")
+
+            # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
+            #  will return an empty "value" array
+            success, emissions_data, error_message = make_carbon_api_request_batched(
+                headers, subscription_ids, month_str
+            )
+
+            if success:
+                if success and len(emissions_data["value"]) == 0:
+                    # Create empty carbon data for months outside API range
+                    emissions_data = empty_emissions_data(month_str)
+                
+                save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
+                processed_months += 1
+            else:
+                logger.error(error_message)
+                if write_empty_object:
+                    logger.warning(f"Unable to process month: {month_str}. Writing empty results")
+                    emissions_data = empty_emissions_data(month_str)
+                    save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
+                    processed_months += 1
+                else:
+                    logger.error(f"Unable to process month: {month_str}. Not writing empty results")
+                    skipped_months += 1
+            
+            # Move to next month
+            if current_month == 12:
+                current_year += 1
+                current_month = 1
+            else:
+                current_month += 1
+        
+        # gets this far if having processed all carbon export backfill
+        carbon_export_backfill_lock_create()
+
+        return (
+            processed_months,
+            skipped_months,
+        )
+        
+    except Exception as e:
+        error_msg = f"Error in carbon emissions backfill impl: {str(e)}"
+        raise Exception(error_msg)

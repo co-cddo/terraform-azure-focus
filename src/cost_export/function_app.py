@@ -1,21 +1,6 @@
 import azure.functions as func
 import logging
-from common import(
-  Config,
-  getS3FileSystem,
-  is_uuid,
-  extract_subscription_ids_from_billing_scope,
-  extract_billing_account_from_blob_path,
-)
-from carbonExport import (
-  get_carbon_api_date_range,
-  is_month_within_api_range,
-  make_carbon_api_request_batched,
-  carbon_export_api_latest_fetch_date,
-  check_carbon_data_exists,
-  empty_emissions_data,
-  save_carbon_data_to_s3,
-)
+import os
 import pyarrow.parquet as pq
 import pyarrow.fs as fs
 import io
@@ -24,16 +9,41 @@ import requests
 from azure.storage.blob import BlobServiceClient
 from azure.identity import ManagedIdentityCredential
 from datetime import datetime, timezone, timedelta
+from common import(
+  Config,
+  is_uuid,
+)
+from api.s3Api import getS3FileSystem
+from carbonExport import (
+  get_carbon_api_date_range,
+  is_month_within_api_range,
+  make_carbon_api_request_batched,
+  carbon_export_api_latest_fetch_date,
+  check_carbon_data_exists,
+  save_carbon_data_to_s3,
+  carbon_emissions_backfill_imp,
+)
+from costExport import (
+    cost_export_backfill_impl,
+)
+from billing import (
+    extract_subscription_ids_from_billing_scope,
+    extract_billing_account_from_blob_path,
+)
+from api.tokens import TokenManager
+
+logger = logging.getLogger("cost_export")
+logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 
 app = func.FunctionApp()
 
 # Log billing account configuration at startup
-logging.info("=== Billing Account Configuration ===")
-logging.info(f"Billing account mapping: {Config.billing_account_mapping}")
-logging.info(f"Number of billing accounts: {len(Config.billing_account_mapping)}")
+logger.info("=== Billing Account Configuration ===")
+logger.info(f"Billing account mapping: {Config.billing_account_mapping}")
+logger.info(f"Number of billing accounts: {len(Config.billing_account_mapping)}")
 for idx, account_id in Config.billing_account_mapping.items():
-    logging.info(f"Export index {idx} -> Billing Account {account_id}")
-logging.info("====================================")
+    logger.info(f"Export index {idx} -> Billing Account {account_id}")
+logger.info("====================================")
 
 @app.function_name(name="CostExportProcessor")
 @app.queue_trigger(arg_name="msg", queue_name="costdata", connection="StorageAccountManagedIdentity")
@@ -41,8 +51,8 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
     """Queue trigger function that processes parquet files when messages are received"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
 
-    logging.info(f'Cost export processor triggered at: {utc_timestamp}')
-    logging.info(f'Processing message: {msg.get_body().decode("utf-8")}')
+    logger.info(f'Cost export processor triggered at: {utc_timestamp}')
+    logger.info(f'Processing message: {msg.get_body().decode("utf-8")}')
     
     try:
         # Parse the EventGrid message to get the specific blob
@@ -60,14 +70,14 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                 blob_name = parts[1]
         
         if not blob_name:
-            logging.error(f"Could not extract blob name from message subject: {blob_url}")
+            logger.error(f"Could not extract blob name from message subject: {blob_url}")
             return
             
         if not blob_name.endswith('.parquet'):
-            logging.info(f"Skipping non-parquet file: {blob_name}")
+            logger.info(f"Skipping non-parquet file: {blob_name}")
             return
             
-        logging.info(f"Processing specific parquet file: {blob_name}")
+        logger.info(f"Processing specific parquet file: {blob_name}")
         
         # Initialize blob service client
         blob_service_client = BlobServiceClient.from_connection_string(Config.storage_connection_string)
@@ -97,7 +107,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                 billing_account_ids = table.select(["BillingAccountId"]).to_pylist()
                 if billing_account_ids:
                     full_billing_path = billing_account_ids[0]["BillingAccountId"]
-                    logging.info(f"Found billing account path in data: {full_billing_path}")
+                    logger.info(f"Found billing account path in data: {full_billing_path}")
                     
                     # Extract billing account ID and profile from the full path
                     # Example: /providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/billingProfiles/OC35-AR3W-BG7-PGB
@@ -112,13 +122,13 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                         else:
                             billing_account_id = account_part
                         
-                        logging.info(f"Extracted billing account ID: {billing_account_id}")
+                        logger.info(f"Extracted billing account ID: {billing_account_id}")
                         if billing_profile_from_data:
-                            logging.info(f"Extracted billing profile from data: {billing_profile_from_data}")
+                            logger.info(f"Extracted billing profile from data: {billing_profile_from_data}")
                     else:
                         # Fallback: use the full path as billing account ID
                         billing_account_id = full_billing_path
-                        logging.warning(f"Could not parse billing account path, using full path: {billing_account_id}")
+                        logger.warning(f"Could not parse billing account path, using full path: {billing_account_id}")
             
             table = table.drop_columns("BillingAccountId")
             table = table.drop_columns("BillingAccountName")
@@ -157,14 +167,14 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     continue
                 elif part.startswith("focus-backfill-"):
                     # Skip focus-backfill-YYYY-MM directories
-                    logging.info(f"Skipping focus-backfill directory: {part}")
+                    logger.info(f"Skipping focus-backfill directory: {part}")
                     i += 1
                     continue
                 elif len(part) == 12 and part.isdigit():
                     # Validate that this is actually a valid YYYYMMDDHHMM timestamp
                     try:
                         datetime.strptime(part, "%Y%m%d%H%M")
-                        logging.info(f"Skipping timestamp directory: {part}")
+                        logger.info(f"Skipping timestamp directory: {part}")
                         i += 1
                         continue
                     except ValueError:
@@ -178,7 +188,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     continue
                 elif is_uuid(part):
                     # Skip UUID directories - these should be flattened
-                    logging.info(f"Skipping UUID directory: {part}")
+                    logger.info(f"Skipping UUID directory: {part}")
                     i += 1
                     continue
                 elif part == "providers":
@@ -187,7 +197,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                         path_parts[i + 1] == "Microsoft.Billing" and 
                         path_parts[i + 2] == "billingAccounts"):
                         billing_account_path_part = path_parts[i + 3]
-                        logging.info(f"Found billing account in path: {billing_account_path_part}")
+                        logger.info(f"Found billing account in path: {billing_account_path_part}")
                         # Skip providers, Microsoft.Billing, billingAccounts, and the billing account ID
                         i += 4
                         continue
@@ -199,7 +209,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     # Extract billing profile name from next part
                     if i + 1 < len(path_parts):
                         billing_profile_path_part = path_parts[i + 1]
-                        logging.info(f"Found billing profile in path: {billing_profile_path_part}")
+                        logger.info(f"Found billing profile in path: {billing_profile_path_part}")
                         # Skip billingProfiles and the profile name
                         i += 2
                         continue
@@ -215,19 +225,19 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
             if billing_account_id:
                 # Use the billing account ID directly
                 billing_account_folder = billing_account_id
-                logging.info(f"Using billing account ID from data: {billing_account_folder}")
+                logger.info(f"Using billing account ID from data: {billing_account_folder}")
             elif billing_account_path_part:
                 # Use the billing account ID from the path
                 billing_account_folder = billing_account_path_part
-                logging.info(f"Using billing account ID from path: {billing_account_folder}")
+                logger.info(f"Using billing account ID from path: {billing_account_folder}")
             else:
                 # Fallback: try to extract from blob path structure
                 export_index = extract_billing_account_from_blob_path(blob_name)
                 if export_index is not None and str(export_index) in Config.billing_account_mapping:
                     billing_account_folder = Config.billing_account_mapping[str(export_index)]
-                    logging.info(f"Mapped export index {export_index} to billing account: {billing_account_folder}")
+                    logger.info(f"Mapped export index {export_index} to billing account: {billing_account_folder}")
                 else:
-                    logging.warning(f"Could not determine billing account folder for {blob_name}")
+                    logger.warning(f"Could not determine billing account folder for {blob_name}")
                     billing_account_folder = "unknown-billing-account"
             
             # Extract filename from the modified path and construct flattened filename
@@ -253,7 +263,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                 filename_parts.append(original_filename)
                 
                 flattened_filename = '_'.join(filename_parts)
-                logging.info(f"Flattened filename: {original_filename} -> {flattened_filename}")
+                logger.info(f"Flattened filename: {original_filename} -> {flattened_filename}")
                 
                 # Reconstruct path with flattened filename
                 if directory_parts:
@@ -262,24 +272,24 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     modified_path = flattened_filename
             else:
                 modified_path = '/'.join(modified_parts)
-                logging.warning(f"Could not extract filename from path parts: {modified_parts}")
+                logger.warning(f"Could not extract filename from path parts: {modified_parts}")
             
             # Construct S3 path with flattened structure
             s3_path = f"{Config.s3_focus_path.rstrip('/')}/{modified_path.lstrip('/')}"
             
             pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
-            logging.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path} (billing account: {billing_account_folder})")
+            logger.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path} (billing account: {billing_account_folder})")
 
             # Delete source file after successful upload
             blob_client.delete_blob()
-            logging.info(f"Successfully deleted source file: {blob_name}")
+            logger.info(f"Successfully deleted source file: {blob_name}")
             
         except Exception as e:
-            logging.error(f"Failed to process {blob_name}: {str(e)}")
+            logger.error(f"Failed to process {blob_name}: {str(e)}")
             raise
             
     except Exception as e:
-        logging.error(f"Error in daily cost export processor: {str(e)}")
+        logger.error(f"Error in daily cost export processor: {str(e)}")
         raise
 
 def sanitize_recommendations_data(data):
@@ -323,16 +333,16 @@ def save_recommendations_to_s3(data, file_name):
         billing_period = current_date.strftime("%Y%m%d")  # Current date as YYYYMMDD (e.g., 20250814)
         s3_path = f"{Config.s3_recommendations_path.rstrip('/')}/gds-recommendations-v1/billing_period={billing_period}/{file_name}"
         
-        logging.info(f"Saving recommendations with billing_period={billing_period} to path: {s3_path}")
+        logger.info(f"Saving recommendations with billing_period={billing_period} to path: {s3_path}")
         
         # Upload to S3
         with s3.open_output_stream(s3_path) as f:
             f.write(json_data)
             
-        logging.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
+        logger.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
         
     except Exception as e:
-        logging.error(f"Error saving recommendations data to S3: {str(e)}")
+        logger.error(f"Error saving recommendations data to S3: {str(e)}")
         raise
 
 @app.function_name(name="AdvisorRecommendationsExporter")
@@ -341,32 +351,31 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports Azure Advisor cost recommendations daily at 2 AM"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
-    logging.info(f'Azure Advisor recommendations exporter triggered at: {utc_timestamp}')
+    logger.info(f'Azure Advisor recommendations exporter triggered at: {utc_timestamp}')
     
     if timer.past_due:
-        logging.info('The timer is past due!')
+        logger.info('The timer is past due!')
 
     try:
         # Get access token using managed identity
-        credential = ManagedIdentityCredential()
-        token = credential.get_token("https://management.azure.com/.default")
+        token = TokenManager().azure_token
         
         headers = {
-            "Authorization": f"Bearer {token.token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         
         # Extract subscription IDs from billing scope
         subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
         
-        logging.info(f"Fetching cost recommendations for {len(subscription_ids)} subscriptions")
+        logger.info(f"Fetching cost recommendations for {len(subscription_ids)} subscriptions")
         
         all_recommendations = []
         
         # Fetch cost recommendations for each subscription
         for subscription_id in subscription_ids:
             try:
-                logging.info(f"Fetching cost recommendations for subscription: {subscription_id}")
+                logger.info(f"Fetching cost recommendations for subscription: {subscription_id}")
                 
                 # Azure Advisor Recommendations API endpoint
                 api_url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Advisor/recommendations"
@@ -378,7 +387,7 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
                     "$filter": "Category eq 'Cost'"
                 }
                 
-                logging.info(f"Calling API: {api_url} with params: {params}")
+                logger.info(f"Calling API: {api_url} with params: {params}")
                 
                 response = requests.get(
                     api_url,
@@ -387,28 +396,28 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
                     timeout=300
                 )
                 
-                logging.info(f"API Response Status: {response.status_code}")
+                logger.info(f"API Response Status: {response.status_code}")
                 
                 if response.status_code == 200:
                     recommendations_data = response.json()
                     recommendations = recommendations_data.get("value", [])
                     
-                    logging.info(f"Raw API response for subscription {subscription_id}: {recommendations_data}")
+                    logger.info(f"Raw API response for subscription {subscription_id}: {recommendations_data}")
                     
                     # Add subscription ID to each recommendation for tracking
                     for rec in recommendations:
                         rec["subscriptionId"] = subscription_id
                     
                     all_recommendations.extend(recommendations)
-                    logging.info(f"Retrieved {len(recommendations)} cost recommendations for subscription {subscription_id}")
+                    logger.info(f"Retrieved {len(recommendations)} cost recommendations for subscription {subscription_id}")
                     
                 else:
-                    logging.error(f"Failed to fetch recommendations for subscription {subscription_id}: {response.status_code}")
-                    logging.error(f"Response text: {response.text}")
-                    logging.error(f"Response headers: {dict(response.headers)}")
+                    logger.error(f"Failed to fetch recommendations for subscription {subscription_id}: {response.status_code}")
+                    logger.error(f"Response text: {response.text}")
+                    logger.error(f"Response headers: {dict(response.headers)}")
                     
             except Exception as e:
-                logging.error(f"Error fetching recommendations for subscription {subscription_id}: {str(e)}")
+                logger.error(f"Error fetching recommendations for subscription {subscription_id}: {str(e)}")
                 continue
         
         if all_recommendations:
@@ -417,12 +426,12 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
             file_name = f"advisor-cost-recommendations-{current_date.strftime('%Y-%m-%d')}.json"
             save_recommendations_to_s3({"value": all_recommendations}, file_name)
             
-            logging.info(f"Successfully exported {len(all_recommendations)} cost recommendations from {len(subscription_ids)} subscriptions")
+            logger.info(f"Successfully exported {len(all_recommendations)} cost recommendations from {len(subscription_ids)} subscriptions")
         else:
-            logging.warning("No cost recommendations found across all subscriptions")
+            logger.warning("No cost recommendations found across all subscriptions")
             
     except Exception as e:
-        logging.error(f"Error in Azure Advisor recommendations exporter: {str(e)}")
+        logger.error(f"Error in Azure Advisor recommendations exporter: {str(e)}")
         raise
 
 @app.function_name(name="CarbonApiDateRangeInfo")
@@ -508,7 +517,7 @@ def carbon_api_date_range_info(req: func.HttpRequest) -> func.HttpResponse:
                 "note": "This check covers 2022-01 through current API range"
             }
         
-        logging.info(f"Carbon API date range info requested: check_existing={check_existing}")
+        logger.info(f"Carbon API date range info requested: check_existing={check_existing}")
         
         return func.HttpResponse(
             json.dumps(response_data, indent=2),
@@ -518,7 +527,7 @@ def carbon_api_date_range_info(req: func.HttpRequest) -> func.HttpResponse:
         
     except Exception as e:
         error_msg = f"Error getting Carbon API date range info: {str(e)}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         return func.HttpResponse(
             json.dumps({"error": error_msg}),
             status_code=500,
@@ -540,7 +549,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
     """
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
-    logging.info(f'Carbon emissions exporter triggered at: {utc_timestamp}')
+    logger.info(f'Carbon emissions exporter triggered at: {utc_timestamp}')
     
     if timer.past_due:
         logging.debug('The timer is past due!')
@@ -548,15 +557,15 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
     try:
         # Get previous month date range using dynamic API range calculation
         carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
-        logging.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
+        logger.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
         # Get access token using managed identity
-        credential = ManagedIdentityCredential()
-        token = credential.get_token("https://management.azure.com/.default")
+        token = TokenManager().azure_token
+        logger.debug(f"cost_mgmt_export_exists: token: {token}")
         
         # Prepare the API request
         headers = {
-            "Authorization": f"Bearer {token.token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         
@@ -566,14 +575,14 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         # Check if data already exists
         exists, existing_path = check_carbon_data_exists(file_name)
         if exists:
-            logging.info(f"Carbon data for {carbon_api_fetch_date.strftime('%Y-%m')} already exists at {existing_path}.")
+            logger.info(f"Carbon data for {carbon_api_fetch_date.strftime('%Y-%m')} already exists at {existing_path}.")
             return  # Exit early if data already exists
         
         # Extract subscription IDs from billing scope
         subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
         
         # Log the full request payload (excluding sensitive headers)
-        logging.info(f"Carbon API request will include {len(subscription_ids)} subscriptions target date")
+        logger.info(f"Carbon API request will include {len(subscription_ids)} subscriptions target date")
         
         # Call Carbon Optimization API using batched helper function
         success, emissions_data, error_message = make_carbon_api_request_batched(
@@ -582,37 +591,37 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
         
         if success:
             # Log response details for confirmation
-            logging.info(f"Carbon API response received successfully")
+            logger.info(f"Carbon API response received successfully")
             
             # Log batching information if available
             if "_batchingMetadata" in emissions_data:
                 metadata = emissions_data["_batchingMetadata"]
-                logging.info(f"Batching summary: {metadata['successful_batches']}/{metadata['total_batches']} batches successful, {metadata['total_subscriptions']} total subscriptions")
+                logger.info(f"Batching summary: {metadata['successful_batches']}/{metadata['total_batches']} batches successful, {metadata['total_subscriptions']} total subscriptions")
                 if metadata['failed_batches'] > 0:
-                    logging.warning(f"Note: {metadata['failed_batches']} batches failed - some subscription data may be missing")
+                    logger.warning(f"Note: {metadata['failed_batches']} batches failed - some subscription data may be missing")
             
-            logging.info(f"Response data structure: {json.dumps(emissions_data, indent=2)[:1000]}...")  # First 1000 chars
+            logger.info(f"Response data structure: {json.dumps(emissions_data, indent=2)[:1000]}...")  # First 1000 chars
             
             if 'value' in emissions_data and len(emissions_data['value']) > 0:
                 first_record = emissions_data['value'][0]
-                logging.info(f"First record - Date: {first_record.get('date')}, Emissions: {first_record.get('latestMonthEmissions')}, Data Type: {first_record.get('dataType')}")
-                logging.info(f"Total records in response: {len(emissions_data['value'])}")
+                logger.info(f"First record - Date: {first_record.get('date')}, Emissions: {first_record.get('latestMonthEmissions')}, Data Type: {first_record.get('dataType')}")
+                logger.info(f"Total records in response: {len(emissions_data['value'])}")
             else:
-                logging.warning("No data found in Carbon API response")
+                logger.warning("No data found in Carbon API response")
             
             # Save to storage and upload to S3
             save_carbon_data_to_s3(emissions_data, file_name)
             
-            logging.info(f"Successfully exported carbon emissions data for {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
+            logger.info(f"Successfully exported carbon emissions data for {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
             
         else:
-            logging.error(f"Carbon API request failed: {error_message}")
-            logging.error(f"Request was for {len(subscription_ids)} subscriptions")
-            logging.error(f"Attempted date: {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
+            logger.error(f"Carbon API request failed: {error_message}")
+            logger.error(f"Request was for {len(subscription_ids)} subscriptions")
+            logger.error(f"Attempted date: {carbon_api_fetch_date.strftime('%Y-%m-%d')}")
             raise Exception(f"Carbon API request failed: {error_message}")
             
     except Exception as e:
-        logging.error(f"Error in carbon emissions exporter: {str(e)}")
+        logger.error(f"Error in carbon emissions exporter: {str(e)}")
         raise
 
 @app.function_name(name="CarbonEmissionsBackfill")
@@ -627,14 +636,14 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
     """
     utc_timestamp = datetime.now(timezone.utc).isoformat()
     
-    logging.info(f'Carbon emissions backfill triggered at: {utc_timestamp}')
+    logger.info(f'Carbon emissions backfill triggered at: {utc_timestamp}')
     
     # Parse query parameters
     force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
     write_empty_object = req.params.get('write_empty_object', 'true').lower() == 'true'
     skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
     start_date_param = req.params.get('start_date')
-    logging.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}, write_empty_object={write_empty_object}")
+    logger.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}, write_empty_object={write_empty_object}")
     
     try:
         # check parameters
@@ -643,84 +652,13 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         except:
             raise Exception(f"Invalid start_date parameter: {start_date_param}. Given start date in format: 'YYYY-MM-DD'")
             
-        current_year, current_month = start_date.year, start_date.month
-
-        # Get access token using managed identity
-        credential = ManagedIdentityCredential()
-        token = credential.get_token("https://management.azure.com/.default")
-        
-        headers = {
-            "Authorization": f"Bearer {token.token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Extract subscription IDs from billing scope
-        subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
-        
-        logging.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions from {start_date.strftime('%Y-%m-%d')}")
-        
-        processed_months = 0
-        skipped_months = 0
-
-        # backfill should through until the latest carbon export data is available
-        #  which from "carbon_emissions_exporter" is the around the 19th for the last month
-        carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
-        latest_fetch_month, latest_fetch_year = carbon_api_fetch_date.month, carbon_api_fetch_date.year
-        
-        # Process months before API range (create empty records)
-        while (current_year, current_month) <= (latest_fetch_year, latest_fetch_month):
-            month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
-            month_str = month_date.strftime("%Y-%m-01")
-            file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
-            
-            # Check if data already exists
-            if skip_existing:
-                exists, existing_path = check_carbon_data_exists(file_name)
-                if exists:
-                    logging.info(f"Skipping {month_str} - data already exists at {existing_path}")
-                    skipped_months += 1
-                    # Move to next month
-                    if current_month == 12:
-                        current_year += 1
-                        current_month = 1
-                    else:
-                        current_month += 1
-                    continue
-            
-            logging.info(f"Processing month: {month_str}")
-
-            # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
-            #  will return an empty "value" array
-            success, emissions_data, error_message = make_carbon_api_request_batched(
-                headers, subscription_ids, month_str
-            )
-
-            if success:
-                if success and len(emissions_data["value"]) == 0:
-                    # Create empty carbon data for months outside API range
-                    emissions_data = empty_emissions_data(month_str)
-                
-                save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
-                processed_months += 1
-            else:
-                logging.error(error_message)
-                if write_empty_object:
-                    logging.warning(f"Unable to process month: {month_str}. Writing empty results")
-                    emissions_data = empty_emissions_data(month_str)
-                    save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
-                    processed_months += 1
-                else:
-                    logging.error(f"Unable to process month: {month_str}. Not writing empty results")
-                    skipped_months += 1
-            
-            # Move to next month
-            if current_month == 12:
-                current_year += 1
-                current_month = 1
-            else:
-                current_month += 1
-        
-        logging.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
+        processed_months, skipped_months = carbon_emissions_backfill_imp(
+            start_date=start_date,
+            skip_existing=skip_existing,
+            force_overwrite=force_overwrite,
+            write_empty_object=write_empty_object,
+        )
+        logger.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
         
         return func.HttpResponse(
             f"Carbon backfill completed successfully. Processed {processed_months} months, skipped {skipped_months} existing months.",
@@ -729,7 +667,81 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         
     except Exception as e:
         error_msg = f"Error in carbon emissions backfill: {str(e)}"
-        logging.error(error_msg)
+        logger.error(error_msg)
+        return func.HttpResponse(
+            error_msg,
+            status_code=500
+        )
+
+@app.function_name(name="BackfillTrigger")
+@app.timer_trigger(schedule="0 0 6 * * 1-5", arg_name="timer", run_on_startup=False)
+def backfill_trigger(timer: func.TimerRequest) -> None:
+    """Timer trigger function that triggers the running of backfill for both cost export and carbon export.
+
+    Checks for backfill export lock objects on the target S3 bucket; if exists, does nothing, else
+    run the associated CostExportBackfill and CarbonEmissionsBackfill.
+    """
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    
+    logger.info(f'Exporter backfill trigger at: {utc_timestamp}')
+
+    try:
+        # get the backfill start date from ENV VAR on the function
+        logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
+        
+        start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
+        cost_export_backfill_impl(
+            start_date=start_date,
+            force_overwrite=False,
+            skip_existing=True,
+        )
+
+        processed_months, skipped_months = carbon_emissions_backfill_imp(
+            start_date=start_date,
+            skip_existing=True,
+            force_overwrite=False,
+            write_empty_object=True,
+        )
+        logger.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
+
+    except Exception as e:
+        error_msg = f"Error in backfill_trigger: {str(e)}"
+        logger.error(error_msg)
+
+@app.function_name(name="CostExportBackfill")
+@app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)
+def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP trigger function for cost export backfill from given start date in ISO format (YYYY-MM-DD).
+
+    The Cost Management API supports up to 7 years of data, so the start_date will be no older than 7 years:
+      https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports.
+
+    Query parameters:
+    - start_date: Required parameter; is the ISO date (YYYY-MM-DD) to start backfill from, e.g. 2024-01-01
+    - force_overwrite: Set to 'true' to overwrite existing data (default: false)
+    - backfill_skip_existing: Set to 'false' to process all months regardless of existing data (default: true)
+    """
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    logger.info(f'Cost export backfill triggered at: {utc_timestamp}')
+
+    try:
+        # Parse query parameters
+        force_overwrite = req.params.get('force_overwrite', 'false').lower() == 'true'
+        skip_existing = req.params.get('skip_existing', 'true').lower() == 'true'
+        start_date_param = req.params.get('start_date')
+        logger.info(f"Backfill parameters: force_overwrite={force_overwrite}, skip_existing={skip_existing}, start_date={start_date_param}")
+        
+        start_date = datetime.strptime(start_date_param, '%Y-%m-%d')            
+        cost_export_backfill_impl(start_date=start_date, force_overwrite=force_overwrite, skip_existing=skip_existing)
+
+        return func.HttpResponse(
+            f"Cost Export backfill completed successfully.",
+            status_code=200
+        )
+        
+    except Exception as e:
+        error_msg = f"Error in cost_export_backfill: {str(e)}"
+        logger.error(error_msg)
         return func.HttpResponse(
             error_msg,
             status_code=500

@@ -174,3 +174,5 @@ cost_export.zip
 
 plan.ps1
 *.DS_Store
+
+.vscode/

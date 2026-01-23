@@ -17,6 +17,9 @@ module "example" {
   # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network = false
 
+  backfill_start_date = "2022-01-01"
+  logging_level       = "DEBUG" # INFO (default) or DEBUG
+
   # Uncomment the following line if running in CI/CD with a service principal
   # current_principal_type = "ServicePrincipal"
 }

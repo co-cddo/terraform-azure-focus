@@ -76,3 +76,25 @@ variable "current_principal_type" {
     error_message = "current_principal_type must be either 'User' or 'ServicePrincipal'."
   }
 }
+
+variable "backfill_start_date" {
+  description = "The year and month to start backfill - nin the format 'YYYY-MM-01; defaults to 2022-01-01"
+  type        = string
+  default     = "2022-01-01"
+  validation {
+    condition     = can(regex("^(19|20|21|22|23|24|25)\\d{2}-(0?[1-9]|1[012])-01$", var.backfill_start_date))
+    error_message = "backfill_start_date must be given and in the format'YYYY-MM-01'"
+  }
+}
+
+variable "cost_export_daily_schedule_to_years" {
+  description = "The number of years from initial deployment to set the end date of the daily schedule for cost export"
+  type        = number
+  default     = 15
+}
+
+variable "logging_level" {
+  description = "Logging level for the app; can be DEBUG or INFO (default)"
+  type        = string
+  default     = "INFO"
+}

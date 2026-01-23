@@ -14,7 +14,7 @@
 
 This Terraform module exports Azure cost-related data and forwards to AWS S3. The supported data sets are described below:
 
-- **Cost Data**: Daily parquet files containing standardized cost and usage details in FOCUS format
+- **Cost Data**: Daily parquet files containing standardized cost and usage details in FOCUS format; daily schedule requires an end date - defaults to 10 years from deployment but can be changed with module variable `cost_export_daily_schedule_to_years`
 - **Azure Advisor Recommendations**: Daily JSON files containing cost optimization recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint metrics across Scope 1 and Scope 3 emissions
 
@@ -92,7 +92,7 @@ The module creates three distinct export pipelines for each of the data sets:
 1. **Daily Export**: Cost Management exports daily FOCUS-format cost data (Parquet files) to Azure Storage
 2. **Event Trigger**: Blob creation events trigger the `CostExportProcessor` function via storage queue
 3. **Processing**: Function processes and transforms the data (removes sensitive columns, restructures paths)
-4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
+4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`; all billing account cost data written to the same folder each parquet object prefixed with the billing account name
 
 #### Azure Advisor Recommendations Pipeline  
 1. **Daily Trigger**: `AdvisorRecommendationsExporter` function runs daily at 2 AM (timer trigger)
@@ -106,10 +106,6 @@ The module creates three distinct export pipelines for each of the data sets:
     - Batches the API call per 100 subscriptions, and merges all each of the datasets into one - refer to "subscription batching" below.
   - Processing: Response data formatted as JSON with dynamic date range validation (12-month rolling window)
   - Upload: JSON data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`
-- **Backfill** - called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD, called the same API as the monthly trigger but for each month from the
-given start date.
-  - If data is not available (see "rolling window" below), will upload a default "zero" dataset.
-    - Optionally, takes a parameter called `write_empty_object`, which when set to "False", skips each month with no data.
 
 ##### Carbon API Date Range Calculation
 The Carbon Optimization API provides a rolling 12-month window of emissions data. The available date range is calculated dynamically based on Microsoft's data availability policy:
@@ -144,7 +140,74 @@ The Carbon Optimization API has a maximum limit of 100 subscriptions per request
 - All data transfers secured with cross-cloud federation (no long-lived AWS credentials)
 - Application Insights provides telemetry and monitoring for all pipelines
 
-### Security Features
+## Backfill
+
+### FOCUS Cost Data
+**Endpoint**: `POST /api/cost-export-backfill`
+Can be called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD.
+
+The cost export has two separate lock files; one for the schedule (which creates the backfill of Cost Mgmt Export tasks for each month)
+and the run (the executing of those exports) - in batches of six (half year). Lock objects are created only after successfully creating
+the schedule or once a full run across all tasks has completed successfully.
+
+To run the full backfill of tasks, simply repeatedly run this cost export backfill task. If a task is already running, it will not
+interrupting the running task but it will count as one of the batch of six. It takes around 15 minutes for each task to run - and
+will run concurrently.
+
+The schedule will be created from the given backfill start date for every month up to until last month.
+
+To remove the lock object, contact appvia support.
+
+**Query Parameters**:
+- `start_date` - the backifill start date in format YYYY-MM-DD (e.g. 2025-01-01); no default must be given
+- `force_overwrite=true` - Overwrite existing data files (default: false); set `skip_existing` to False
+- `skip_existing=false` - Process all months regardless of existing data (default: true)
+
+**Examples**:
+- `POST /api/cost-export-backfill` - Skip months that already have data (idempotent)
+- `POST /api/cost-export-backfill?force_overwrite=true` - Overwrite all existing data
+- `POST /api/cost-export-backfill?skip_existing=false` - Process all months, but don't skip if carbon export already exists
+
+
+### Carbon Emissions Data
+**Endpoint**: `POST /api/carbon-backfill`
+Can be called on-demand with a mandatory parameter `start-date` in the format YYYY-MM-DD, called the same API as the monthly
+trigger but for each month from the given start date.
+
+Uses a "carbon export" lock object on the target S3 bucket as semaphore; the lock object exists
+then Carbon data backfill is skipped. Lock object is created only once a full carbon export backfill has
+completed successfully.
+
+The Carbon Mgmt API only provides up to 12 months of archive data; where the backfill start date precedes the 12 months
+it will write an empty file. The backfill will run from start date up until the month prior to current Carbon Export (note
+the 19th of the month - see above).
+
+To remove the lock object, contact appvia support.
+
+**Query Parameters**:
+- `start_date` - the backifill start date in format YYYY-MM-DD (e.g. 2025-01-01); no default must be given
+- `force_overwrite=true` - Overwrite existing data files (default: false); set `skip_existing` to False
+- `skip_existing=false` - Process all months regardless of existing data (default: true)
+- `write_empty_object` - If no data exists for given month will write an empty export (default: true)
+
+**Examples**:
+- `POST /api/carbon-backfill` - Skip months that already have data (idempotent)
+- `POST /api/carbon-backfill?force_overwrite=true` - Overwrite all existing data
+- `POST /api/carbon-backfill?skip_existing=false` - Process all months, but don't skip if carbon export already exists
+
+
+### Recommendations
+We don't provide a backfill for this dataset.
+
+### Backfill timer
+Runs every weekday at 6AM GMT automatically run the backfill for cost exports and carbon exports; first costs then carbon.
+
+The appvia analytics teams can delete the associated lockfile for each tenant to force re-running the backfill. And because
+the Cost Export backfill will only run batches of six, it will take multiple days to export a full backfill schedule.
+
+The backfill start date ()`backfill_start_date`) module terraform variable must be explicitly set.
+
+## Security Features
 
 - **Private Networking**: All components use private endpoints and VNet integration
 - **Zero Trust**: No public network access (except during deployment if `deploy_from_external_network=true`)
@@ -196,52 +259,7 @@ module "example" {
 > If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
 > please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
 
-## Backfill
-
-### FOCUS Cost Data
-
-When the terraform apply has completed, exports in each billing account should appear on the exports blade in Cost Management + Billing. Search for 'focus-backfill', multi-select reports and click 'Run now' in small batches:
-
-![focus-backfill-exports](images/focus-backfill-exports.png)
-
-> [!NOTE]  
-> An alert will appear saying 'Failed to run one or more export (1 out of 1 failed)'. Sometimes this message appears to be wrong, other times you may need to retry some of the exports.
-
-### Carbon Emissions Data
-
-#### Initial Backfill
-For historical carbon emissions data, use the backfill HTTP endpoint instead of running the timer function:
-
-**Endpoint**: `POST /api/carbon-backfill`
-
-**Query Parameters**:
-- `force_overwrite=true` - Overwrite existing data files (default: false)
-- `skip_existing=false` - Process all months regardless of existing data (default: true)
-
-**Examples**:
-- `POST /api/carbon-backfill` - Skip months that already have data (idempotent)
-- `POST /api/carbon-backfill?force_overwrite=true` - Overwrite all existing data
-- `POST /api/carbon-backfill?skip_existing=false` - Process all months, but don't overwrite existing
-
-#### Date Range Information
-Check current API availability and existing data:
-
-**Endpoint**: `GET /api/carbon-date-range`
-
-**Query Parameters**:
-- `check_existing=true` - Also check which months already have data in S3
-
-#### Manual Monthly Export
-Run the function named 'CarbonEmissionsExporter' once. Note that you will need to temporarily configure the firewall and CORS rules to allow this (add an entry for https://portal.azure.com).
-
-**Idempotency**: Both the timer function and backfill endpoint are idempotent - they will skip processing if data already exists for a given month.
-
-### Recommendations
-
-We don't provide a backfill for this dataset.
-
 ## Testing
-
 This module includes comprehensive tests for the carbon export functionality, including dynamic date range calculations, idempotency features, and subscription batching logic.
 
 ### Running Tests Locally
@@ -316,10 +334,13 @@ The `terraform-docs` utility is used to generate this README. Follow the below s
 | <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the existing resource group where the virtual network is located | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | `"uk-gov-gds-cost-inbound-azure"` | no |
+| <a name="input_backfill_start_date"></a> [backfill\_start\_date](#input\_backfill\_start\_date) | The year and month to start backfill - nin the format 'YYYY-MM-01; defaults to 2022-01-01 | `string` | `"2022-01-01"` | no |
+| <a name="input_cost_export_daily_schedule_to_years"></a> [cost\_export\_daily\_schedule\_to\_years](#input\_cost\_export\_daily\_schedule\_to\_years) | The number of years from initial deployment to set the end date of the daily schedule for cost export | `number` | `15` | no |
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
+| <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
 
 ## Outputs
 
