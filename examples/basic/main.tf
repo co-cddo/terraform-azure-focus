@@ -23,7 +23,7 @@ module "example" {
   # only provide a suffix if deploying multiple modules into the same tenant (Cost Mgmt is a common to all deployments)
   # must still provide billing account for the module. If you only have one billing account for the tenant
   # then each deployed Cost Mgmt Export jobs will write the same cost export to target (S3); no conflict.
-  cost_mgmt_suffix                    = "dev"
+  cost_mgmt_suffix = "dev"
 
   # Uncomment the following line if running in CI/CD with a service principal
   # current_principal_type = "ServicePrincipal"
