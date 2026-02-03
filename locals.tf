@@ -23,4 +23,6 @@ locals {
   report_scopes = [
     for account_id in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${account_id}"
   ]
+
+  cost_mgmt_suffix = length(var.cost_mgmt_suffix) > 0 ? "-${var.cost_mgmt_suffix}" : ""
 }

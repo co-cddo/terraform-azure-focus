@@ -126,6 +126,7 @@ module "cost_forwarding" {
   deploy_from_external_network        = local.deploy_from_external_network
   backfill_start_date                 = "2022-01-01"
   logging_level                       = "INFO"
+  cost_mgmt_suffix                    = "dev"
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
 }

@@ -98,3 +98,9 @@ variable "logging_level" {
   type        = string
   default     = "INFO"
 }
+
+variable "cost_mgmt_suffix" {
+  description = "[optional] suffix to add to cost mgmt export tasks - to allow multiple deployments of this module in one tenant"
+  type        = string
+  default     = ""
+}
