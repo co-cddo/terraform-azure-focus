@@ -74,23 +74,23 @@ resource "azurerm_role_assignment" "advisor_reader" {
   principal_type       = "ServicePrincipal"
 }
 
-resource "azapi_resource_action" "add_role_assignment" {
-  for_each = toset(var.billing_account_ids)
+# resource "azapi_resource_action" "add_role_assignment" {
+#   for_each = toset(var.billing_account_ids)
 
-  type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
-  resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
-  action                 = "createBillingRoleAssignment"
-  method                 = "POST"
-  when                   = "apply"
-  response_export_values = ["*"]
-  body = {
-    properties = {
-      principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-      # TODO: Look this up dynamically https://learn.microsoft.com/en-us/rest/api/billing/billing-role-definition/list-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
-      roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/50000000-aaaa-bbbb-cccc-100000000001"
-    }
-  }
-}
+#   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
+#   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
+#   action                 = "createBillingRoleAssignment"
+#   method                 = "POST"
+#   when                   = "apply"
+#   response_export_values = ["*"]
+#   body = {
+#     properties = {
+#       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#       # TODO: Look this up dynamically https://learn.microsoft.com/en-us/rest/api/billing/billing-role-definition/list-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
+#       roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/50000000-aaaa-bbbb-cccc-100000000001"
+#     }
+#   }
+# }
 
 # resource "azapi_resource_action" "remove_role_assignment" {
 #   for_each    = toset(var.billing_account_ids)
