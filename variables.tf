@@ -104,3 +104,9 @@ variable "cost_mgmt_suffix" {
   type        = string
   default     = ""
 }
+
+variable "billing_role_to_assign" {
+  description = "The Azure role UUID to assign to the function app for access billing"
+  type        = "string"
+  default     = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"
+}

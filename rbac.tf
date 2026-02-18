@@ -92,6 +92,26 @@ resource "azurerm_role_assignment" "advisor_reader" {
 #   }
 # }
 
+# for Enterprise Agreement customers
+resource "azapi_resource_action" "add_role_assignment" {
+  for_each = toset(var.billing_account_ids)
+
+  type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
+  resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
+  action                 = "billingRoleAssignment"
+  method                 = "PUT"
+  when                   = "apply"
+  response_export_values = ["*"]
+  body = {
+    properties = {
+      principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+      # "Enrollment Reader" for enterprise account customers - https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals 
+      roleDefinitionId = var.billing_role_to_assign
+      # principalTenantId = ????
+    }
+  }
+}
+
 # resource "azapi_resource_action" "remove_role_assignment" {
 #   for_each    = toset(var.billing_account_ids)
 
