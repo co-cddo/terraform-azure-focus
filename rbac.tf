@@ -106,7 +106,7 @@ resource "azapi_resource_action" "add_role_assignment" {
     properties = {
       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
       # "Enrollment Reader" for enterprise account customers - https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals 
-      roleDefinitionId = var.billing_role_to_assign
+      roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/${var.billing_role_to_assign}"
       # principalTenantId = ????
     }
   }
