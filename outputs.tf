@@ -48,7 +48,7 @@ output "publish_code_command" {
   value       = local.publish_code_command
 }
 
-output "cost_export_app_principle_id" {
+output "cost_export_app_principal_id" {
   description = "The principal id of the cost export app - use this to assign Enrollment Reader role"
   value       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
 }
