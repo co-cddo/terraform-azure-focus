@@ -110,10 +110,10 @@ resource "azurerm_subnet" "functionapp" {
   }
 }
 
-# Call the cost forwarding module using the created resources
 module "cost_forwarding" {
   source = "../../"
 
+  is_enterprise_customer              = true
   aws_s3_bucket_name                  = var.aws_s3_bucket_name
   aws_account_id                      = var.aws_account_id
   billing_account_ids                 = var.billing_account_ids
@@ -126,6 +126,7 @@ module "cost_forwarding" {
   deploy_from_external_network        = local.deploy_from_external_network
   backfill_start_date                 = "2022-01-01"
   logging_level                       = "INFO"
+  cost_mgmt_suffix                    = "dev"
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
 }

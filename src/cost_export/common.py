@@ -15,6 +15,12 @@ def _get_required_env(name):
         raise EnvironmentError(f"Missing required environment variable: {name}")
     return value
 
+def _get_required_env_empty(name):
+    value = os.environ.get(name)
+    if not value:
+        value = ""
+    return value
+
 def is_uuid(value):
     """Check if a string is a valid UUID"""
     try:
@@ -41,6 +47,7 @@ class Config:
     backfill_start_date = _get_required_env("BACKFILL_START_DATE")
     cost_mgmt_export_container = _get_required_env("STORAGE_CONTAINER")
     cost_mgmt_export_destination_id = _get_required_env("STORAGE_RESOURCE_ID")
+    cost_mgmt_export_task_suffix = _get_required_env_empty("COST_MGMT_SUFFIX")   # can be empty -do not throw error if empty
 
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")

@@ -7,6 +7,7 @@ provider "azurerm" {
 module "example" {
   source = "../../"
 
+  is_enterprise_customer              = false
   aws_account_id                      = "<aws-account-id>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
@@ -19,6 +20,11 @@ module "example" {
 
   backfill_start_date = "2022-01-01"
   logging_level       = "DEBUG" # INFO (default) or DEBUG
+
+  # only provide a suffix if deploying multiple modules into the same tenant (Cost Mgmt is common to all deployments)
+  # must still provide billing account for the module. If you only have one billing account for the tenant
+  # then each deployed Cost Mgmt Export jobs will write the same cost export to target (S3); no conflict.
+  cost_mgmt_suffix = "dev"
 
   # Uncomment the following line if running in CI/CD with a service principal
   # current_principal_type = "ServicePrincipal"

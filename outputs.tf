@@ -47,3 +47,18 @@ output "publish_code_command" {
   description = "Publish code command for debugging"
   value       = local.publish_code_command
 }
+
+output "cost_export_app_principal_id" {
+  description = "The principal id of the cost export app - use this to assign Enrollment Reader role"
+  value       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+}
+
+output "tenant_id" {
+  description = "The tenant id - use this to assign the Enrollment Reader role"
+  value       = data.azurerm_client_config.current.tenant_id
+}
+
+output "ea_billing_role_definition_ids" {
+  description = "The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL"
+  value       = [for v in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"]
+}

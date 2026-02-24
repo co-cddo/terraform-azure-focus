@@ -12,8 +12,11 @@ from api.tokens import TokenManager
 COST_MGMT_EXPORT_BACKFILL_JOB_PREFIX: str = "focus-backfill"
 
 def get_export_task_name(account_idx: int, month: int, year: int) -> str:
+  # allow multiple cost mgmt export tasks (by suffix - env var on function)
+  cost_mgmt_export_task_suffix = Config.cost_mgmt_export_task_suffix
+
   try:
-    export_task_name = "%s-%d-%04d-%02d" % (COST_MGMT_EXPORT_BACKFILL_JOB_PREFIX, account_idx, year, month)
+    export_task_name = "%s%s-%d-%04d-%02d" % (COST_MGMT_EXPORT_BACKFILL_JOB_PREFIX, cost_mgmt_export_task_suffix, account_idx, year, month)
     return export_task_name
   except Exception as e:
     logger.error(f"get_export_task_name: error: {e}")
