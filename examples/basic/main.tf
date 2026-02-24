@@ -7,6 +7,7 @@ provider "azurerm" {
 module "example" {
   source = "../../"
 
+  is_enterprise_customer              = false
   aws_account_id                      = "<aws-account-id>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"

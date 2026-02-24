@@ -110,10 +110,10 @@ resource "azurerm_subnet" "functionapp" {
   }
 }
 
-# Call the cost forwarding module using the created resources
 module "cost_forwarding" {
   source = "../../"
 
+  is_enterprise_customer              = true
   aws_s3_bucket_name                  = var.aws_s3_bucket_name
   aws_account_id                      = var.aws_account_id
   billing_account_ids                 = var.billing_account_ids

@@ -47,3 +47,13 @@ output "publish_code_command" {
   description = "Publish code command for debugging"
   value       = local.publish_code_command
 }
+
+output "cost_export_app_principle_id" {
+  description = "The principal id of the cost export app - use this to assign Enrollment Reader role"
+  value       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+}
+
+output "tenant_id" {
+  description = "The tenant id - use this to assign the Enrollment Reader role"
+  value       = data.azurerm_client_config.current.tenant_id
+}

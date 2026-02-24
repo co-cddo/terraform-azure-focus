@@ -74,43 +74,45 @@ resource "azurerm_role_assignment" "advisor_reader" {
   principal_type       = "ServicePrincipal"
 }
 
-# resource "azapi_resource_action" "add_role_assignment" {
-#   for_each = toset(var.billing_account_ids)
-
-#   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
-#   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
-#   action                 = "createBillingRoleAssignment"
-#   method                 = "POST"
-#   when                   = "apply"
-#   response_export_values = ["*"]
-#   body = {
-#     properties = {
-#       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-#       # TODO: Look this up dynamically https://learn.microsoft.com/en-us/rest/api/billing/billing-role-definition/list-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
-#       roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/50000000-aaaa-bbbb-cccc-100000000001"
-#     }
-#   }
-# }
-
-# for Enterprise Agreement customers
+# this only works for MCA customers
 resource "azapi_resource_action" "add_role_assignment" {
-  for_each = toset(var.billing_account_ids)
+  for_each = var.is_enterprise_customer ? [] : toset(var.billing_account_ids)
 
   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
-  action                 = "billingRoleAssignment"
-  method                 = "PUT"
+  action                 = "createBillingRoleAssignment"
+  method                 = "POST"
   when                   = "apply"
   response_export_values = ["*"]
   body = {
     properties = {
       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-      # "Enrollment Reader" for enterprise account customers - https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals 
-      roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/${var.billing_role_to_assign}"
-      # principalTenantId = ????
+      # TODO: Look this up dynamically https://learn.microsoft.com/en-us/rest/api/billing/billing-role-definition/list-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
+      roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/50000000-aaaa-bbbb-cccc-100000000001"
     }
   }
 }
+
+# for Enterprise Agreement customers - assign the "Enrollment Reader" role (24f8edb6-1668-4659-b5e2-40bb5f3a7d7e)
+# but this requires Enterprise Admin privileges; so needs to be done manually
+# resource "azapi_resource_action" "add_role_assignment" {
+#   for_each = toset(var.billing_account_ids)
+
+#   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
+#   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
+#   action                 = "billingRoleAssignment"
+#   method                 = "PUT"
+#   when                   = "apply"
+#   response_export_values = ["*"]
+#   body = {
+#     properties = {
+#       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#       # "Enrollment Reader" for enterprise account customers - https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals 
+#       roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"
+#       # principalTenantId = ????
+#     }
+#   }
+# }
 
 # resource "azapi_resource_action" "remove_role_assignment" {
 #   for_each    = toset(var.billing_account_ids)
