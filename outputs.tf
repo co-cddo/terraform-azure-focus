@@ -57,3 +57,8 @@ output "tenant_id" {
   description = "The tenant id - use this to assign the Enrollment Reader role"
   value       = data.azurerm_client_config.current.tenant_id
 }
+
+output "EA_billing_role_definition_ids" {
+  description = "The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL"
+  value       = [for v in var.billing_account_ids: "/providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"]
+}
