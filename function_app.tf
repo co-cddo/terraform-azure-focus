@@ -4,12 +4,14 @@ resource "azurerm_service_plan" "cost_export" {
   location            = azurerm_resource_group.cost_export.location
   os_type             = "Linux"
   sku_name            = "FC1"
+  tags                = var.tags
 }
 
 resource "azurerm_function_app_flex_consumption" "cost_export" {
   name                = "func-cost-export-${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
+  tags                = var.tags
 
   storage_container_type = "blobContainer"
   # TODO: Switch to managed identity once this is fixed:
@@ -105,7 +107,7 @@ resource "azurerm_application_insights" "this" {
   local_authentication_disabled         = false
   retention_in_days                     = 90
   sampling_percentage                   = 100
-  tags                                  = {}
+  tags                                  = var.tags
 }
 
 resource "null_resource" "publish_function_code" {

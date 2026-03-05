@@ -8,6 +8,8 @@ resource "azurerm_eventgrid_system_topic" "storage_events" {
   identity {
     type = "SystemAssigned"
   }
+
+  tags = var.tags
 }
 
 resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {

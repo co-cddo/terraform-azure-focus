@@ -5,6 +5,7 @@ resource "azurerm_storage_account" "cost_export" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   is_hns_enabled           = true
+  tags                     = var.tags
 
   public_network_access_enabled = false
 
@@ -39,6 +40,7 @@ resource "azurerm_storage_account" "deployment" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   is_hns_enabled           = true
+  tags                     = var.tags
 
   public_network_access_enabled = false
 
