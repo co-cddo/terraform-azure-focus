@@ -88,20 +88,6 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
   principal_type       = "ServicePrincipal"
 }
 
-# resource "azurerm_role_assignment" "management_group_reader" {
-#   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-#   role_definition_name = "Management Group Reader"
-#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-#   principal_type       = "ServicePrincipal"
-# }
-
-# resource "azurerm_role_assignment" "advisor_reader" {
-#   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-#   role_definition_name = "Reader"
-#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-#   principal_type       = "ServicePrincipal"
-# }
-
 # this only works for MCA customers
 resource "azapi_resource_action" "add_role_assignment" {
   for_each = var.is_enterprise_customer ? [] : toset(var.billing_account_ids)
@@ -114,11 +100,45 @@ resource "azapi_resource_action" "add_role_assignment" {
   response_export_values = ["*"]
   body = {
     properties = {
-      principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-      # TODO: Look this up dynamically https://learn.microsoft.com/en-us/rest/api/billing/billing-role-definition/list-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
-      roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/50000000-aaaa-bbbb-cccc-100000000001"
+      principalId      = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+      roleDefinitionId = local.billing_account_reader_role_ids[each.value]
     }
   }
+}
+
+# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
+resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
+# Custom role granting only the permissions needed for Cost Management to configure managed identity
+# role assignments on the firewall-protected export storage account.
+resource "azurerm_role_definition" "cost_export_rbac" {
+  name        = "Cost Export RBAC Manager (${random_string.unique.result})"
+  scope       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
+  description = "Allows Cost Management to write role assignments and read permissions on the export storage account when configuring exports to firewall-protected storage."
+
+  permissions {
+    actions = [
+      "Microsoft.Authorization/roleAssignments/write",
+      "Microsoft.Authorization/permissions/read",
+    ]
+  }
+
+  assignable_scopes = [
+    azurerm_storage_account.cost_export.id,
+  ]
+}
+
+resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
+  scope              = azurerm_storage_account.cost_export.id
+  role_definition_id = azurerm_role_definition.cost_export_rbac.role_definition_resource_id
+  principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type     = "ServicePrincipal"
 }
 
 # for Enterprise Agreement customers - assign the "Enrollment Reader" role (24f8edb6-1668-4659-b5e2-40bb5f3a7d7e)
@@ -168,28 +188,31 @@ resource "azapi_resource_action" "add_role_assignment" {
 #   when        = "destroy"
 # }
 
-# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
-resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
-  scope                = azurerm_storage_account.cost_export.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
-}
 
-# https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
-resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
-  scope                = azurerm_storage_account.cost_export.id
-  role_definition_name = "Owner"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
-  condition_version    = "2.0"
-  condition            = <<-EOT
-  (
-    !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
-  )
-  OR
-  (
-    !(ActionMatches{'Microsoft.Authorization/permissions/read'})
-  )
-  EOT
-}
+# TODO: Figure out whether this is needed
+# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
+# resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
+#   scope                = azurerm_storage_account.cost_export.id
+#   role_definition_name = "Storage Blob Data Contributor"
+#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#   principal_type       = "ServicePrincipal"
+# }
+
+# TODO: Figure out whether this is needed
+# # https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
+# resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
+#   scope                = azurerm_storage_account.cost_export.id
+#   role_definition_name = "Owner"
+#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#   principal_type       = "ServicePrincipal"
+#   condition_version    = "2.0"
+#   condition            = <<-EOT
+#   (
+#     !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
+#   )
+#   OR
+#   (
+#     !(ActionMatches{'Microsoft.Authorization/permissions/read'})
+#   )
+#   EOT
+# }

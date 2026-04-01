@@ -27,4 +27,10 @@ locals {
   report_scopes = [
     for account_id in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${account_id}"
   ]
+
+  # Look up billing role definition IDs by name
+  billing_account_reader_role_ids = {
+    for k, v in data.azapi_resource_list.billing_role_definitions :
+    k => one([for r in v.output.value : r.id if r.properties.roleName == "Billing account reader"])
+  }
 }
