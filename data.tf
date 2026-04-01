@@ -5,6 +5,15 @@ data "azurerm_virtual_network" "existing" {
   resource_group_name = var.virtual_network_resource_group_name
 }
 
+data "azapi_resource_list" "billing_role_definitions" {
+  for_each = var.is_enterprise_customer ? toset([]) : toset(var.billing_account_ids)
+
+  type      = "Microsoft.Billing/billingAccounts/billingRoleDefinitions@2024-04-01"
+  parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
+
+  response_export_values = ["value"]
+}
+
 data "archive_file" "function" {
   type        = "zip"
   source_dir  = "${path.module}/src/cost_export"
