@@ -14,6 +14,8 @@
 #
 .PHONY: all security lint format documentation documentation-examples validate-all validate validate-examples init examples tests tests-python python-setup python-lint python-format
 
+TERRAFORM_DOCS_DOCKER=docker run --rm --volume "$$(pwd):/workspace" --workdir /workspace -u $$(id -u) quay.io/terraform-docs/terraform-docs:0.20.0
+
 default: all
 
 all: 
@@ -37,7 +39,7 @@ examples:
 
 documentation: 
 	@echo "--> Generating documentation"
-	@terraform-docs .
+	@$(TERRAFORM_DOCS_DOCKER) markdown .
 	$(MAKE) documentation-modules
 	$(MAKE) documentation-examples
 
@@ -45,14 +47,14 @@ documentation-modules:
 	@echo "--> Generating documentation for modules"
 	@find . -type d -regex '.*/modules/[a-za-z\-_$$]*' -not -path '*.terraform*' 2>/dev/null | while read -r dir; do \
 		echo "--> Generating documentation for module: $$dir"; \
-		terraform-docs $$dir; \
+		$(TERRAFORM_DOCS_DOCKER) markdown $$dir; \
 	done;
 
 documentation-examples:
 	@echo "--> Generating documentation for examples"
 	@find . -type d -path '*/examples/*' -not -path '*.terraform*' 2>/dev/null| while read -r dir; do \
 		echo "--> Generating documentation for example: $$dir"; \
-		terraform-docs $$dir; \
+		$(TERRAFORM_DOCS_DOCKER) markdown $$dir; \
 	done;
 
 upgrade-terraform-providers:
