@@ -127,3 +127,16 @@ output "function_app_private_endpoint_ip" {
   description = "The private IP address of the function app private endpoint"
   value       = azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address
 }
+
+output "private_dns_zones" {
+  description = "Effective private DNS zone configuration used by the module"
+  value = {
+    for zone, zone_id in local.effective_private_dns_zone_ids :
+    zone => {
+      id                = zone_id
+      name              = local.effective_private_dns_zone_names[zone]
+      resource_group    = local.effective_private_dns_zone_resource_group_names[zone]
+      managed_by_module = !var.use_existing_private_dns_zones
+    }
+  }
+}

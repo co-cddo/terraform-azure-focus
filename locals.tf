@@ -25,4 +25,36 @@ locals {
   report_scopes = [
     for account_id in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${account_id}"
   ]
+
+  private_dns_zone_names = {
+    blob  = "privatelink.blob.core.windows.net"
+    queue = "privatelink.queue.core.windows.net"
+    sites = "privatelink.azurewebsites.net"
+  }
+
+  manage_private_endpoint_dns = var.private_endpoints_manage_dns_zone_group
+
+  managed_private_dns_zone_ids = {
+    blob  = try(azurerm_private_dns_zone.blob[0].id, null)
+    queue = try(azurerm_private_dns_zone.queue[0].id, null)
+    sites = try(azurerm_private_dns_zone.sites[0].id, null)
+  }
+
+  effective_private_dns_zone_ids = !local.manage_private_endpoint_dns ? {} : var.use_existing_private_dns_zones ? {
+    for zone, _ in local.private_dns_zone_names :
+    zone => var.existing_private_dns_zone_ids[zone]
+    } : {
+    for zone, _ in local.private_dns_zone_names :
+    zone => local.managed_private_dns_zone_ids[zone]
+  }
+
+  effective_private_dns_zone_resource_group_names = {
+    for zone, zone_id in local.effective_private_dns_zone_ids :
+    zone => split("/", zone_id)[4]
+  }
+
+  effective_private_dns_zone_names = {
+    for zone, zone_id in local.effective_private_dns_zone_ids :
+    zone => split("/", zone_id)[8]
+  }
 }
