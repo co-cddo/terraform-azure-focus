@@ -178,7 +178,7 @@ variable "private_dns_a_record_ttl" {
   default     = 300
 
   validation {
-    condition     = var.private_dns_a_record_ttl >= 30 && var.private_dns_a_record_ttl <= 3600
+    condition     = !var.private_endpoints_manage_dns_zone_group || (var.private_dns_a_record_ttl >= 30 && var.private_dns_a_record_ttl <= 3600)
     error_message = "private_dns_a_record_ttl must be between 30 and 3600 seconds."
   }
 }

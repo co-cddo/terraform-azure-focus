@@ -271,9 +271,11 @@ This module supports three private DNS modes for private endpoints:
    - `private_endpoints_manage_dns_zone_group = true`
    - `use_existing_private_dns_zones = true`
    - Provide `existing_private_dns_zone_ids` for `blob`, `queue`, and `sites`.
+   - Best suited when DNS zones are in the same subscription context as the module provider.
 3. **External DNS management (for example Azure Policy)**
    - `private_endpoints_manage_dns_zone_group = false`
    - Module creates private endpoints but does not manage private DNS zones, links, or A records.
+   - Recommended for ALZ-style cross-subscription DNS architectures.
 
 ### BYOD Example
 
