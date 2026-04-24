@@ -62,3 +62,68 @@ output "ea_billing_role_definition_ids" {
   description = "The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL"
   value       = [for v in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"]
 }
+
+output "random_string_suffix" {
+  description = "The random suffix appended to generated resource names"
+  value       = random_string.unique.result
+}
+
+output "cost_export_storage_account_name" {
+  description = "The name of the cost export storage account"
+  value       = azurerm_storage_account.cost_export.name
+}
+
+output "deployment_storage_account_name" {
+  description = "The name of the deployment storage account"
+  value       = azurerm_storage_account.deployment.name
+}
+
+output "function_app_name" {
+  description = "The name of the cost export function app"
+  value       = azurerm_function_app_flex_consumption.cost_export.name
+}
+
+output "event_grid_system_topic_name" {
+  description = "The name of the Event Grid system topic for storage events"
+  value       = azurerm_eventgrid_system_topic.storage_events.name
+}
+
+output "event_grid_subscription_name" {
+  description = "The name of the Event Grid subscription for blob created events"
+  value       = azurerm_eventgrid_event_subscription.focus_blob_created.name
+}
+
+output "cost_export_storage_account_id" {
+  description = "The resource id of the cost export storage account"
+  value       = azurerm_storage_account.cost_export.id
+}
+
+output "deployment_storage_account_id" {
+  description = "The resource id of the deployment storage account"
+  value       = azurerm_storage_account.deployment.id
+}
+
+output "function_app_id" {
+  description = "The resource id of the cost export function app"
+  value       = azurerm_function_app_flex_consumption.cost_export.id
+}
+
+output "storage_private_endpoint_ip" {
+  description = "The private IP address of the cost export storage blob private endpoint"
+  value       = azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address
+}
+
+output "storage_queue_private_endpoint_ip" {
+  description = "The private IP address of the cost export storage queue private endpoint"
+  value       = azurerm_private_endpoint.storage_queue.private_service_connection[0].private_ip_address
+}
+
+output "deployment_storage_private_endpoint_ip" {
+  description = "The private IP address of the deployment storage blob private endpoint"
+  value       = azurerm_private_endpoint.deployment.private_service_connection[0].private_ip_address
+}
+
+output "function_app_private_endpoint_ip" {
+  description = "The private IP address of the function app private endpoint"
+  value       = azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address
+}
