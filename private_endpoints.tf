@@ -12,8 +12,12 @@ resource "azurerm_private_endpoint" "storage" {
     is_manual_connection           = false
   }
 
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
+  dynamic "private_dns_zone_group" {
+    for_each = local.manage_private_endpoint_dns ? [1] : []
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [lookup(local.effective_private_dns_zone_ids, "blob", "")]
+    }
   }
 }
 
@@ -31,8 +35,12 @@ resource "azurerm_private_endpoint" "storage_queue" {
     is_manual_connection           = false
   }
 
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
+  dynamic "private_dns_zone_group" {
+    for_each = local.manage_private_endpoint_dns ? [1] : []
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [lookup(local.effective_private_dns_zone_ids, "queue", "")]
+    }
   }
 }
 
@@ -49,8 +57,12 @@ resource "azurerm_private_endpoint" "deployment" {
     is_manual_connection           = false
   }
 
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
+  dynamic "private_dns_zone_group" {
+    for_each = local.manage_private_endpoint_dns ? [1] : []
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [lookup(local.effective_private_dns_zone_ids, "blob", "")]
+    }
   }
 }
 
@@ -68,7 +80,11 @@ resource "azurerm_private_endpoint" "function_app" {
     is_manual_connection           = false
   }
 
-  lifecycle {
-    ignore_changes = [private_dns_zone_group]
+  dynamic "private_dns_zone_group" {
+    for_each = local.manage_private_endpoint_dns ? [1] : []
+    content {
+      name                 = "default"
+      private_dns_zone_ids = [lookup(local.effective_private_dns_zone_ids, "sites", "")]
+    }
   }
 }

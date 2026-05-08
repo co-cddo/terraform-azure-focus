@@ -129,6 +129,12 @@ variable "use_existing_private_dns_zones" {
   default     = false
 }
 
+variable "link_existing_private_dns_zones_to_vnet" {
+  description = "When use_existing_private_dns_zones is true, whether to create virtual network links from the existing private DNS zones to the module virtual network. Leave as false when your DNS zones are centrally managed (e.g. via a Private DNS Resolver hub) and already linked to the VNet."
+  type        = bool
+  default     = false
+}
+
 variable "existing_private_dns_zone_ids" {
   description = <<-EOT
 Map of existing private DNS zone IDs keyed by blob, queue, and sites.

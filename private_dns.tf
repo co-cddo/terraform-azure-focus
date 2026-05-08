@@ -36,7 +36,7 @@ resource "azurerm_private_dns_zone" "sites" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
-  count                 = local.manage_private_endpoint_dns ? 1 : 0
+  count                 = local.manage_private_endpoint_dns && (!var.use_existing_private_dns_zones || var.link_existing_private_dns_zones_to_vnet) ? 1 : 0
   name                  = "blob-dns-link"
   resource_group_name   = local.effective_private_dns_zone_resource_group_names.blob
   private_dns_zone_name = local.effective_private_dns_zone_names.blob
@@ -65,7 +65,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "table" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "queue" {
-  count                 = local.manage_private_endpoint_dns ? 1 : 0
+  count                 = local.manage_private_endpoint_dns && (!var.use_existing_private_dns_zones || var.link_existing_private_dns_zones_to_vnet) ? 1 : 0
   name                  = "queue-dns-link"
   resource_group_name   = local.effective_private_dns_zone_resource_group_names.queue
   private_dns_zone_name = local.effective_private_dns_zone_names.queue
@@ -74,7 +74,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "queue" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
-  count                 = local.manage_private_endpoint_dns ? 1 : 0
+  count                 = local.manage_private_endpoint_dns && (!var.use_existing_private_dns_zones || var.link_existing_private_dns_zones_to_vnet) ? 1 : 0
   name                  = "sites-dns-link"
   resource_group_name   = local.effective_private_dns_zone_resource_group_names.sites
   private_dns_zone_name = local.effective_private_dns_zone_names.sites
@@ -82,52 +82,31 @@ resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
   tags                  = var.tags
 }
 
-resource "azurerm_private_dns_a_record" "storage" {
-  count               = local.manage_private_endpoint_dns ? 1 : 0
-  name                = azurerm_storage_account.cost_export.name
-  zone_name           = local.effective_private_dns_zone_names.blob
-  resource_group_name = local.effective_private_dns_zone_resource_group_names.blob
-  ttl                 = var.private_dns_a_record_ttl
-  records             = [azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address]
-  tags                = var.tags
+# A records were previously managed manually by this module. They are now registered
+# automatically by the private_dns_zone_group attached to each private endpoint.
+# The removed blocks below instruct Terraform to drop these resources from state
+# without issuing a DELETE in Azure, so existing records are preserved in place.
+removed {
+  from = azurerm_private_dns_a_record.storage
+  lifecycle { destroy = false }
 }
 
-resource "azurerm_private_dns_a_record" "storage_queue" {
-  count               = local.manage_private_endpoint_dns ? 1 : 0
-  name                = azurerm_storage_account.cost_export.name
-  zone_name           = local.effective_private_dns_zone_names.queue
-  resource_group_name = local.effective_private_dns_zone_resource_group_names.queue
-  ttl                 = var.private_dns_a_record_ttl
-  records             = [azurerm_private_endpoint.storage_queue.private_service_connection[0].private_ip_address]
-  tags                = var.tags
+removed {
+  from = azurerm_private_dns_a_record.storage_queue
+  lifecycle { destroy = false }
 }
 
-resource "azurerm_private_dns_a_record" "deployment" {
-  count               = local.manage_private_endpoint_dns ? 1 : 0
-  name                = azurerm_storage_account.deployment.name
-  zone_name           = local.effective_private_dns_zone_names.blob
-  resource_group_name = local.effective_private_dns_zone_resource_group_names.blob
-  ttl                 = var.private_dns_a_record_ttl
-  records             = [azurerm_private_endpoint.deployment.private_service_connection[0].private_ip_address]
-  tags                = var.tags
+removed {
+  from = azurerm_private_dns_a_record.deployment
+  lifecycle { destroy = false }
 }
 
-resource "azurerm_private_dns_a_record" "function_app" {
-  count               = local.manage_private_endpoint_dns ? 1 : 0
-  name                = azurerm_function_app_flex_consumption.cost_export.name
-  zone_name           = local.effective_private_dns_zone_names.sites
-  resource_group_name = local.effective_private_dns_zone_resource_group_names.sites
-  ttl                 = var.private_dns_a_record_ttl
-  records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
-  tags                = var.tags
+removed {
+  from = azurerm_private_dns_a_record.function_app
+  lifecycle { destroy = false }
 }
 
-resource "azurerm_private_dns_a_record" "function_app_kudu" {
-  count               = local.manage_private_endpoint_dns ? 1 : 0
-  name                = "${azurerm_function_app_flex_consumption.cost_export.name}.scm"
-  zone_name           = local.effective_private_dns_zone_names.sites
-  resource_group_name = local.effective_private_dns_zone_resource_group_names.sites
-  ttl                 = var.private_dns_a_record_ttl
-  records             = [azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address]
-  tags                = var.tags
+removed {
+  from = azurerm_private_dns_a_record.function_app_kudu
+  lifecycle { destroy = false }
 }
