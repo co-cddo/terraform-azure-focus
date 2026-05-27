@@ -16,7 +16,7 @@ resource "azuread_application" "aws_app" {
 resource "azuread_service_principal" "aws_app" {
   client_id                    = azuread_application.aws_app.client_id
   app_role_assignment_required = false
-  owners                       = [data.azurerm_client_config.current.object_id, "ab5300e5-1a79-4935-898f-bb37fb69f0c4"]
+  owners                       = [data.azurerm_client_config.current.object_id]
 
   feature_tags {
     enterprise = true
