@@ -213,6 +213,19 @@ The backfill start date ()`backfill_start_date`) module terraform variable must 
 - **Zero Trust**: No public network access (except during deployment if `deploy_from_external_network=true`)
 - **Managed Identity**: Azure resources authenticate using system-assigned managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived AWS credentials
+- **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
+
+### Updating Python Dependencies
+
+Python dependencies in `src/cost_export/requirements.txt` and `src/cost_export/requirements-test.txt` are pinned with `--hash=sha256:` digests. When pip's hash-checking mode is active, **all** installed packages (including transitive dependencies) must also have hashes specified. If you encounter hash-related install failures:
+
+1. Use `pip-compile --generate-hashes` from [pip-tools](https://pip-tools.readthedocs.io/) to resolve the full dependency tree with hashes:
+   ```bash
+   pip install pip-tools
+   pip-compile --generate-hashes --output-file=src/cost_export/requirements.txt src/cost_export/requirements.in
+   ```
+2. Ensure `pip-compile` runs under **Python 3.12** (matching the Function App runtime in `function_app.tf`) so that platform-specific wheels resolve correctly.
+3. Alternatively, install with `pip install --require-hashes -r requirements.txt` to enforce hash verification only at the CI/deploy stage while allowing local development without full transitive hashes.
 
 ## Prerequisites
 

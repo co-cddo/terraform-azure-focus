@@ -1,23 +1,60 @@
 # Test dependencies for carbon export functions
-pytest>=7.0.0
-pytest-mock>=3.10.0
-requests-mock>=1.10.0
-unittest-xml-reporting>=3.2.0
+pytest==9.0.3 \
+    --hash=sha256:2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9 \
+    --hash=sha256:b86ada508af81d19edeb213c681b1d48246c1a91d304c6c81a427674c17eb91c
+pytest-mock==3.15.1 \
+    --hash=sha256:0a25e2eb88fe5168d535041d09a4529a188176ae608a6d249ee65abc0949630d \
+    --hash=sha256:1849a238f6f396da19762269de72cb1814ab44416fa73a8686deac10b0d87a0f
+requests-mock==1.12.1 \
+    --hash=sha256:b1e37054004cdd5e56c84454cc7df12b25f90f382159087f4b6915aaeef39563 \
+    --hash=sha256:e9e12e333b525156e82a3c852f22016b9158220d2f47454de9cae8a77d371401
+unittest-xml-reporting==4.0.0 \
+    --hash=sha256:e3e24bac8ea27c454d8be1d718851b2c5c8f712d75281920b6af81bdfef2f9bc \
+    --hash=sha256:bfa1ed65e9e6f33c161d04470d89050458cfb65a5a5d0358834ef7ce037d9136
 
 # Code quality tools
-black>=23.0.0
-isort>=5.12.0
-flake8>=6.0.0
-bandit>=1.7.0
-safety>=2.3.0
+black==26.5.1 \
+    --hash=sha256:9942db8888e06943c5dde66ca0037dcff82a2a4ec1ad0ada9e0d2ee9d9823893 \
+    --hash=sha256:89c93167a74d3a75dfaa38a5c7cca015537d5820dd7f17d63267d674a61cae90 \
+    --hash=sha256:22f2cd76d069cc54c71f10360744ba8983fbb616903b4304a85b734915c8e1b4 \
+    --hash=sha256:87ed5c6f450580a2f6790bc7cbfb016dfc73bc750249762268a3695361315eef \
+    --hash=sha256:58b4bd92cf88aacf83d88479c8f9caee044b1ec55f2451a337354a7ea2590a22 \
+    --hash=sha256:96ae2c733b2aabdd9986e2c5df628ff3473676cd1c5faded1ff496cf6d74083c \
+    --hash=sha256:0e48b87e03bf109288e55cfceadcfa15ff5470aca2851a851950ed2926f450d7 \
+    --hash=sha256:5119fa92ae61f786e8c3662fd60aece1d0a2dd5cca5d0c79417a95e7a4272a59 \
+    --hash=sha256:30d3c14661f2792e9142cce3eeeb1cbc175b3eb5f733be0c8eeb99651e52b0c3 \
+    --hash=sha256:1ef92b76f7733f282fd096ea406200b5a286c42947412b0eaff3a74e3616cefe \
+    --hash=sha256:4ad6fa01f941920f54f2bbb35f3df7673428a0ef98a0b0840c2eaef3b110efa8 \
+    --hash=sha256:3915f256e75a2d7cf88d8953d37f780455dc586cc72dee059c528fe77f581217 \
+    --hash=sha256:9d98d4137277c75dfb898ec8d846c4fd68ba1e9cf77f95e2865c203dc18f4c3d \
+    --hash=sha256:a1dca32d9f1784af512a13410ec204c6f7f0aa9797a111c42e1c03449821c264 \
+    --hash=sha256:1037d5ac7b7b310b2632ad867ec8d0e4c4819dcdb0b820f63135da746a24e418 \
+    --hash=sha256:2b36cf2ddf5566e205f6535f782a62194a184d33e175b64ae8c40b1737522be3 \
+    --hash=sha256:1f7ea64ebfa01b50f693508fc39f875e264446d3b097088f84f203b9d09618a0 \
+    --hash=sha256:ecb3e624844c798144e9bd986954e0adc81d8911a1f30f375e1252fe26e8c294 \
+    --hash=sha256:e1a26503279b6b310669fb0b219c39e4820b77e8189fe80f522bb511f247db0a \
+    --hash=sha256:5c34b25da232ead53a6f335b76dbea124f4d152ad568b9080d6f944bc2b34b52 \
+    --hash=sha256:e88976690a64b0af98312ca958415849cb42423423c5f2ee74af4b49a97a2168 \
+    --hash=sha256:32d5ea7f6c8bdfa6e648326ebca1f02b0764e2a029edc6f8dce2627e19d468c3 \
+    --hash=sha256:ea8d16dc41655aa113cd64665e7219446cd7e4ff2248d7178eaa905190c86b18 \
+    --hash=sha256:577f21094ea469ef92ec1adaf2c9441a226d2144d01a5be2fa823cecf6543e50 \
+    --hash=sha256:ed1a20af114c301a0269bf01163d51dbef72737fd65f850001e7cbe7f3c7abae \
+    --hash=sha256:4ed7f7da04046d2e488437170797d3b4a4ad83906683bcb7dfc68b673bbce5e2 \
+    --hash=sha256:dd321f668053961824bcc1be1cc1df748b2d7e4fa28086b08331e577b0100a73
+isort==8.0.1 \
+    --hash=sha256:28b89bc70f751b559aeca209e6120393d43fbe2490de0559662be7a9787e3d75 \
+    --hash=sha256:171ac4ff559cdc060bcfff550bc8404a486fee0caab245679c2abe7cb253c78d
+flake8==7.3.0 \
+    --hash=sha256:b9696257b9ce8beb888cdbe31cf885c90d31928fe202be0889a7cdafad32f01e \
+    --hash=sha256:fe044858146b9fc69b551a4b490d69cf960fcb78ad1edcb84e7fbb1b4a8e3872
+bandit==1.9.4 \
+    --hash=sha256:f89ffa663767f5a0585ea075f01020207e966a9c0f2b9ef56a57c7963a3f6f8e \
+    --hash=sha256:b589e5de2afe70bd4d53fa0c1da6199f4085af666fde00e8a034f152a52cd628
+safety==3.8.0 \
+    --hash=sha256:76f38519e34c5dfb728e9324b128b54b452c69b2accb9594f29fcb0d4d3fee2f \
+    --hash=sha256:24b2cd7b873ee0dd4bc7f4f65933d2bfaf7041741f371449c12b5c8572ccb727
 
 # Runtime dependencies (from requirements.txt)
 # Note: These would normally be installed from requirements.txt
 # but listed here for reference in testing environments
-azure-functions
-pyarrow
-pandas
-azure-identity
-boto3
-s3fs
-azure-storage-blob
+-r requirements.txt
