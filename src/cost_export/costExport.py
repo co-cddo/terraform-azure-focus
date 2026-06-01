@@ -68,7 +68,7 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
   # until last month (current month export is a daily continuous aggregate of the current month)
   until_month, until_year = get_backfill_until_month_year()
   logger.info(f"From {current_month}/{current_year} to {until_month}/{until_year}...")
-  
+
   while (current_year, current_month) <= (until_year, until_month):
     logger.info(f"....{account_idx}: {current_month}/{current_year}")
 
@@ -79,7 +79,7 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
       logger.debug("....{account_idx}: {current_month}/{current_year} export task already exists")
 
     current_month, current_year = increment_month_year(current_month, current_year)
-  
+
   # if we get this far, then we have created the full schedule of backfill Cost Management export jobs
   cost_export_backfill_schedule_lock_create()
 
@@ -94,7 +94,7 @@ def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx:
   # until last month (current month export is a daily continuous aggregate of the current month)
   until_year, until_month = start_date.year, start_date.month
   logger.info(f"From {current_month}/{current_year} to {until_month}/{until_year}...")
-  
+
   # there could be 100+ export jobs for a 10 year backfill; it is not practical (and subject to quotas)
   #  to initiate backfill on all jobs. So only initiate 10 at a time. The backfill job will
   #  keep running every day until all export jobs have executed.
@@ -129,7 +129,7 @@ def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx:
       logger.info(f"....{account_idx}: {current_month}/{current_year} export already exists and skipping is enabled...")
 
     current_month, current_year = decrement_month_year(current_month, current_year)
-  
+
   # if we get this far, and we've added zero job to run, then we can conclude we have ran all jobs
   #  as all data exists
   if number_of_jobs_running == 0:
@@ -163,4 +163,3 @@ def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = Fals
 
   else:
     logger.info("Cost export backfill run lock exists. Skipping backfill run.")
-

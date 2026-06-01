@@ -3,12 +3,12 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
@@ -18,7 +18,7 @@ TERRAFORM_DOCS_DOCKER=docker run --rm --volume "$$(pwd):/workspace" --workdir /w
 
 default: all
 
-all: 
+all:
 	$(MAKE) init
 	$(MAKE) validate
 	$(MAKE) tests
@@ -37,7 +37,7 @@ examples:
 	$(MAKE) format
 	$(MAKE) documentation
 
-documentation: 
+documentation:
 	@echo "--> Generating documentation"
 	@$(TERRAFORM_DOCS_DOCKER) markdown .
 	$(MAKE) documentation-modules
@@ -70,7 +70,7 @@ upgrade-terraform-example-providers:
 		done; \
 	fi
 
-init: 
+init:
 	@echo "--> Running terraform init"
 	@terraform init -backend=false
 	@find . -type f -name "*.tf" -not -path '*.terraform*' -exec dirname {} \; | sort -u | while read -r dir; do \
@@ -90,7 +90,7 @@ security-modules:
 		echo "--> Validating $$dir"; \
 	  terraform init -backend=false; \
 		trivy config  --format table --exit-code  1 --severity  CRITICAL,HIGH --ignorefile .trivyignore $$dir; \
-	done; 
+	done;
 
 security-examples:
 	@echo "--> Running Security checks on examples"
@@ -100,8 +100,8 @@ security-examples:
 		trivy config  --format table --exit-code  1 --severity  CRITICAL,HIGH --ignorefile .trivyignore $$dir; \
 	done;
 
-tests: 
-	@echo "--> Running Terraform Tests" 
+tests:
+	@echo "--> Running Terraform Tests"
 	@terraform test
 
 validate:
@@ -126,7 +126,7 @@ validate-examples:
 		echo "--> Validating $$dir"; \
 		terraform -chdir=$$dir init -backend=false; \
 		terraform -chdir=$$dir validate; \
-	done; 
+	done;
 
 validate-commits:
 	@echo "--> Running commitlint against the main branch"
@@ -135,7 +135,7 @@ validate-commits:
 
 lint:
 	@echo "--> Running tflint"
-	@tflint --init 
+	@tflint --init
 	@tflint -f compact
 	$(MAKE) lint-modules
 	$(MAKE) lint-examples
@@ -154,9 +154,9 @@ lint-examples:
 		echo "--> Linting $$dir"; \
 		tflint --chdir=$$dir --init; \
 		tflint --chdir=$$dir -f compact; \
-	done; 
+	done;
 
-format: 
+format:
 	@echo "--> Running terraform fmt"
 	@terraform fmt -recursive -write=true
 

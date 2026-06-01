@@ -44,7 +44,7 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
 
   try:
     token = TokenManager().azure_token
-    
+
     # Prepare the API request
     headers = {
       "Authorization": f"Bearer {token}",
@@ -54,12 +54,12 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
         headers=headers,
         timeout=timeout
     )
-    
+
     ### NOT FOUND
     if response.status_code == 404:
       return False
 
-    # FOUND    
+    # FOUND
     elif response.status_code == 200:
       return True
 
@@ -67,7 +67,7 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
       error_msg = f"cost_mgmt_export_exists (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
       logger.error(error_msg)
       return False
-            
+
   except requests.exceptions.Timeout:
     logger.error(f"cost_mgmt_export_exists timeout: {str(e)}")
     return False
@@ -190,7 +190,7 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
 
   try:
     token = TokenManager().azure_token
-  
+
     # Prepare the API request
     headers = {
       "Authorization": f"Bearer {token}",
@@ -211,7 +211,7 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
       error_msg = f"cost_mgmt_export_create (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
       logger.error(error_msg)
       return False
-            
+
   except requests.exceptions.Timeout:
     logger.error(f"cost_mgmt_export_create timeout: {str(e)}")
     return False
@@ -237,7 +237,7 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
 
   try:
     token = TokenManager().azure_token
-    
+
     # Prepare the API request
     headers = {
       "Authorization": f"Bearer {token}",
@@ -248,12 +248,12 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
         headers=headers,
         timeout=timeout
     )
-    
+
     ### NOT FOUND
     if response.status_code == 404:
       return False
 
-    # FOUND    
+    # FOUND
     elif response.status_code == 200:
       return True
 
@@ -261,7 +261,7 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
       error_msg = f"cost_mgmt_export_run (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
       logger.error(error_msg)
       return False
-            
+
   except requests.exceptions.Timeout:
     logger.error(f"cost_mgmt_export_run timeout: {str(e)}")
     return False
