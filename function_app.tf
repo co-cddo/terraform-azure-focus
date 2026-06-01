@@ -1,4 +1,6 @@
 resource "azurerm_service_plan" "cost_export" {
+  # checkov:skip=CKV_AZURE_225:Zone redundancy not required at present
+  # checkov:skip=CKV_AZURE_212:Failover not required at present
   name                = "asp-cost-export"
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
@@ -62,7 +64,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 
   app_settings = {
-    "STORAGE_CONNECTION_STRING"                 = azurerm_storage_account.cost_export.primary_connection_string
+    "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export.primary_blob_endpoint
     "CONTAINER_NAME"                            = azapi_resource.cost_export.name
     "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"

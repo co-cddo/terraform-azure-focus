@@ -29,13 +29,13 @@ def is_uuid(value):
     except ValueError:
         return False
 
-class Config:    
+class Config:
     client_id = _get_required_env("ENTRA_APP_CLIENT_ID")  # Example: "00000000-0000-0000-0000-000000000000"
     urn = _get_required_env("ENTRA_APP_URN")  # Example: "api://AWS-Federation-App"
     arn = _get_required_env("AWS_ROLE_ARN")  # Example: "arn:aws:iam::000000000000:role/aad_s3"
     s3_focus_path = _get_required_env("S3_FOCUS_PATH")  # Example: "s3://s3bucketname/test/"
     aws_region = _get_required_env("AWS_REGION")  # Example: "eu-west-2"
-    storage_connection_string = _get_required_env("STORAGE_CONNECTION_STRING")
+    storage_account_blob_endpoint = _get_required_env("STORAGE_ACCOUNT_BLOB_ENDPOINT")
     container_name = _get_required_env("CONTAINER_NAME")
     s3_cost_directory_name = _get_required_env("ROOT_FOLDER_PATH")
     s3_utilization_path = _get_required_env("S3_UTILIZATION_PATH")
@@ -53,7 +53,7 @@ class Config:
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
     billing_scope = os.environ.get("BILLING_SCOPE")
     billing_azure_location = os.environ.get("BILLING_AZURE_LOCATION")
-    
+
     # Billing account mapping for S3 path organization
     _billing_account_mapping_json = os.environ.get("BILLING_ACCOUNT_MAPPING", "{}")
     try:
@@ -61,6 +61,6 @@ class Config:
     except:
         logger.warning(f"Failed to parse BILLING_ACCOUNT_MAPPING: {_billing_account_mapping_json}")
         billing_account_mapping = {}
-    
+
     azure_token_timeout_in_seconds = 1800   # 30 minutes
     aws_token_timeout_in_seconds = 900   # 15 minutes

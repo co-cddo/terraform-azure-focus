@@ -1,0 +1,46 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: terraform fmt
+        entry: terraform fmt -check -recursive
+        language: system
+        files: \.tf(vars)?$
+        pass_filenames: false
+
+      - id: tflint
+        name: tflint
+        entry: tflint --recursive
+        language: system
+        files: \.tf$
+        pass_filenames: false
+
+      - id: checkov
+        name: checkov
+        entry: checkov -d . --quiet
+        language: system
+        files: \.tf(vars)?$
+        pass_filenames: false
+
+      - id: trivy
+        name: trivy
+        entry: trivy config --exit-code 1 --severity MEDIUM,HIGH,CRITICAL --quiet .
+        language: system
+        files: \.tf(vars)?$
+        pass_filenames: false
+
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck
+        language: system
+        types: [shell]

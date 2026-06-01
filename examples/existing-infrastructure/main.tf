@@ -110,6 +110,31 @@ resource "azurerm_subnet" "functionapp" {
   }
 }
 
+# Network security groups for the subnets. They have no custom rules here (the default
+# rules deny inbound internet traffic), but associating an NSG with every subnet is best
+# practice and lets you add rules later without re-architecting.
+resource "azurerm_network_security_group" "default" {
+  name                = "nsg-${var.default_subnet_name}"
+  location            = azurerm_resource_group.existing.location
+  resource_group_name = azurerm_resource_group.existing.name
+}
+
+resource "azurerm_network_security_group" "functionapp" {
+  name                = "nsg-${var.functionapp_subnet_name}"
+  location            = azurerm_resource_group.existing.location
+  resource_group_name = azurerm_resource_group.existing.name
+}
+
+resource "azurerm_subnet_network_security_group_association" "default" {
+  subnet_id                 = azurerm_subnet.default.id
+  network_security_group_id = azurerm_network_security_group.default.id
+}
+
+resource "azurerm_subnet_network_security_group_association" "functionapp" {
+  subnet_id                 = azurerm_subnet.functionapp.id
+  network_security_group_id = azurerm_network_security_group.functionapp.id
+}
+
 module "cost_forwarding" {
   source = "../../"
 

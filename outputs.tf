@@ -127,3 +127,8 @@ output "function_app_private_endpoint_ip" {
   description = "The private IP address of the function app private endpoint"
   value       = azurerm_private_endpoint.function_app.private_service_connection[0].private_ip_address
 }
+
+output "log_analytics_workspace_id" {
+  description = "The resource ID of the Log Analytics workspace used for diagnostic settings"
+  value       = local.effective_log_analytics_workspace_id
+}

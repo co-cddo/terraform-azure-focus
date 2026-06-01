@@ -116,3 +116,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "log_analytics_workspace_id" {
+  description = "ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
+  type        = string
+  default     = null
+}

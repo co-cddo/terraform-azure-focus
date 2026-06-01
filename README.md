@@ -18,7 +18,7 @@ This Terraform module exports Azure cost-related data and forwards to AWS S3. Th
 - **Azure Advisor Recommendations**: Daily JSON files containing cost optimization recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint metrics across Scope 1 and Scope 3 emissions
 
-> [!NOTE]  
+> [!NOTE]
 > There is currently an [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------) with publishing Function App code on the Flex Consumption Plan using a managed identity. We have had to revert to using the storage account connection string for now. More details can be found [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f) (behind a paywall, sadly).
 
 ## Architecture
@@ -32,42 +32,42 @@ graph TD
         AAA[Azure Advisor API<br/>Daily Timer]
         COA[Carbon Optimization API<br/>Monthly Timer]
     end
-    
+
     subgraph "Azure Storage"
         SA[Storage Account]
     end
-    
+
     subgraph "Processing"
         QF[Queue: FOCUS]
-        
+
         FAF[CostExportProcessor<br/>Function App]
         FAR[AdvisorRecommendationsExporter<br/>Function App]
         FAC[CarbonExporter<br/>Function App]
     end
-    
+
     subgraph "AWS"
         S3[S3 Bucket]
         APP[Entra ID App<br/>Registration<br/>for Upload Auth]
     end
-    
+
     %% Data Flow
     CMF -->|Daily Parquet| SA
     AAA -->|Daily Timer| FAR
     COA -->|Monthly Timer| FAC
-    
+
     SA -->|Blob Event| QF
-    
+
     QF -->|Trigger| FAF
-    
+
     %% Upload Flow with App Registration Authentication
     FAF -->|Upload via<br/>App Registration| S3
     FAR -->|Upload via<br/>App Registration| S3
     FAC -->|Upload via<br/>App Registration| S3
-    
+
     FAF -.->|Uses for Auth| APP
     FAR -.->|Uses for Auth| APP
     FAC -.->|Uses for Auth| APP
-    
+
     %% Styling
     classDef datasource fill:#4285f4,color:#fff
     classDef storage fill:#4285f4,color:#fff
@@ -75,7 +75,7 @@ graph TD
     classDef function fill:#4285f4,color:#fff
     classDef aws fill:#ff9900,color:#fff
     classDef auth fill:#28a745,color:#fff
-    
+
     class CMF,AAA,COA datasource
     class SA storage
     class QF queue
@@ -94,7 +94,7 @@ The module creates three distinct export pipelines for each of the data sets:
 3. **Processing**: Function processes and transforms the data (removes sensitive columns, restructures paths)
 4. **Upload**: Processed data uploaded to S3 in partitioned structure: `billing_period=YYYYMMDD/`; all billing account cost data written to the same folder each parquet object prefixed with the billing account name
 
-#### Azure Advisor Recommendations Pipeline  
+#### Azure Advisor Recommendations Pipeline
 1. **Daily Trigger**: `AdvisorRecommendationsExporter` function runs daily at 2 AM (timer trigger)
 2. **API Call**: Function calls Azure Advisor Recommendations API for all subscriptions in scope, filtering for cost category recommendations
 3. **Processing**: Response data formatted as JSON with subscription tracking and date metadata
@@ -135,7 +135,7 @@ The Carbon Optimization API has a maximum limit of 100 subscriptions per request
 4. Provides complete data as if from a single request
 
 #### Common Authentication Flow
-- Function Apps use Managed Identity to authenticate with Entra ID Application  
+- Function Apps use Managed Identity to authenticate with Entra ID Application
 - Entra ID Application uses OIDC federation to assume AWS IAM Role
 - All data transfers secured with cross-cloud federation (no long-lived AWS credentials)
 - Application Insights provides telemetry and monitoring for all pipelines
@@ -249,7 +249,7 @@ module "example" {
   resource_group_name                 = "rg-cost-export"
   # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network        = false
-  
+
   # Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
   # current_principal_type = "ServicePrincipal"
 }
@@ -258,6 +258,29 @@ module "example" {
 > [!TIP]
 > If you don't have a suitable existing Virtual Network with two subnets (one of which has a delegation to Microsoft.App.environments),
 > please refer to the example configuration [here](examples/existing-infrastructure), which provisions the prerequisite baseline infrastructure before consuming the module.
+
+## Dev Container
+
+This repo includes a dev container with all required tooling pre-installed at pinned versions. No local tool installation is required beyond Docker.
+
+### Getting started
+
+Open the repo in VS Code and select **Reopen in Container**.
+
+### Prerequisites
+
+- Docker Desktop
+
+## Terraform Example
+
+See [examples/existing-infrastructure](examples/existing-infrastructure) for a working example.
+
+```sh
+cd examples/existing-infrastructure
+az login
+terraform init
+terraform plan
+```
 
 ## Testing
 This module includes comprehensive tests for the carbon export functionality, including dynamic date range calculations, idempotency features, and subscription batching logic.
@@ -276,7 +299,7 @@ make python-test-quick
 # Run individual test suites
 cd src/cost_export
 python3 test_carbon_date_range.py      # Date range calculation tests
-python3 test_carbon_idempotency.py     # Idempotency behavior tests  
+python3 test_carbon_idempotency.py     # Idempotency behavior tests
 python3 test_carbon_batching.py        # Subscription batching integration tests
 python3 test_carbon_batching_unit.py   # Subscription batching unit tests
 ```
@@ -302,11 +325,7 @@ Tests include both functional validation and code quality checks (linting, forma
 
 ## Update Documentation
 
-The `terraform-docs` utility is used to generate this README. Follow the below steps to update:
-
-1. Make changes to the `.terraform-docs.yml` file
-2. Fetch the `terraform-docs` binary (https://terraform-docs.io/user-guide/installation/)
-3. Run `terraform-docs markdown table --output-file ${PWD}/README.md --output-mode inject .`
+Terraform module documentation is maintained by a `terraform-docs` pre-commit hook.
 
 <!-- BEGIN_TF_DOCS -->
 ## Providers
