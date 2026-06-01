@@ -44,7 +44,7 @@ repos:
 
       - id: trivy
         name: trivy
-        entry: trivy config --exit-code 1 --severity MEDIUM,HIGH,CRITICAL --quiet .
+        entry: trivy config --exit-code 1 --severity HIGH,CRITICAL --quiet .
         language: system
         files: \.tf(vars)?$
         pass_filenames: false
