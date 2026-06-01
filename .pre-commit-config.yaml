@@ -9,6 +9,16 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
 
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: d0e12caebb2ab0ee8bf98181c8bfe9702bca103d # v1.105.0
+    hooks:
+      - id: terraform_docs
+        files: \.tf$
+        exclude: ^(\..*/|assets/)
+        args:
+          - --hook-config=--create-file-if-not-exist=true
+          - --args=--config=.terraform-docs.yml
+
   - repo: local
     hooks:
       - id: terraform-fmt
