@@ -57,20 +57,20 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
     try:
         # Parse the EventGrid message to get the specific blob
         message_body = json.loads(msg.get_body().decode("utf-8"))
-        blob_url = message_body.get("subject")
-        if not blob_url:
-           # log an error
-           return
+        message_subject = message_body.get("subject")
+        if not message_subject:
+            logger.error(f"cost_export_processor: Event Grid message missing 'subject' field (id={msg.id}): {message_body}")
+            return
 
         # Extract blob name from the subject (format: /blobServices/default/containers/{container}/blobs/{blobname})
         blob_name = None
-        if blob_url.startswith("/blobServices/default/containers/"):
-            parts = blob_url.split("/blobs/", 1)
+        if message_subject.startswith("/blobServices/default/containers/"):
+            parts = message_subject.split("/blobs/", 1)
             if len(parts) == 2:
                 blob_name = parts[1]
 
         if not blob_name:
-            logger.error(f"Could not extract blob name from message subject: {blob_url}")
+            logger.error(f"Could not extract blob name from message subject: {message_subject}")
             return
 
         if not blob_name.endswith('.parquet'):
