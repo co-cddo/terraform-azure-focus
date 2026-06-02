@@ -10,6 +10,8 @@ resource "azapi_resource" "daily_cost_export" {
     type = "SystemAssigned"
   }
 
+  response_export_values = ["identity.principalId"]
+
   body = {
     properties = {
       exportDescription = "Focus Daily Cost Export for ${each.value.scope}"
