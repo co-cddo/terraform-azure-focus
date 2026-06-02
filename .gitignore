@@ -176,3 +176,5 @@ plan.ps1
 *.DS_Store
 
 .vscode/
+.devcontainer/.git-env
+.github/**/*.md

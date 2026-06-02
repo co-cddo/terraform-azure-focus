@@ -217,15 +217,38 @@ The backfill start date ()`backfill_start_date`) module terraform variable must 
 
 ### Updating Python Dependencies
 
-Python dependencies in `src/cost_export/requirements.txt` and `src/cost_export/requirements-test.txt` are pinned with `--hash=sha256:` digests. When pip's hash-checking mode is active, **all** installed packages (including transitive dependencies) must also have hashes specified. If you encounter hash-related install failures:
+Python dependencies are managed using a two-file approach:
 
-1. Use `pip-compile --generate-hashes` from [pip-tools](https://pip-tools.readthedocs.io/) to resolve the full dependency tree with hashes:
+| File | Purpose | Edit manually? |
+|---|---|---|
+| `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** — this is the source of truth |
+| `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** — always machine-generated |
+
+`requirements.txt` is committed to the repository and is what Azure's Oryx build system installs using `--require-hashes`. It must contain every package in the dependency tree (direct and transitive) pinned with `==` and hashed. Do not edit it by hand.
+
+#### To add, remove, or update a dependency
+
+1. **Edit `src/cost_export/requirements.in`** — add, remove, or change the version of the direct dependency. Versions are pinned with `==`.
+
+   > **Note on boto3/s3fs compatibility:** `boto3` is capped at `<1.43` because `s3fs` pulls in `aiobotocore`, which requires `botocore<1.43.1`. `boto3>=1.43` requires `botocore>=1.43.15`, making the two incompatible. If you bump either package, re-check this constraint.
+
+2. **Install `uv`** if you don't have it (one-time):
    ```bash
-   pip install pip-tools
-   pip-compile --generate-hashes --output-file=src/cost_export/requirements.txt src/cost_export/requirements.in
+   brew install uv
+   # or: curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
-2. Ensure `pip-compile` runs under **Python 3.12** (matching the Function App runtime in `function_app.tf`) so that platform-specific wheels resolve correctly.
-3. Alternatively, install with `pip install --require-hashes -r requirements.txt` to enforce hash verification only at the CI/deploy stage while allowing local development without full transitive hashes.
+
+3. **Regenerate the lockfile:**
+   ```bash
+   make python-lock
+   ```
+   This resolves the full dependency tree for **Linux / Python 3.13** (matching the Function App runtime) and overwrites `requirements.txt` with all packages pinned and hashed. `uv` fetches a Python 3.13 interpreter automatically — no local Python 3.13 or Docker required.
+
+4. **Commit both files:**
+   ```bash
+   git add src/cost_export/requirements.in src/cost_export/requirements.txt
+   git commit -m "chore: update python dependencies"
+   ```
 
 ## Prerequisites
 

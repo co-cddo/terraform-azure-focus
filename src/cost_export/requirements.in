@@ -1,0 +1,18 @@
+# Direct dependencies for the cost_export Azure Function.
+# This is the human-maintained source of truth. After editing, regenerate the
+# fully pinned + hashed lockfile (requirements.txt) with:
+#
+#     make python-lock
+#
+# Do not edit requirements.txt by hand.
+azure-functions==1.24.0
+pyarrow==24.0.0
+pandas==3.0.3
+azure-identity==1.25.3
+# boto3 is capped below 1.43 so botocore stays compatible with the aiobotocore
+# version that s3fs==2026.4.0 requires (aiobotocore needs botocore<1.43.1, while
+# boto3>=1.43 requires botocore>=1.43.15). boto3 is only used for an STS
+# assume-role-with-web-identity call, so the exact patch version is not critical.
+boto3<1.43
+s3fs==2026.4.0
+azure-storage-blob==12.29.0
