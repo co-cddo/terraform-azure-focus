@@ -327,6 +327,10 @@ be explicitly set.
 provider "azurerm" {
   # These need to be explicitly registered
   resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  # Required: the cost_export storage account disables shared access keys, so the provider
+  # must use Entra ID for storage data-plane operations. Without this, apply fails with
+  # KeyBasedAuthenticationNotPermitted (403).
+  storage_use_azuread = true
   features {}
 }
 

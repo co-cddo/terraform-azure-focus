@@ -28,6 +28,11 @@ resource "azurerm_storage_account" "cost_export" {
     default_action = "Deny"
     bypass         = ["AzureServices"]
   }
+
+  # Key auth is disabled above, so the provider's create-time data-plane poll uses Entra ID
+  # (storage_use_azuread). Wait for the deployer's data-plane RBAC to propagate before creating
+  # the account, otherwise the poll fails with AuthorizationPermissionMismatch (403). See rbac.tf.
+  depends_on = [time_sleep.wait_for_deployer_rbac]
 }
 
 resource "azapi_resource" "cost_export" {

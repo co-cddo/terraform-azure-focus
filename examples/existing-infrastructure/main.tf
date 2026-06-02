@@ -1,6 +1,10 @@
 provider "azurerm" {
   resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
   subscription_id                = var.subscription_id
+  # The cost_export storage account disables shared access keys, so the provider must
+  # authenticate to the storage data plane with Entra ID instead of account keys.
+  # Without this, post-create data-plane polls fail with KeyBasedAuthenticationNotPermitted (403).
+  storage_use_azuread = true
   features {}
 }
 
