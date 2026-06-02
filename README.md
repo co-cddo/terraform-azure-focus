@@ -154,7 +154,7 @@ data availability policy:
 
 **Example**: On October 30, 2024 (day ≥19), the API would provide data for
 September 2024. The same function running on January 15, 2025 would provide
-data for November 2025.
+data for November 2024.
 
 A test endpoint is available at `/api/carbon-date-range` to view the current
 calculated date range.
