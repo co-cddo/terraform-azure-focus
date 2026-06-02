@@ -1,3 +1,4 @@
+# trivy:ignore:DS-0026 HEALTHCHECK not necessary for a dev container
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04@sha256:d94c97dd9cacf183d0a6fd12a8e87b526e9e928307674ae9c94139139c0c6eae
 
 ARG AZURE_CLI_VERSION="2.73.0"
@@ -13,6 +14,9 @@ ARG TERRAFORM_DOCS_VERSION="0.20.0"
 ARG TERRAFORM_VERSION="1.15.5"
 ARG TFLINT_VERSION="0.61.0"
 ARG TRIVY_VERSION="0.69.3"
+
+HEALTHCHECK --interval=5m --timeout=3s \
+  CMD terraform --version || exit 1
 
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

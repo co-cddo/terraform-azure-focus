@@ -1,4 +1,5 @@
 # trivy:ignore:AVD-AZU-0057 Request logging is handled via azurerm_monitor_diagnostic_setting (Log Analytics) below, not the legacy Storage Analytics queue_properties block.
+# trivy:ignore:AZU-0058 LRS is sufficient for now
 resource "azurerm_storage_account" "cost_export" {
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now - this is a temporary storage location
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account
@@ -48,6 +49,7 @@ resource "azapi_resource" "cost_data_queue" {
 }
 
 # trivy:ignore:AVD-AZU-0057 Request logging is handled via azurerm_monitor_diagnostic_setting (Log Analytics) below, not the legacy Storage Analytics queue_properties block.
+# trivy:ignore:AZU-0058 LRS is sufficient for now
 resource "azurerm_storage_account" "deployment" {
   # checkov:skip=CKV2_AZURE_38:We don't need soft delete since this account is neither source nor destination for cost data
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account

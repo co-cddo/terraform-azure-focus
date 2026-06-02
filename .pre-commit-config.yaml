@@ -44,6 +44,9 @@ repos:
     hooks:
       - id: pymarkdown
         exclude: ^(terraform|maester/scripts)/
+        args:
+          - --config=.pymarkdown.yaml
+          - scan
 
       - id: pymarkdown
         name: pymarkdown (terraform modules)

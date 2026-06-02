@@ -28,7 +28,7 @@ def get_mgmt_base_url(account_id: str) -> str:
 def get_mgmt_export_task_url(account_idx: int, account_id: str, month: int, year: int) -> str:
   return "%s/%s?api-version=2025-03-01" % (get_mgmt_base_url(account_id), get_export_task_name(account_idx, month, year))
 
-# slighly different URL to run a task (requires "/run" on the URL endpoint)
+# slightly different URL to run a task (requires "/run" on the URL endpoint)
 def get_mgmt_export_run_task_url(account_idx: int, account_id: str, month: int, year: int) -> str:
   return "%s/%s/run?api-version=2025-03-01" % (get_mgmt_base_url(account_id), get_export_task_name(account_idx, month, year))
 

@@ -78,7 +78,7 @@ variable "current_principal_type" {
 }
 
 variable "backfill_start_date" {
-  description = "The year and month to start backfill - nin the format 'YYYY-MM-01; defaults to 2022-01-01"
+  description = "The year and month to start backfill - in the format 'YYYY-MM-01; defaults to 2022-01-01"
   type        = string
   default     = "2022-01-01"
   validation {
