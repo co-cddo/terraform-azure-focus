@@ -9,7 +9,7 @@ variable "aws_s3_bucket_name" {
 }
 
 variable "aws_account_id" {
-  description = "AWS IAM role ARN for cross-account access"
+  description = "AWS account ID (12-digit) used to construct the cross-cloud federation role ARN"
   type        = string
 }
 
