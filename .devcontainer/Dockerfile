@@ -1,123 +1,107 @@
-# trivy:ignore:DS-0026 HEALTHCHECK not necessary for a dev container
-FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04@sha256:d94c97dd9cacf183d0a6fd12a8e87b526e9e928307674ae9c94139139c0c6eae
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
-ARG AZURE_CLI_VERSION="2.73.0"
-ARG CHECKOV_VERSION="3.2.529"
-ARG CHECKOV_SHA256="fb2d5418913343933e0b33442b7cb49b373af75f4f919c094d6c3b6fb3d03d36"
-ARG POWERSHELL_VERSION="7.4.6"
-ARG PRE_COMMIT_VERSION="3.7.1"
-ARG PRE_COMMIT_SHA256="fae36fd1d7ad7d6a5a1c0b0d5adb2ed1a3bda5a21bf6c3e5372073d7a11cd4c5"
-ARG SHELLCHECK_VERSION="0.10.0"
-ARG SHELLCHECK_SHA256_X86_64="6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87"
-ARG SHELLCHECK_SHA256_AARCH64="324a7e89de8fa2aed0d0c28f3dab59cf84c6d74264022c00c22af665ed1a09bb"
-ARG TERRAFORM_DOCS_VERSION="0.20.0"
-ARG TERRAFORM_VERSION="1.15.5"
-ARG TFLINT_VERSION="0.61.0"
-ARG TRIVY_VERSION="0.69.3"
-
-HEALTHCHECK --interval=5m --timeout=3s \
-  CMD terraform --version || exit 1
+ARG AZURE_CLI_URL="https://packages.microsoft.com/repos/azure-cli/pool/main/a/azure-cli/azure-cli_2.73.0-1~noble_arm64.deb@sha256:6af9009a39895ba396e92d5138824091e95f9bd797422db2fe9564a0cf4a35f4"
+ARG CHECKOV_URL="https://github.com/bridgecrewio/checkov/releases/download/3.2.529/checkov_linux_arm64.zip@sha256:fff55b064eadfc14ce35da9b9744dedf82fb50c25447076149480ad92c06a6a9"
+ARG PRE_COMMIT_URL="https://github.com/pre-commit/pre-commit/releases/download/v3.7.1/pre-commit-3.7.1.pyz@sha256:a0349324f0f53b08d00eb473b5f6646c8a07f3253703c09b977b0b9b9476d486"
+ARG POWERSHELL_URL="https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/powershell-7.4.6-linux-arm64.tar.gz@sha256:c0159b03e85f44ae1e7697818a011558da6c813d0aae848bf5ac13bf435d8624"
+ARG SHELLCHECK_URL="https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.aarch64.tar.xz@sha256:324a7e89de8fa2aed0d0c28f3dab59cf84c6d74264022c00c22af665ed1a09bb"
+ARG TERRAFORM_URL="https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_arm64.zip@sha256:06e7b48de826146c6d9331ba35b13da12332d8392be30d1dd6b789ba4713fff0"
+ARG TERRAFORM_DOCS_URL="https://github.com/terraform-docs/terraform-docs/releases/download/v0.20.0/terraform-docs-v0.20.0-linux-arm64.tar.gz@sha256:371b4ed983781d1efdd8f7de06264baac41b1d80927f7fd718c405a303d863a0"
+ARG TFLINT_URL="https://github.com/terraform-linters/tflint/releases/download/v0.61.0/tflint_linux_arm64.zip@sha256:999c25cfdb5208fe1133dec6b219e666a39fc2a7a0786a781dc9924ea5945ebf"
+ARG TRIVY_URL="https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz@sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
 
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl unzip xz-utils python3 python3-venv gnupg \
+        curl unzip xz-utils python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# azure-cli via Microsoft apt repo (GPG-verified, pinned version)
-RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-        | gpg --dearmor -o /usr/share/keyrings/microsoft.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft.gpg] \
-        https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" \
-        > /etc/apt/sources.list.d/azure-cli.list \
-    && apt-get update && apt-get install -y --no-install-recommends azure-cli=${AZURE_CLI_VERSION}-1~$(lsb_release -cs) \
-    && rm -rf /var/lib/apt/lists/*
+# azure-cli with pinned SHA256 digest
+RUN URL="${AZURE_CLI_URL%@sha256:*}" \
+    && SHA="${AZURE_CLI_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/azure-cli.deb \
+    && (cd /tmp && echo "${SHA}  azure-cli.deb" | sha256sum -c) \
+    && apt-get update && apt-get install -y --no-install-recommends /tmp/azure-cli.deb \
+    && rm /tmp/azure-cli.deb \
+    && rm -rf /var/lib/apt/lists/* \
+    && az --version
 
-# powershell with SHA256 verification (deb for amd64, tar.gz for arm64)
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/hashes.sha256" \
-        -o /tmp/powershell_hashes.sha256 \
-    && if [ "${ARCH}" = "amd64" ]; then \
-        curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell_${POWERSHELL_VERSION}-1.deb_amd64.deb" \
-            -o "/tmp/powershell_${POWERSHELL_VERSION}-1.deb_amd64.deb" \
-        && (cd /tmp && grep "powershell_${POWERSHELL_VERSION}-1.deb_amd64.deb" powershell_hashes.sha256 | sha256sum -c) \
-        && apt-get update && apt-get install -y --no-install-recommends "/tmp/powershell_${POWERSHELL_VERSION}-1.deb_amd64.deb" \
-        && rm "/tmp/powershell_${POWERSHELL_VERSION}-1.deb_amd64.deb" \
-        && rm -rf /var/lib/apt/lists/*; \
-    else \
-        curl -fsSL "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION}-linux-arm64.tar.gz" \
-            -o "/tmp/powershell-${POWERSHELL_VERSION}-linux-arm64.tar.gz" \
-        && (cd /tmp && grep "powershell-${POWERSHELL_VERSION}-linux-arm64.tar.gz" powershell_hashes.sha256 | sha256sum -c) \
-        && mkdir -p /opt/microsoft/powershell/7 \
-        && tar -xzf "/tmp/powershell-${POWERSHELL_VERSION}-linux-arm64.tar.gz" -C /opt/microsoft/powershell/7/ \
-        && chmod +x /opt/microsoft/powershell/7/pwsh \
-        && ln -sf /opt/microsoft/powershell/7/pwsh /usr/bin/pwsh \
-        && rm "/tmp/powershell-${POWERSHELL_VERSION}-linux-arm64.tar.gz"; \
-    fi \
-    && rm /tmp/powershell_hashes.sha256
+# powershell with pinned SHA256 digest (arm64 ships as tar.gz, not .deb)
+RUN URL="${POWERSHELL_URL%@sha256:*}" \
+    && SHA="${POWERSHELL_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/powershell.tar.gz \
+    && (cd /tmp && echo "${SHA}  powershell.tar.gz" | sha256sum -c) \
+    && mkdir -p /opt/microsoft/powershell/7 \
+    && tar -xz -C /opt/microsoft/powershell/7 -f /tmp/powershell.tar.gz \
+    && chmod +x /opt/microsoft/powershell/7/pwsh \
+    && ln -s /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
+    && rm /tmp/powershell.tar.gz \
+    && pwsh --version
 
-# terraform with SHA256 verification
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" \
-        -o "/tmp/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" \
-    && curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" \
-        -o /tmp/terraform_SHA256SUMS \
-    && (cd /tmp && grep "terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" terraform_SHA256SUMS | sha256sum -c) \
-    && unzip "/tmp/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" terraform -d /usr/local/bin \
-    && rm "/tmp/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" /tmp/terraform_SHA256SUMS
+# terraform with pinned SHA256 digest
+RUN URL="${TERRAFORM_URL%@sha256:*}" \
+    && SHA="${TERRAFORM_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/terraform.zip \
+    && (cd /tmp && echo "${SHA}  terraform.zip" | sha256sum -c) \
+    && unzip /tmp/terraform.zip terraform -d /usr/local/bin \
+    && rm /tmp/terraform.zip \
+    && terraform version
 
-# checkov + pre-commit in isolated Python venv (top-level wheels SHA256-verified before install)
-RUN python3 -m venv /opt/checkov \
-    && /opt/checkov/bin/pip download --no-deps --no-cache-dir --dest /tmp/pip-pkgs \
-        "checkov==${CHECKOV_VERSION}" "pre-commit==${PRE_COMMIT_VERSION}" \
-    && echo "${CHECKOV_SHA256}  /tmp/pip-pkgs/checkov-${CHECKOV_VERSION}-py3-none-any.whl" | sha256sum -c \
-    && echo "${PRE_COMMIT_SHA256}  /tmp/pip-pkgs/pre_commit-${PRE_COMMIT_VERSION}-py2.py3-none-any.whl" | sha256sum -c \
-    && /opt/checkov/bin/pip install --no-cache-dir \
-        "/tmp/pip-pkgs/checkov-${CHECKOV_VERSION}-py3-none-any.whl" \
-        "/tmp/pip-pkgs/pre_commit-${PRE_COMMIT_VERSION}-py2.py3-none-any.whl" \
-    && rm -rf /tmp/pip-pkgs
+# checkov binary with pinned SHA256 digest
+RUN URL="${CHECKOV_URL%@sha256:*}" \
+    && SHA="${CHECKOV_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/checkov.zip \
+    && (cd /tmp && echo "${SHA}  checkov.zip" | sha256sum -c) \
+    && unzip /tmp/checkov.zip -d /usr/local/bin \
+    && mv /usr/local/bin/dist/checkov /usr/local/bin/checkov \
+    && rm -rf /usr/local/bin/dist \
+    && chmod +x /usr/local/bin/checkov \
+    && rm /tmp/checkov.zip \
+    && checkov --version
 
-ENV PATH="/opt/checkov/bin:${PATH}"
+# pre-commit with pinned SHA256 digest
+RUN URL="${PRE_COMMIT_URL%@sha256:*}" \
+    && SHA="${PRE_COMMIT_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /usr/local/bin/pre-commit \
+    && (cd /usr/local/bin && echo "${SHA}  pre-commit" | sha256sum -c) \
+    && chmod +x /usr/local/bin/pre-commit \
+    && pre-commit --version
 
-# shellcheck with hardcoded SHA256 (upstream publishes no checksum file)
-RUN ARCH=$(uname -m) \
-    && if [ "${ARCH}" = "x86_64" ]; then SC_SHA256="${SHELLCHECK_SHA256_X86_64}"; else SC_SHA256="${SHELLCHECK_SHA256_AARCH64}"; fi \
-    && curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.${ARCH}.tar.xz" \
-        -o /tmp/shellcheck.tar.xz \
-    && echo "${SC_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c \
+# shellcheck with pinned SHA256 digest
+RUN URL="${SHELLCHECK_URL%@sha256:*}" \
+    && SHA="${SHELLCHECK_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/shellcheck.tar.xz \
+    && (cd /tmp && echo "${SHA}  shellcheck.tar.xz" | sha256sum -c) \
     && tar -xJ -C /tmp -f /tmp/shellcheck.tar.xz \
-    && mv "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/ \
-    && rm -rf "/tmp/shellcheck-v${SHELLCHECK_VERSION}" /tmp/shellcheck.tar.xz
+    && mv /tmp/shellcheck-v*/shellcheck /usr/local/bin/ \
+    && rm -rf /tmp/shellcheck-v* /tmp/shellcheck.tar.xz \
+    && shellcheck --version
 
-# tflint with SHA256 verification
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_${ARCH}.zip" \
-        -o "/tmp/tflint_linux_${ARCH}.zip" \
-    && curl -fsSL "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/checksums.txt" \
-        -o /tmp/tflint_checksums.txt \
-    && (cd /tmp && grep "tflint_linux_${ARCH}.zip" tflint_checksums.txt | sha256sum -c) \
-    && unzip "/tmp/tflint_linux_${ARCH}.zip" tflint -d /usr/local/bin \
-    && rm "/tmp/tflint_linux_${ARCH}.zip" /tmp/tflint_checksums.txt
+# tflint with pinned SHA256 digest
+RUN URL="${TFLINT_URL%@sha256:*}" \
+    && SHA="${TFLINT_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/tflint.zip \
+    && (cd /tmp && echo "${SHA}  tflint.zip" | sha256sum -c) \
+    && unzip /tmp/tflint.zip tflint -d /usr/local/bin \
+    && rm /tmp/tflint.zip \
+    && tflint --version
 
-# trivy with SHA256 verification
-RUN ARCH=$(uname -m) \
-    && TRIVY_ARCH=$([ "${ARCH}" = "x86_64" ] && echo "64bit" || echo "ARM64") \
-    && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
-        -o "/tmp/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" \
-    && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt" \
-        -o /tmp/trivy_checksums.txt \
-    && (cd /tmp && grep "trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" trivy_checksums.txt | sha256sum -c) \
-    && tar -xz -C /usr/local/bin -f "/tmp/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" trivy \
-    && rm "/tmp/trivy_${TRIVY_VERSION}_Linux-${TRIVY_ARCH}.tar.gz" /tmp/trivy_checksums.txt
+# trivy with pinned SHA256 digest
+RUN URL="${TRIVY_URL%@sha256:*}" \
+    && SHA="${TRIVY_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/trivy.tar.gz \
+    && (cd /tmp && echo "${SHA}  trivy.tar.gz" | sha256sum -c) \
+    && tar -xz -C /usr/local/bin -f /tmp/trivy.tar.gz trivy \
+    && rm /tmp/trivy.tar.gz \
+    && trivy --version
 
-# terraform-docs with SHA256 verification
-RUN ARCH=$(dpkg --print-architecture) \
-    && curl -fsSL "https://github.com/terraform-docs/terraform-docs/releases/download/v${TERRAFORM_DOCS_VERSION}/terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-${ARCH}.tar.gz" \
-        -o "/tmp/terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-${ARCH}.tar.gz" \
-    && curl -fsSL "https://github.com/terraform-docs/terraform-docs/releases/download/v${TERRAFORM_DOCS_VERSION}/terraform-docs-v${TERRAFORM_DOCS_VERSION}.sha256sum" \
-        -o /tmp/terraform-docs_sha256sum \
-    && (cd /tmp && grep "terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-${ARCH}.tar.gz" terraform-docs_sha256sum | sha256sum -c) \
-    && tar -xz -C /usr/local/bin -f "/tmp/terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-${ARCH}.tar.gz" terraform-docs \
+# terraform-docs with pinned SHA256 digest
+RUN URL="${TERRAFORM_DOCS_URL%@sha256:*}" \
+    && SHA="${TERRAFORM_DOCS_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/terraform-docs.tar.gz \
+    && (cd /tmp && echo "${SHA}  terraform-docs.tar.gz" | sha256sum -c) \
+    && tar -xz -C /usr/local/bin -f /tmp/terraform-docs.tar.gz terraform-docs \
     && chmod +x /usr/local/bin/terraform-docs \
-    && rm "/tmp/terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-${ARCH}.tar.gz" /tmp/terraform-docs_sha256sum
+    && rm /tmp/terraform-docs.tar.gz \
+    && terraform-docs --version
 
 USER vscode

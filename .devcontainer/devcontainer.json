@@ -4,7 +4,12 @@
     "dockerfile": "Dockerfile"
   },
   "remoteUser": "vscode",
-  "runArgs": ["--security-opt=no-new-privileges:true"],
+  "runArgs": [
+    "--security-opt=no-new-privileges:true"
+  ],
+  "mounts": [
+    "source=${localEnv:HOME},target=/host-home,type=bind,consistency=cached"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
