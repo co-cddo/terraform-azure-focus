@@ -236,7 +236,7 @@ To remove the lock object, contact appvia support.
 
 **Endpoint**: `POST /api/carbon-backfill`
 
-Can be called on-demand with a mandatory parameter `start-date` in the
+Can be called on-demand with a mandatory query parameter `start_date` in the
 format YYYY-MM-DD, called the same API as the monthly trigger but for each
 month from the given start date.
 
