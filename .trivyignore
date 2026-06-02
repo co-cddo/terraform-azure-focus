@@ -1,5 +1,1 @@
-misconfigurations:
-  - id: AVD-DS-0026
-    paths:
-      - "Dockerfile"
-    statement: HEALTHCHECK not required
+AVD-DS-0026

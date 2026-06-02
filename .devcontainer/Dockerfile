@@ -10,6 +10,9 @@ ARG TERRAFORM_DOCS_URL="https://github.com/terraform-docs/terraform-docs/release
 ARG TFLINT_URL="https://github.com/terraform-linters/tflint/releases/download/v0.61.0/tflint_linux_arm64.zip@sha256:999c25cfdb5208fe1133dec6b219e666a39fc2a7a0786a781dc9924ea5945ebf"
 ARG TRIVY_URL="https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz@sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
 
+HEALTHCHECK --interval=5m --timeout=3s \
+  CMD terraform --version || exit 1
+
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl unzip xz-utils python3 \

@@ -72,7 +72,7 @@ resource "azurerm_storage_account" "deployment" {
   public_network_access_enabled     = false
   shared_access_key_enabled         = true
   local_user_enabled                = false
-  min_tls_version                   = "TLS1_3"
+  min_tls_version                   = "TLS1_2"
   infrastructure_encryption_enabled = true
 
   sas_policy {
