@@ -68,7 +68,7 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
       logger.error(error_msg)
       return False
 
-  except requests.exceptions.Timeout:
+  except requests.exceptions.Timeout as e:
     logger.error(f"cost_mgmt_export_exists timeout: {str(e)}")
     return False
   except requests.exceptions.RequestException as e:
@@ -212,7 +212,7 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
       logger.error(error_msg)
       return False
 
-  except requests.exceptions.Timeout:
+  except requests.exceptions.Timeout as e:
     logger.error(f"cost_mgmt_export_create timeout: {str(e)}")
     return False
   except requests.exceptions.RequestException as e:
@@ -262,7 +262,7 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
       logger.error(error_msg)
       return False
 
-  except requests.exceptions.Timeout:
+  except requests.exceptions.Timeout as e:
     logger.error(f"cost_mgmt_export_run timeout: {str(e)}")
     return False
   except requests.exceptions.RequestException as e:
