@@ -10,3 +10,9 @@ plugins:
     code_block_line_length: 500
   MD033:
     enabled: false
+  # The generated TF_DOCS block is injected without blank-line padding so it
+  # matches the CI terraform-docs gh-action output exactly. That places the
+  # first heading directly under the <!-- BEGIN_TF_DOCS --> marker, which MD022
+  # (blanks-around-headings) would otherwise flag.
+  MD022:
+    enabled: false

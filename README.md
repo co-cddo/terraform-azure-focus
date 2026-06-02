@@ -438,7 +438,6 @@ Terraform module documentation is maintained by a `terraform-docs`
 pre-commit hook.
 
 <!-- BEGIN_TF_DOCS -->
-
 ## Providers
 
 | Name | Version |
@@ -507,5 +506,4 @@ pre-commit hook.
 | <a name="output_storage_private_endpoint_ip"></a> [storage\_private\_endpoint\_ip](#output\_storage\_private\_endpoint\_ip) | The private IP address of the cost export storage blob private endpoint |
 | <a name="output_storage_queue_private_endpoint_ip"></a> [storage\_queue\_private\_endpoint\_ip](#output\_storage\_queue\_private\_endpoint\_ip) | The private IP address of the cost export storage queue private endpoint |
 | <a name="output_tenant_id"></a> [tenant\_id](#output\_tenant\_id) | The tenant id - use this to assign the Enrollment Reader role |
-
 <!-- END_TF_DOCS -->

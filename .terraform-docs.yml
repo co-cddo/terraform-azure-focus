@@ -16,13 +16,13 @@ formatter: "markdown table"
 output:
   file: README.md
   mode: inject
-  # Surround the generated block with blank lines so the first/last headings
-  # satisfy pymarkdown MD022 (blanks-around-headings).
+  # No blank-line padding inside the markers: the appvia CI workflow runs the
+  # terraform-docs gh-action with its own unpadded --output-template, so padding
+  # here produces a diff CI flags as uncommitted changes. MD022 is disabled in
+  # .pymarkdown.yaml to allow the unpadded heading.
   template: |-
     <!-- BEGIN_TF_DOCS -->
-
     {{ .Content }}
-
     <!-- END_TF_DOCS -->
 
 sections:
