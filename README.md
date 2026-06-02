@@ -195,7 +195,7 @@ intelligent batching:
 
 **Endpoint**: `POST /api/cost-export-backfill`
 
-Can be called on-demand with a mandatory parameter `start-date` in the
+Can be called on-demand with a mandatory query parameter `start_date` in the
 format YYYY-MM-DD.
 
 The cost export has two separate lock files; one for the schedule (which
