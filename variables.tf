@@ -118,7 +118,12 @@ variable "tags" {
 }
 
 variable "log_analytics_workspace_id" {
-  description = "ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
+  description = "Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
   type        = string
   default     = null
+
+  validation {
+    condition = var.log_analytics_workspace_id == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$", var.log_analytics_workspace_id))
+    error_message = "log_analytics_workspace_id must be null or a valid Log Analytics workspace resource ID."
+  }
 }
