@@ -123,7 +123,7 @@ variable "log_analytics_workspace_id" {
   default     = null
 
   validation {
-    condition = var.log_analytics_workspace_id == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$", var.log_analytics_workspace_id))
+    condition     = var.log_analytics_workspace_id == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$", var.log_analytics_workspace_id))
     error_message = "log_analytics_workspace_id must be null or a valid Log Analytics workspace resource ID."
   }
 }
