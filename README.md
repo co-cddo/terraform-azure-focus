@@ -8,7 +8,7 @@
 -->
 
 ![Github Actions](../../actions/workflows/terraform.yml/badge.svg)
-![Python Tests](../../actions/workflows/python-tests.yml/badge.svg)
+<!-- ![Python Tests](../../actions/workflows/python-tests.yml/badge.svg) -->
 
 ## Description
 
