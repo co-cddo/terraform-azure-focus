@@ -42,12 +42,14 @@ resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
 }
 
 # The cost_export storage account disables shared access keys (storage.tf), so the azurerm
-# provider authenticates to its data plane with Entra ID (storage_use_azuread = true). During
-# storage account creation the provider polls the blob/queue data plane to confirm it is
-# available, which requires the deploying principal to already hold data-plane roles. These are
-# scoped to the resource group (created before the storage account) so the grant exists ahead of
-# that create-time poll; the storage account then depends on time_sleep.wait_for_deployer_rbac
-# to allow RBAC propagation before it is created.
+# provider authenticates to its data plane with Entra ID (storage_use_azuread = true). The
+# azurerm_storage_account resource reads BOTH blob and queue service properties on the data
+# plane during create and refresh, so the deploying principal needs both data roles - without
+# the queue role the queue-properties read fails and the provider's fallback surfaces a
+# misleading "KeyBasedAuthenticationNotPermitted" 403 (see hashicorp/terraform-provider-azurerm
+# issue #29984). The grants are scoped to the resource group (created before the storage account)
+# so they exist ahead of the create-time poll; the storage account depends on
+# time_sleep.wait_for_deployer_rbac to allow RBAC propagation before it is created.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
   scope                = azurerm_resource_group.cost_export.id
   role_definition_name = "Storage Blob Data Contributor"
@@ -55,19 +57,19 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
   principal_type       = var.current_principal_type
 }
 
-# resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
-#   scope                = azurerm_resource_group.cost_export.id
-#   role_definition_name = "Storage Queue Data Contributor"
-#   principal_id         = data.azurerm_client_config.current.object_id
-#   principal_type       = var.current_principal_type
-# }
+resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
+  scope                = azurerm_resource_group.cost_export.id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+  principal_type       = var.current_principal_type
+}
 
 resource "time_sleep" "wait_for_deployer_rbac" {
   create_duration = "60s"
 
   depends_on = [
-    azurerm_role_assignment.grant_deployer_cost_export_blob #,
-    # azurerm_role_assignment.grant_deployer_cost_export_queue,
+    azurerm_role_assignment.grant_deployer_cost_export_blob,
+    azurerm_role_assignment.grant_deployer_cost_export_queue,
   ]
 }
 
