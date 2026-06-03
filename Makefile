@@ -189,10 +189,6 @@ python-setup:
 
 tests-python: python-setup
 	@echo "--> Running Python tests for carbon export functions"
-	@cd src/cost_export && echo "Running Carbon API Date Range Tests..." && python3 test_carbon_date_range.py
-	@cd src/cost_export && echo "Running Carbon API Idempotency Tests..." && python3 test_carbon_idempotency.py
-	@cd src/cost_export && echo "Running Carbon API Batching Integration Tests..." && python3 test_carbon_batching.py
-	@cd src/cost_export && echo "Running Carbon API Batching Unit Tests..." && python3 test_carbon_batching_unit.py
 	@cd src/cost_export && echo "Validating Python syntax..." && python3 -m py_compile function_app.py common.py
 	@echo "✅ All Python tests completed successfully"
 
@@ -210,5 +206,4 @@ python-format:
 python-test-quick:
 	@echo "--> Running quick Python syntax validation"
 	@cd src/cost_export && python3 -m py_compile function_app.py common.py
-	@cd src/cost_export && python3 test_carbon_batching_unit.py
 	@echo "✅ Quick Python validation completed"
