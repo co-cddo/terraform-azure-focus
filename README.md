@@ -7,7 +7,7 @@
   ***** CAUTION: DO NOT EDIT ABOVE THIS LINE ******
 -->
 
-![Github Actions](../../actions/workflows/terraform.yml/badge.svg)
+![GitHub Actions](../../actions/workflows/terraform.yml/badge.svg)
 <!-- ![Python Tests](../../actions/workflows/python-tests.yml/badge.svg) -->
 
 ## Description
