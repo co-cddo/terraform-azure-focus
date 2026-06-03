@@ -123,7 +123,7 @@ resource "null_resource" "publish_function_code" {
     publish_code_command = local.publish_code_command
   }
 
-  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_sp_deploy_sa_contributor, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
 }
 
 resource "null_resource" "set_function_app_public_network_access_disabled" {

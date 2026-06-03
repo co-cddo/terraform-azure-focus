@@ -34,13 +34,6 @@ resource "azuread_app_role_assignment" "aws_app" {
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
-resource "azurerm_role_assignment" "grant_sp_deploy_sa_contributor" {
-  scope                = azurerm_storage_account.deployment.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
-  principal_type       = var.current_principal_type
-}
-
 # The cost_export storage account disables shared access keys (storage.tf), so the azurerm
 # provider authenticates to its data plane with Entra ID (storage_use_azuread = true). The
 # azurerm_storage_account resource reads BOTH blob and queue service properties on the data
