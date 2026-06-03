@@ -172,7 +172,7 @@ clean:
 # requirements.in. Resolves for Linux / Python 3.13 so the tree and wheel hashes match
 # Azure's Oryx remote build (--platform-version 3.13), which installs with
 # --require-hashes. Requires uv (https://docs.astral.sh/uv/); it fetches a 3.12
-# interpreter automatically, so no local Python 3.12 or Docker is needed.
+# interpreter automatically, so no local Python 3.13 is needed.
 python-lock:
 	@echo "--> Locking Python requirements with full transitive hashes (linux/py3.13)"
 	@command -v uv >/dev/null 2>&1 || { echo "uv is not installed. Install it: https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
