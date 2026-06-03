@@ -477,18 +477,6 @@ The test suite covers:
 - **Error Handling**: Validates graceful handling of API limits and failures
 - **Syntax Validation**: Ensures all Python code compiles correctly
 
-### GitHub Actions
-
-The `.github/workflows/python-tests.yml` workflow automatically runs all
-tests on:
-
-- Pull requests modifying carbon export code
-- Pushes to the main branch
-- Multiple Python versions (3.9, 3.10, 3.11)
-
-Tests include both functional validation and code quality checks (linting,
-formatting, security).
-
 ## Terraform Documentation
 
 Terraform module documentation is maintained by a `terraform-docs`
