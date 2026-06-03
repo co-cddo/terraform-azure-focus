@@ -167,6 +167,19 @@ clean:
 		rm -rf $$dir; \
 	done
 
+# Python dependency locking for the cost_export function app.
+# Regenerates requirements.txt (fully pinned + hashed, incl. transitive deps) from
+# requirements.in. Resolves for Linux / Python 3.13 so the tree and wheel hashes match
+# Azure's Oryx remote build (--platform-version 3.13), which installs with
+# --require-hashes. Requires uv (https://docs.astral.sh/uv/); it fetches a 3.12
+# interpreter automatically, so no local Python 3.12 or Docker is needed.
+python-lock:
+	@echo "--> Locking Python requirements with full transitive hashes (linux/py3.13)"
+	@command -v uv >/dev/null 2>&1 || { echo "uv is not installed. Install it: https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
+	@cd src/cost_export && uv pip compile --generate-hashes \
+	  --python-version 3.13 --python-platform linux \
+	  --output-file requirements.txt requirements.in
+
 # Python testing targets for carbon export functions
 python-setup:
 	@echo "--> Setting up Python test environment"

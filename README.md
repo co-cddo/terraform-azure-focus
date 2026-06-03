@@ -298,6 +298,39 @@ be explicitly set.
   managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived
   AWS credentials
+- **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
+
+### Updating Python Dependencies
+
+Python dependencies are managed using a two-file approach:
+
+| File | Purpose | Edit manually? |
+|---|---|---|
+| `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** — this is the source of truth |
+| `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** — always machine-generated |
+
+`requirements.txt` is committed to the repository and is what Azure's Oryx build system installs using `--require-hashes`. It must contain every package in the dependency tree (direct and transitive) pinned with `==` and hashed. Do not edit it by hand.
+
+#### To add, remove, or update a dependency
+
+1. **Edit `src/cost_export/requirements.in`** — add, remove, or change the version of the direct dependency. Versions are pinned with `==`.
+
+   > **Note on boto3/s3fs compatibility:** `boto3` is capped at `<1.43` because `s3fs` pulls in `aiobotocore`, which requires `botocore<1.43.1`. `boto3>=1.43` requires `botocore>=1.43.15`, making the two incompatible. If you bump either package, re-check this constraint.
+
+2. **Regenerate the lockfile:**
+
+   ```bash
+   make python-lock
+   ```
+
+   This resolves the full dependency tree for **Linux / Python 3.13** (matching the Function App runtime) and overwrites `requirements.txt` with all packages pinned and hashed. `uv` is pre-installed in the dev container and fetches a Python 3.13 interpreter automatically — no local Python 3.13 required.
+
+3. **Commit both files:**
+
+   ```bash
+   git add src/cost_export/requirements.in src/cost_export/requirements.txt
+   git commit -m "chore: update python dependencies"
+   ```
 
 ## Prerequisites
 
@@ -364,14 +397,34 @@ module "example" {
 
 ## Dev Container
 
-This repo includes a dev container with all required tooling pre-installed at
-pinned versions. No local tool installation is required beyond Docker.
+> [!IMPORTANT]
+> **Use the dev container.** It is the recommended way to work on this
+> repository. All required tooling (Terraform, `uv`, `az`, `make`, pre-commit
+> hooks, etc.) is pre-installed at pinned versions. You do not need to install
+> anything locally beyond Docker.
 
 ### Getting Started
 
-Open the repo in VS Code and select **Reopen in Container**.
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+2. Open the repo in VS Code
+3. Install the
+   [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+   if you don't already have it
+4. Select **Reopen in Container** (VS Code will prompt you automatically, or
+   use the command palette: `Dev Containers: Reopen in Container`)
 
-### Dev Container Requirements
+The container will build on first use and subsequent opens will be fast.
+
+### What's included
+
+- Terraform & `terraform-docs`
+- Azure CLI (`az`)
+- `uv` (Python package manager)
+- `make`
+- Pre-commit hooks
+- All VS Code extensions needed for this repo
+
+### Requirements
 
 - Docker Desktop
 

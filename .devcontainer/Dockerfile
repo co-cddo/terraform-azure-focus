@@ -9,13 +9,11 @@ ARG TERRAFORM_URL="https://releases.hashicorp.com/terraform/1.15.5/terraform_1.1
 ARG TERRAFORM_DOCS_URL="https://github.com/terraform-docs/terraform-docs/releases/download/v0.20.0/terraform-docs-v0.20.0-linux-arm64.tar.gz@sha256:371b4ed983781d1efdd8f7de06264baac41b1d80927f7fd718c405a303d863a0"
 ARG TFLINT_URL="https://github.com/terraform-linters/tflint/releases/download/v0.61.0/tflint_linux_arm64.zip@sha256:999c25cfdb5208fe1133dec6b219e666a39fc2a7a0786a781dc9924ea5945ebf"
 ARG TRIVY_URL="https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz@sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
-
-HEALTHCHECK --interval=5m --timeout=3s \
-  CMD terraform --version || exit 1
+ARG UV_URL="https://github.com/astral-sh/uv/releases/download/0.11.18/uv-aarch64-unknown-linux-gnu.tar.gz@sha256:0f03c6648df1c159557f4222c0f37250f84733fb88d6fc3c16770e17c177a8c9"
 
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl unzip xz-utils python3 \
+    curl unzip xz-utils python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # azure-cli with pinned SHA256 digest
@@ -106,5 +104,14 @@ RUN URL="${TERRAFORM_DOCS_URL%@sha256:*}" \
     && chmod +x /usr/local/bin/terraform-docs \
     && rm /tmp/terraform-docs.tar.gz \
     && terraform-docs --version
+
+# uv with pinned SHA256 digest
+RUN URL="${UV_URL%@sha256:*}" \
+    && SHA="${UV_URL##*@sha256:}" \
+    && curl -fsSL "${URL}" -o /tmp/uv.tar.gz \
+    && (cd /tmp && echo "${SHA}  uv.tar.gz" | sha256sum -c) \
+    && tar -xz -C /usr/local/bin -f /tmp/uv.tar.gz --strip-components=1 uv-aarch64-unknown-linux-gnu/uv uv-aarch64-unknown-linux-gnu/uvx \
+    && rm /tmp/uv.tar.gz \
+    && uv --version
 
 USER vscode
