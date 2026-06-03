@@ -43,8 +43,6 @@ jobs:
             $(grep -v '^\s*#' src/cost_export/requirements.in | grep -v '^\s*$')
 
       - name: Run tests
-        run: |
-          pytest
-          exit_code=$?
-          # Exit code 5 means no tests were collected — treat as success
-          [ $exit_code -eq 5 ] && exit 0 || exit $exit_code
+        # pytest exits 5 when no tests are collected; treat that as success.
+        # The || construct keeps bash -e from treating the non-zero exit as fatal.
+        run: pytest || [ $? -eq 5 ]
