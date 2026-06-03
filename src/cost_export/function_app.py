@@ -52,11 +52,17 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
     utc_timestamp = datetime.now(timezone.utc).isoformat()
 
     logger.info(f'Cost export processor triggered at: {utc_timestamp}')
-    logger.info(f'Processing message: {msg.get_body().decode("utf-8")}')
+
+    raw_body = msg.get_body().decode("utf-8")
+    logger.info(f'Processing message: {raw_body}')
+
+    if not raw_body.strip():
+        logger.warning(f"Received empty message body (id={msg.id}), skipping")
+        return
 
     try:
         # Parse the EventGrid message to get the specific blob
-        message_body = json.loads(msg.get_body().decode("utf-8"))
+        message_body = json.loads(raw_body)
         message_subject = message_body.get("subject")
         if not message_subject:
             logger.error(f"cost_export_processor: Event Grid message missing 'subject' field (id={msg.id}): {message_body}")

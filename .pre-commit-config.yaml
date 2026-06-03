@@ -43,16 +43,8 @@ repos:
     rev: c5755e272a13da06be38d74052658af46c1ee447 # frozen: v0.9.35
     hooks:
       - id: pymarkdown
-        exclude: ^(terraform|maester/scripts)/
         args:
           - --config=.pymarkdown.yaml
-          - scan
-
-      - id: pymarkdown
-        name: pymarkdown (terraform modules)
-        files: ^terraform/
-        args:
-          - --config=terraform/.pymarkdown.yaml
           - scan
 
   - repo: https://github.com/gruntwork-io/pre-commit
@@ -108,3 +100,13 @@ repos:
       - id: terraform_trivy
         args:
           - --args=--skip-dirs="**/.terraform"
+
+  - repo: local
+    hooks:
+      - id: terraform_test
+        name: Terraform test
+        entry: bash -c 'terraform init -backend=false && terraform test'
+        language: system
+        files: ^tests/.*\.tftest\.hcl$
+        pass_filenames: false
+        verbose: true
