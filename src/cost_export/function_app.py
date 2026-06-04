@@ -53,7 +53,12 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
 
     logger.info(f'Cost export processor triggered at: {utc_timestamp}')
 
-    raw_body = msg.get_body().decode("utf-8")
+    try:
+        raw_body = msg.get_body().decode("utf-8")
+    except Exception as e:
+        logger.error(f"Failed to decode message body (id={msg.id}): {e}")
+        raise
+
     logger.info(f'Processing message: {raw_body}')
 
     if not raw_body.strip():
