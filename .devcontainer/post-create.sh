@@ -19,3 +19,11 @@ pre-commit install --install-hooks
 # Download tflint plugins declared in .tflint.hcl so the tflint hook works
 # without requiring a manual "tflint --init" after container creation.
 tflint --init
+
+# Install Python dependencies for cost export.
+# Remove any stale .venv that may reference a non-existent interpreter from a
+# previous container build (the workspace is bind-mounted so .venv can persist).
+cd "$(pwd)"
+rm -rf .venv
+uv sync
+uv pip install -r src/cost_export/requirements.txt

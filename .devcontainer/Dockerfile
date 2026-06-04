@@ -115,3 +115,7 @@ RUN URL="${UV_URL%@sha256:*}" \
     && uv --version
 
 USER vscode
+
+# Install Python 3.13 via uv so it is baked into the image and available
+# for venv creation without needing a runtime download.
+RUN uv python install 3.13

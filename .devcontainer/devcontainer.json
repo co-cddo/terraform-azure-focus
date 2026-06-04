@@ -10,6 +10,10 @@
   "mounts": [
     "source=${localEnv:HOME},target=/host-home,type=bind,consistency=cached"
   ],
+  "remoteEnv": {
+    "UV_LINK_MODE": "copy",
+    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
