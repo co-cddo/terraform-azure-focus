@@ -1,0 +1,117 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: 'Version bump type'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+  workflow_call:
+    inputs:
+      increment:
+        description: 'Version bump type'
+        required: true
+        default: 'minor'
+        type: string
+    outputs:
+      tag:
+        description: 'The new release tag'
+        value: ${{ jobs.release.outputs.new_tag }}
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.set_output.outputs.new_tag }}
+
+    steps:
+      - name: Validate increment input
+        run: |
+          if [[ "${{ inputs.increment }}" != "major" && "${{ inputs.increment }}" != "minor" && "${{ inputs.increment }}" != "patch" ]]; then
+            echo "Error: 'increment' must be 'major', 'minor', or 'patch', got '${{ inputs.increment }}'."
+            exit 1
+          fi
+
+      # Checkout with fetch-depth: 0 so we get all Git tags
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0 
+
+      # Calculate the next version tag using bash
+      - name: Calculate Next Version
+        id: version
+        run: |
+          # Get the latest tag. If no tags exist, default to v0.0.1
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.1")
+          echo "Latest tag: $LATEST_TAG"
+          
+          # Remove the 'v' prefix if it exists
+          VERSION=${LATEST_TAG#v}
+          
+          # Split the version into Major, Minor, and Patch components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          
+          # Default to 0 if variables are empty
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          
+          # Increment based on the user input
+          INCREMENT="${{ inputs.increment }}"
+          
+          if [ "$INCREMENT" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$INCREMENT" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [ "$INCREMENT" = "patch" ]; then
+            PATCH=$((PATCH + 1))
+          fi
+          
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Next tag calculated: $NEW_TAG"
+          
+          # Pass the new tag to the next step using GITHUB_ENV
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+
+      # Create the release using the generated tag
+      - name: Create Release with GitHub CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            RANGE="${PREVIOUS_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          GENERATED_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name=${{ env.NEW_TAG }} \
+            ${PREVIOUS_TAG:+-f previous_tag_name=$PREVIOUS_TAG} \
+            --jq .body)
+
+          cat <<EOF > release_notes.md
+          Released by @${{ github.actor }}
+
+          ${GENERATED_NOTES}
+          EOF
+
+          gh release create ${{ env.NEW_TAG }} \
+            --title "Release ${{ env.NEW_TAG }}" \
+            --notes-file release_notes.md \
+            --latest
