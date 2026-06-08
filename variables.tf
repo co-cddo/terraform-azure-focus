@@ -78,7 +78,7 @@ variable "current_principal_type" {
 }
 
 variable "backfill_start_date" {
-  description = "The year and month to start backfill - nin the format 'YYYY-MM-01; defaults to 2022-01-01"
+  description = "The year and month to start backfill - in the format 'YYYY-MM-01'; defaults to 2022-01-01"
   type        = string
   default     = "2022-01-01"
   validation {
@@ -115,4 +115,15 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "log_analytics_workspace_id" {
+  description = "Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.log_analytics_workspace_id == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$", var.log_analytics_workspace_id))
+    error_message = "log_analytics_workspace_id must be null or a valid Log Analytics workspace resource ID."
+  }
 }

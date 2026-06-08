@@ -1,0 +1,39 @@
+{
+  "name": "Terraform",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  "runArgs": [
+    "--security-opt=no-new-privileges:true"
+  ],
+  "mounts": [
+    "source=${localEnv:HOME},target=/host-home,type=bind,consistency=cached"
+  ],
+  "remoteEnv": {
+    "UV_LINK_MODE": "copy",
+    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "ms-azuretools.vscode-azureterraform",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azure-devops.azure-pipelines",
+        "timonwong.shellcheck",
+        "redhat.vscode-yaml",
+        "eamodio.gitlens",
+        "ms-vscode.powershell"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "[terraform]": {
+          "editor.defaultFormatter": "hashicorp.terraform"
+        }
+      }
+    }
+  },
+  "initializeCommand": "sh .devcontainer/init-git-config.sh",
+  "postCreateCommand": "sh .devcontainer/post-create.sh"
+}

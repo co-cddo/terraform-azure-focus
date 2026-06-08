@@ -41,4 +41,3 @@ resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
     azapi_resource.cost_data_queue
   ]
 }
-

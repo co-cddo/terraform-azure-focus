@@ -1,3 +1,4 @@
+resource "time_static" "recurrence" {}
 resource "azapi_resource" "daily_cost_export" {
   for_each = local.billing_accounts_map
 
@@ -8,6 +9,8 @@ resource "azapi_resource" "daily_cost_export" {
   identity {
     type = "SystemAssigned"
   }
+
+  response_export_values = ["identity.principalId"]
 
   body = {
     properties = {
