@@ -39,64 +39,7 @@ This module creates a fully integrated solution for exporting multiple Azure
 datasets and forwarding them to AWS S3. The following diagram illustrates the
 data flow and component architecture for all three export types:
 
-```mermaid
-graph TD
-    subgraph "Data Sources"
-        CMF[Cost Management<br/>FOCUS Export]
-        AAA[Azure Advisor API<br/>Daily Timer]
-        COA[Carbon Optimization API<br/>Monthly Timer]
-    end
-
-    subgraph "Azure Storage"
-        SA[Storage Account]
-    end
-
-    subgraph "Processing"
-        QF[Queue: FOCUS]
-
-        FAF[CostExportProcessor<br/>Function App]
-        FAR[AdvisorRecommendationsExporter<br/>Function App]
-        FAC[CarbonExporter<br/>Function App]
-    end
-
-    subgraph "AWS"
-        S3[S3 Bucket]
-        APP[Entra ID App<br/>Registration<br/>for Upload Auth]
-    end
-
-    %% Data Flow
-    CMF -->|Daily Parquet| SA
-    AAA -->|Daily Timer| FAR
-    COA -->|Monthly Timer| FAC
-
-    SA -->|Blob Event| QF
-
-    QF -->|Trigger| FAF
-
-    %% Upload Flow with App Registration Authentication
-    FAF -->|Upload via<br/>App Registration| S3
-    FAR -->|Upload via<br/>App Registration| S3
-    FAC -->|Upload via<br/>App Registration| S3
-
-    FAF -.->|Uses for Auth| APP
-    FAR -.->|Uses for Auth| APP
-    FAC -.->|Uses for Auth| APP
-
-    %% Styling
-    classDef datasource fill:#4285f4,color:#fff
-    classDef storage fill:#4285f4,color:#fff
-    classDef queue fill:#00d4aa,color:#fff
-    classDef function fill:#4285f4,color:#fff
-    classDef aws fill:#ff9900,color:#fff
-    classDef auth fill:#28a745,color:#fff
-
-    class CMF,AAA,COA datasource
-    class SA storage
-    class QF queue
-    class FAF,FAR,FAC function
-    class S3 aws
-    class APP auth
-```
+![Azure FOCUS Cost Export Architecture](images/infra.png)
 
 ## Data Flow
 
