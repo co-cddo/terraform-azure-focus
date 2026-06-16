@@ -1,5 +1,12 @@
 data "azurerm_client_config" "current" {}
 
+# Built-in role whose GUID is referenced in the ABAC condition that constrains the function
+# identity's Owner grant on the cost export storage account (see rbac.tf). role_definition_id
+# returns the bare GUID required by the condition's GuidEquals operator.
+data "azurerm_role_definition" "storage_blob_data_contributor" {
+  name = "Storage Blob Data Contributor"
+}
+
 data "azurerm_virtual_network" "existing" {
   name                = var.virtual_network_name
   resource_group_name = var.virtual_network_resource_group_name

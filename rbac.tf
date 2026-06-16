@@ -115,39 +115,50 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
 }
 
 # https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
-# Custom role granting only the permissions needed for Cost Management to configure managed identity
-# role assignments on the firewall-protected export storage account.
-resource "azurerm_role_definition" "cost_export_rbac" {
-  name        = "Cost Export RBAC Manager (${random_string.unique.result})"
-  scope       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
-  description = "Allows Cost Management to access the export storage account and write role assignments / read permissions on it when configuring exports to firewall-protected storage."
+# When creating an export to a firewall-protected storage account, Cost Management performs a
+# control-plane validation that the caller can access the destination storage account, and then
+# assigns "Storage Blob Data Contributor" to the export's own managed identity on that account.
+# Narrower grants (a custom "Authorization actions only" role, Storage Account Contributor, or the
+# data-plane blob roles) are NOT sufficient and fail at create time with 401 "User is not
+# authorized to access the specified storage account". Owner is what Cost Management actually
+# requires here - see the Microsoft Q&A confirming Contributor/Owner is needed and narrower roles
+# do not work:
+# https://learn.microsoft.com/en-us/answers/questions/5830148/cross-subscription-export-fails-due-to-storage-acc
+#
+# Owner is broad, so the grant is constrained with an ABAC condition: on this storage account the
+# function identity may only assign or remove the "Storage Blob Data Contributor" role - exactly
+# the assignment Cost Management makes for the export identity. Every other Owner action is
+# allowed, but the function identity cannot use Owner's roleAssignments/write to grant arbitrary
+# roles (privilege escalation). The previous condition here was a no-op: "(NOT write) OR (NOT read)"
+# is always true for any single action.
+resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained" {
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Owner"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
 
-  permissions {
-    actions = [
-      # Configure the storage account as an export destination. Cost Management requires the
-      # caller to have management-plane access to the destination storage account ("Write
-      # permissions are required to change the configured storage account, independent of
-      # permissions on the export"); without these the create call fails with 401
-      # "User is not authorized to access the specified storage account".
-      "Microsoft.Storage/storageAccounts/read",
-      "Microsoft.Storage/storageAccounts/write",
-      # Let Cost Management assign Storage Blob Data Contributor to the export's managed identity
-      # on the storage account (the firewall-export prerequisite).
-      "Microsoft.Authorization/roleAssignments/write",
-      "Microsoft.Authorization/permissions/read",
-    ]
-  }
-
-  assignable_scopes = [
-    azurerm_storage_account.cost_export.id,
-  ]
-}
-
-resource "azurerm_role_assignment" "grant_func_cost_export_rbac_manager" {
-  scope              = azurerm_storage_account.cost_export.id
-  role_definition_id = azurerm_role_definition.cost_export_rbac.role_definition_resource_id
-  principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type     = "ServicePrincipal"
+  condition_version = "2.0"
+  condition         = <<-EOT
+  (
+    (
+      !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
+    )
+    OR
+    (
+      @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id}}
+    )
+  )
+  AND
+  (
+    (
+      !(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})
+    )
+    OR
+    (
+      @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id}}
+    )
+  )
+  EOT
 }
 
 # for Enterprise Agreement customers - assign the "Enrollment Reader" role (24f8edb6-1668-4659-b5e2-40bb5f3a7d7e)
