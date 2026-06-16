@@ -1,6 +1,11 @@
 locals {
   cost_mgmt_suffix = length(var.cost_mgmt_suffix) > 0 ? "-${var.cost_mgmt_suffix}" : ""
 
+  # The data source's id is the full role definition resource path
+  # (/providers/Microsoft.Authorization/roleDefinitions/<guid>); the ABAC GuidEquals operator in
+  # rbac.tf needs the bare GUID, so take the last path segment.
+  storage_blob_data_contributor_role_id = reverse(split("/", data.azurerm_role_definition.storage_blob_data_contributor.id))[0]
+
   effective_log_analytics_workspace_id = var.log_analytics_workspace_id != null ? var.log_analytics_workspace_id : azurerm_log_analytics_workspace.this[0].id
 
   publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"

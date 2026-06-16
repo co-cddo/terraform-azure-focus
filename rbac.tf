@@ -145,7 +145,7 @@ resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained
     )
     OR
     (
-      @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${data.azurerm_role_definition.storage_blob_data_contributor.id}}
+      @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.storage_blob_data_contributor_role_id}}
     )
   )
   AND
@@ -155,7 +155,7 @@ resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained
     )
     OR
     (
-      @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${data.azurerm_role_definition.storage_blob_data_contributor.id}}
+      @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.storage_blob_data_contributor_role_id}}
     )
   )
   EOT
