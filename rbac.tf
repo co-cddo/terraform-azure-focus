@@ -120,10 +120,19 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
 resource "azurerm_role_definition" "cost_export_rbac" {
   name        = "Cost Export RBAC Manager (${random_string.unique.result})"
   scope       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
-  description = "Allows Cost Management to write role assignments and read permissions on the export storage account when configuring exports to firewall-protected storage."
+  description = "Allows Cost Management to access the export storage account and write role assignments / read permissions on it when configuring exports to firewall-protected storage."
 
   permissions {
     actions = [
+      # Configure the storage account as an export destination. Cost Management requires the
+      # caller to have management-plane access to the destination storage account ("Write
+      # permissions are required to change the configured storage account, independent of
+      # permissions on the export"); without these the create call fails with 401
+      # "User is not authorized to access the specified storage account".
+      "Microsoft.Storage/storageAccounts/read",
+      "Microsoft.Storage/storageAccounts/write",
+      # Let Cost Management assign Storage Blob Data Contributor to the export's managed identity
+      # on the storage account (the firewall-export prerequisite).
       "Microsoft.Authorization/roleAssignments/write",
       "Microsoft.Authorization/permissions/read",
     ]
@@ -134,7 +143,7 @@ resource "azurerm_role_definition" "cost_export_rbac" {
   ]
 }
 
-resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
+resource "azurerm_role_assignment" "grant_func_cost_export_rbac_manager" {
   scope              = azurerm_storage_account.cost_export.id
   role_definition_id = azurerm_role_definition.cost_export_rbac.role_definition_resource_id
   principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
@@ -186,33 +195,4 @@ resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
 #   resource_id = json_decode(azapi_resource_action.add_role_assignment[each.key].output).id
 #   method      = "DELETE"
 #   when        = "destroy"
-# }
-
-
-# TODO: Figure out whether this is needed
-# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
-# resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
-#   scope                = azurerm_storage_account.cost_export.id
-#   role_definition_name = "Storage Blob Data Contributor"
-#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-#   principal_type       = "ServicePrincipal"
-# }
-
-# TODO: Figure out whether this is needed
-# # https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
-# resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
-#   scope                = azurerm_storage_account.cost_export.id
-#   role_definition_name = "Owner"
-#   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-#   principal_type       = "ServicePrincipal"
-#   condition_version    = "2.0"
-#   condition            = <<-EOT
-#   (
-#     !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
-#   )
-#   OR
-#   (
-#     !(ActionMatches{'Microsoft.Authorization/permissions/read'})
-#   )
-#   EOT
 # }
