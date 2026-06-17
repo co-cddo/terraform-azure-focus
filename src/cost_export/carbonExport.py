@@ -362,7 +362,7 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
         return True
 
     except Exception as e:
-        logger.error(f"Error saving carbon data to S3: {str(e)}")
+        logger.error(f"Error saving carbon data to S3: {str(e)}", exc_info=True)
         raise
 
 def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = True, force_overwrite: bool = False, write_empty_object: bool = True) -> Dict[int, int]:

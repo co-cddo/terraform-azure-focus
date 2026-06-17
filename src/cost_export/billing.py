@@ -47,7 +47,7 @@ def extract_subscription_ids_from_billing_scope(scope):
         return subscription_ids
 
     except Exception as e:
-        logger.error(f"Error extracting subscription IDs: {str(e)}")
+        logger.error(f"Error extracting subscription IDs: {str(e)}", exc_info=True)
         return []
 
 def get_subscriptions_from_billing_account(scope, headers):
@@ -85,7 +85,7 @@ def get_subscriptions_from_billing_account(scope, headers):
             return []
 
     except Exception as e:
-        logger.error(f"Error getting subscriptions from billing account: {str(e)}")
+        logger.error(f"Error getting subscriptions from billing account: {str(e)}", exc_info=True)
         return []
 
 def get_subscriptions_from_management_group(scope, headers):
@@ -102,7 +102,7 @@ def get_subscriptions_from_management_group(scope, headers):
         return subscription_ids
 
     except Exception as e:
-        logger.error(f"Error getting subscriptions from management group: {str(e)}")
+        logger.error(f"Error getting subscriptions from management group: {str(e)}", exc_info=True)
         return []
 
 def get_subscriptions_via_resource_graph(mg_id, headers):
@@ -141,7 +141,7 @@ def get_subscriptions_via_resource_graph(mg_id, headers):
             return []
 
     except Exception as e:
-        logger.error(f"Error using Resource Graph API: {str(e)}")
+        logger.error(f"Error using Resource Graph API: {str(e)}", exc_info=True)
         return []
 
 def extract_billing_account_from_blob_path(blob_name):

@@ -83,7 +83,7 @@ def cost_export_backfill_schedule_lock_create() -> None:
     logger.info("cost export backfill schedule lock created")
 
   except Exception as e:
-    logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    logger.error(f"Failed to create cost export backfill run lock: {str(e)}", exc_info=True)
     raise e
 
 def cost_export_backfill_run_lock_create() -> None:
@@ -101,7 +101,7 @@ def cost_export_backfill_run_lock_create() -> None:
     logger.info("cost export backfill run lock created")
 
   except Exception as e:
-    logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    logger.error(f"Failed to create cost export backfill run lock: {str(e)}", exc_info=True)
     raise e
 
 def cost_export_exists(account_id:str, month: int, year:int) -> bool:
@@ -148,7 +148,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       return assume_exists
 
   except Exception as e:
-    logger.error(e)
+    logger.error(e, exc_info=True)
     # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
@@ -274,7 +274,7 @@ def cost_export_test_IAM_permissions() -> bool:
     return True
 
   except Exception as e:
-    logger.error(e)
+    logger.error(e, exc_info=True)
     # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
