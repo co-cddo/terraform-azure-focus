@@ -1,24 +1,8 @@
 data "azurerm_client_config" "current" {}
 
-# Built-in role whose GUID is referenced in the ABAC condition that constrains the function
-# identity's Owner grant on the cost export storage account (see rbac.tf). role_definition_id
-# returns the bare GUID required by the condition's GuidEquals operator.
-data "azurerm_role_definition" "storage_blob_data_contributor" {
-  name = "Storage Blob Data Contributor"
-}
-
 data "azurerm_virtual_network" "existing" {
   name                = var.virtual_network_name
   resource_group_name = var.virtual_network_resource_group_name
-}
-
-data "azapi_resource_list" "billing_role_definitions" {
-  for_each = var.is_enterprise_customer ? toset([]) : toset(var.billing_account_ids)
-
-  type      = "Microsoft.Billing/billingAccounts/billingRoleDefinitions@2024-04-01"
-  parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
-
-  response_export_values = ["value"]
 }
 
 data "archive_file" "function" {
@@ -34,4 +18,17 @@ data "archive_file" "function" {
     ".DS_Store",
     "*.log"
   ]
+}
+
+data "azurerm_role_definition" "storage_blob_data_contributor" {
+  name = "Storage Blob Data Contributor"
+}
+
+data "azapi_resource_list" "billing_role_definitions" {
+  for_each = var.is_enterprise_customer ? toset([]) : toset(var.billing_account_ids)
+
+  type      = "Microsoft.Billing/billingAccounts/billingRoleDefinitions@2024-04-01"
+  parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
+
+  response_export_values = ["value"]
 }
