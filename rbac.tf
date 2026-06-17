@@ -81,12 +81,13 @@ resource "azurerm_role_assignment" "event_grid_queue_sender" {
 }
 
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
-  # TODO: Verify this scope is ok
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Carbon Optimization Reader"
   principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
+
+resource "random_uuid" "advisor_recommendations_reader" {}
 
 # Azure Advisor RBAC-trims recommendations to scopes the caller can read: without a
 # read role the recommendations API returns 200 with an empty value array (never 403),
@@ -102,15 +103,15 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
 # built-in Reader role. See https://learn.microsoft.com/en-us/azure/advisor/permissions
 # (the "Available actions to build custom roles" section).
 resource "azurerm_role_definition" "advisor_recommendations_reader" {
-  name        = "Advisor Recommendations Reader (cost-export-${random_string.unique.result})"
+  name               = "Advisor Recommendations Reader"
+  role_definition_id = random_uuid.advisor_recommendations_reader.id
+
   scope       = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  description = "Read-only access to Azure Advisor recommendations for the cost-export function."
+  description = "Read-only access to Azure Advisor recommendations."
 
   permissions {
     actions = [
-      "Microsoft.Advisor/recommendations/read",
-      "Microsoft.Advisor/generateRecommendations/action",
-      "Microsoft.Advisor/generateRecommendations/read",
+      "Microsoft.Advisor/recommendations/read"
     ]
     not_actions = []
   }
@@ -120,7 +121,7 @@ resource "azurerm_role_definition" "advisor_recommendations_reader" {
   ]
 }
 
-resource "azurerm_role_assignment" "advisor_reader" {
+resource "azurerm_role_assignment" "advisor_recommendations_reader" {
   scope              = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_id = azurerm_role_definition.advisor_recommendations_reader.role_definition_resource_id
   principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
