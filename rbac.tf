@@ -88,6 +88,19 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
   principal_type       = "ServicePrincipal"
 }
 
+# Azure Advisor RBAC-trims recommendations to scopes the caller can read: without a
+# read role the recommendations API returns 200 with an empty value array (never 403),
+# so the AdvisorRecommendationsExporter silently finds nothing across every subscription.
+# Carbon Optimization Reader (above) only covers carbon emissions data, not Advisor, so a
+# general Reader is required. Scoped to the tenant root management group to cover all the
+# subscriptions the exporter iterates (derived from the billing scope).
+resource "azurerm_role_assignment" "advisor_reader" {
+  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+  role_definition_name = "Reader"
+  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
 # this only works for MCA customers
 resource "azapi_resource_action" "add_role_assignment" {
   for_each = var.is_enterprise_customer ? [] : toset(var.billing_account_ids)
