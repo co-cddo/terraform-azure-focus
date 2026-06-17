@@ -12,6 +12,22 @@ resource "azurerm_eventgrid_system_topic" "storage_events" {
   tags = var.tags
 }
 
+resource "azurerm_monitor_diagnostic_setting" "storage_events" {
+  name                       = "diag-eventgrid"
+  target_resource_id         = azurerm_eventgrid_system_topic.storage_events.id
+  log_analytics_workspace_id = local.effective_log_analytics_workspace_id
+
+  # Delivery/publish failures here mean a created cost-export blob never reached the queue and
+  # so was never processed - a likely culprit when expected cost data is missing downstream.
+  enabled_log {
+    category_group = "allLogs"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
 resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
   name                  = "evgs-blob-created-${random_string.unique.result}"
   scope                 = azurerm_storage_account.cost_export.id

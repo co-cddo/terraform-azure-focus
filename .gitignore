@@ -178,3 +178,4 @@ plan.ps1
 .vscode/
 .devcontainer/.git-env
 .github/**/*.md
+.claude/**/*.md

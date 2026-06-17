@@ -149,3 +149,23 @@ resource "azurerm_monitor_diagnostic_setting" "deployment_blob" {
     category = "StorageDelete"
   }
 }
+
+# The Functions host uses this account's queue service for AzureWebJobsStorage; surfacing its
+# operations helps troubleshoot host-level trigger issues (e.g. why a timer didn't fire).
+# Blob (host singleton leases/locks) is already covered by deployment_blob above; table and
+# file services are not in use on this account (see the storage account skip comments).
+resource "azurerm_monitor_diagnostic_setting" "deployment_queue" {
+  name                       = "diag-queue"
+  target_resource_id         = "${azurerm_storage_account.deployment.id}/queueServices/default"
+  log_analytics_workspace_id = local.effective_log_analytics_workspace_id
+
+  enabled_log {
+    category = "StorageRead"
+  }
+  enabled_log {
+    category = "StorageWrite"
+  }
+  enabled_log {
+    category = "StorageDelete"
+  }
+}

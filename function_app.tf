@@ -95,6 +95,23 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 }
 
+resource "azurerm_monitor_diagnostic_setting" "function_app" {
+  name                       = "diag-function-app"
+  target_resource_id         = azurerm_function_app_flex_consumption.cost_export.id
+  log_analytics_workspace_id = local.effective_log_analytics_workspace_id
+
+  # FunctionAppLogs are emitted by the Functions host (not the in-process worker), so they
+  # persist even when an invocation is hard-killed (timeout / OOM / instance recycle) before
+  # the worker can flush its Application Insights telemetry.
+  enabled_log {
+    category_group = "allLogs"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
 resource "azurerm_application_insights" "this" {
   name                                  = "ai-func-cost-export-${random_string.unique.result}"
   location                              = azurerm_resource_group.cost_export.location
