@@ -91,14 +91,40 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
 # Azure Advisor RBAC-trims recommendations to scopes the caller can read: without a
 # read role the recommendations API returns 200 with an empty value array (never 403),
 # so the AdvisorRecommendationsExporter silently finds nothing across every subscription.
-# Carbon Optimization Reader (above) only covers carbon emissions data, not Advisor, so a
-# general Reader is required. Scoped to the tenant root management group to cover all the
-# subscriptions the exporter iterates (derived from the billing scope).
+# Carbon Optimization Reader (above) only covers carbon emissions data, not Advisor.
+#
+# This custom role is the minimal-privilege attempt: it grants only the Advisor read
+# actions rather than full Reader (*/read). OPEN QUESTION being tested on this branch -
+# Advisor's docs say "you must have access to the resource associated with the
+# recommendation to view it", which may mean Advisor also requires */read on the
+# underlying resource (VM, disk, public IP, ...). If the exporter still returns empty
+# after applying this, that requirement is confirmed and we should fall back to the
+# built-in Reader role. See https://learn.microsoft.com/en-us/azure/advisor/permissions
+# (the "Available actions to build custom roles" section).
+resource "azurerm_role_definition" "advisor_recommendations_reader" {
+  name        = "Advisor Recommendations Reader (cost-export-${random_string.unique.result})"
+  scope       = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+  description = "Read-only access to Azure Advisor recommendations for the cost-export function."
+
+  permissions {
+    actions = [
+      "Microsoft.Advisor/recommendations/read",
+      "Microsoft.Advisor/generateRecommendations/action",
+      "Microsoft.Advisor/generateRecommendations/read",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = [
+    "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}",
+  ]
+}
+
 resource "azurerm_role_assignment" "advisor_reader" {
-  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  role_definition_name = "Reader"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
+  scope              = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+  role_definition_id = azurerm_role_definition.advisor_recommendations_reader.role_definition_resource_id
+  principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type     = "ServicePrincipal"
 }
 
 # this only works for MCA customers
