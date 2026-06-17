@@ -44,10 +44,10 @@ resource "azuread_app_role_assignment" "aws_app" {
 # so they exist ahead of the create-time poll; the storage account depends on
 # time_sleep.wait_for_deployer_rbac to allow RBAC propagation before it is created.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
-  scope                = azurerm_resource_group.cost_export.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
-  principal_type       = var.current_principal_type
+  scope              = azurerm_resource_group.cost_export.id
+  role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
+  principal_id       = data.azurerm_client_config.current.object_id
+  principal_type     = var.current_principal_type
 }
 
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
@@ -121,10 +121,10 @@ resource "azapi_resource_action" "add_role_assignment" {
 
 # required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
-  scope                = azurerm_storage_account.cost_export.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
+  scope              = azurerm_storage_account.cost_export.id
+  role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
+  principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_type     = "ServicePrincipal"
 }
 
 # https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
