@@ -67,5 +67,5 @@ try:
     # else:
     #     logger.warning("WA DEBUG - the cost export backfill schedule lock NOT exists")
 except Exception as e:
-    logger.error(f"Unexpected error: {str(e)}")
+    logger.error(f"Unexpected error: {str(e)}", exc_info=True)
     raise e

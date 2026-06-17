@@ -56,7 +56,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
     try:
         raw_body = msg.get_body().decode("utf-8")
     except Exception as e:
-        logger.error(f"Failed to decode message body (id={msg.id}): {e}")
+        logger.error(f"Failed to decode message body (id={msg.id}): {e}", exc_info=True)
         raise
 
     logger.info(f'Processing message: {raw_body}')
@@ -300,11 +300,11 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
             logger.info(f"Successfully deleted source file: {blob_name}")
 
         except Exception as e:
-            logger.error(f"Failed to process {blob_name}: {str(e)}")
+            logger.error(f"Failed to process {blob_name}: {str(e)}", exc_info=True)
             raise
 
     except Exception as e:
-        logger.error(f"Error in daily cost export processor: {str(e)}")
+        logger.error(f"Error in daily cost export processor: {str(e)}", exc_info=True)
         raise
 
 def sanitize_recommendations_data(data):
@@ -357,7 +357,7 @@ def save_recommendations_to_s3(data, file_name):
         logger.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
 
     except Exception as e:
-        logger.error(f"Error saving recommendations data to S3: {str(e)}")
+        logger.error(f"Error saving recommendations data to S3: {str(e)}", exc_info=True)
         raise
 
 @app.function_name(name="AdvisorRecommendationsExporter")
@@ -432,7 +432,7 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
                     logger.error(f"Response headers: {dict(response.headers)}")
 
             except Exception as e:
-                logger.error(f"Error fetching recommendations for subscription {subscription_id}: {str(e)}")
+                logger.error(f"Error fetching recommendations for subscription {subscription_id}: {str(e)}", exc_info=True)
                 continue
 
         if all_recommendations:
@@ -446,7 +446,7 @@ def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
             logger.warning("No cost recommendations found across all subscriptions")
 
     except Exception as e:
-        logger.error(f"Error in Azure Advisor recommendations exporter: {str(e)}")
+        logger.error(f"Error in Azure Advisor recommendations exporter: {str(e)}", exc_info=True)
         raise
 
 @app.function_name(name="CarbonApiDateRangeInfo")
@@ -542,7 +542,7 @@ def carbon_api_date_range_info(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         error_msg = f"Error getting Carbon API date range info: {str(e)}"
-        logger.error(error_msg)
+        logger.error(error_msg, exc_info=True)
         return func.HttpResponse(
             json.dumps({"error": error_msg}),
             status_code=500,
@@ -636,7 +636,7 @@ def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
             raise Exception(f"Carbon API request failed: {error_message}")
 
     except Exception as e:
-        logger.error(f"Error in carbon emissions exporter: {str(e)}")
+        logger.error(f"Error in carbon emissions exporter: {str(e)}", exc_info=True)
         raise
 
 @app.function_name(name="CarbonEmissionsBackfill")
@@ -682,7 +682,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         error_msg = f"Error in carbon emissions backfill: {str(e)}"
-        logger.error(error_msg)
+        logger.error(error_msg, exc_info=True)
         return func.HttpResponse(
             error_msg,
             status_code=500
@@ -721,7 +721,7 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
 
     except Exception as e:
         error_msg = f"Error in backfill_trigger: {str(e)}"
-        logger.error(error_msg)
+        logger.error(error_msg, exc_info=True)
 
 @app.function_name(name="CostExportBackfill")
 @app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)
@@ -756,7 +756,7 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         error_msg = f"Error in cost_export_backfill: {str(e)}"
-        logger.error(error_msg)
+        logger.error(error_msg, exc_info=True)
         return func.HttpResponse(
             error_msg,
             status_code=500

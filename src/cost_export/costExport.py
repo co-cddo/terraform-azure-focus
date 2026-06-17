@@ -33,7 +33,7 @@ def cost_export_backfill_lock_create() -> None:
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/cost_export.lock"
     s3.create_directory(s3_path)
   except Exception as e:
-    logger.error(f"Error creating cost export backfill lock: {str(e)}")
+    logger.error(f"Error creating cost export backfill lock: {str(e)}", exc_info=True)
 
 def get_backfill_until_month_year() -> Tuple[int, int]:
   today = datetime.today()

@@ -19,7 +19,7 @@ def get_export_task_name(account_idx: int, month: int, year: int) -> str:
     export_task_name = "%s%s-%d-%04d-%02d" % (COST_MGMT_EXPORT_BACKFILL_JOB_PREFIX, cost_mgmt_export_task_suffix, account_idx, year, month)
     return export_task_name
   except Exception as e:
-    logger.error(f"get_export_task_name: error: {e}")
+    logger.error(f"get_export_task_name: error: {e}", exc_info=True)
     return None
 
 def get_mgmt_base_url(account_id: str) -> str:
@@ -69,13 +69,13 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
       return False
 
   except requests.exceptions.Timeout as e:
-    logger.error(f"cost_mgmt_export_exists timeout: {str(e)}")
+    logger.error(f"cost_mgmt_export_exists timeout: {str(e)}", exc_info=True)
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_exists request: {str(e)}")
+    logger.error(f"cost_mgmt_export_exists request: {str(e)}", exc_info=True)
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}", exc_info=True)
     return False
 
 def get_last_day_month_date(month: int, year: int) -> int:
@@ -213,13 +213,13 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
       return False
 
   except requests.exceptions.Timeout as e:
-    logger.error(f"cost_mgmt_export_create timeout: {str(e)}")
+    logger.error(f"cost_mgmt_export_create timeout: {str(e)}", exc_info=True)
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_create request: {str(e)}")
+    logger.error(f"cost_mgmt_export_create request: {str(e)}", exc_info=True)
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_create unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_create unexpected: {str(e)}", exc_info=True)
     return False
 
 def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
@@ -263,11 +263,11 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
       return False
 
   except requests.exceptions.Timeout as e:
-    logger.error(f"cost_mgmt_export_run timeout: {str(e)}")
+    logger.error(f"cost_mgmt_export_run timeout: {str(e)}", exc_info=True)
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_run request: {str(e)}")
+    logger.error(f"cost_mgmt_export_run request: {str(e)}", exc_info=True)
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_run unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_run unexpected: {str(e)}", exc_info=True)
     return False
