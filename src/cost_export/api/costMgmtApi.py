@@ -249,8 +249,10 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
         timeout=timeout
     )
 
-    ### NOT FOUND
+    ### NOT FOUND - run is only called after the schedule created the export task, so a 404
+    # here is unexpected (missing/deleted task); log it rather than swallowing silently.
     if response.status_code == 404:
+      logger.warning(f"cost_mgmt_export_run: export task '{export_task_name}' not found (404) for account idx[{account_idx}], account[{account_id}], {month:02d}/{year:04d}")
       return False
 
     # FOUND

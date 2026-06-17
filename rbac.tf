@@ -103,7 +103,11 @@ resource "random_uuid" "advisor_recommendations_reader" {}
 # built-in Reader role. See https://learn.microsoft.com/en-us/azure/advisor/permissions
 # (the "Available actions to build custom roles" section).
 resource "azurerm_role_definition" "advisor_recommendations_reader" {
-  name               = "Advisor Recommendations Reader"
+  # Custom role names must be unique within a tenant. The default deployment
+  # keeps the bare name "Advisor Recommendations Reader"; additional deployments
+  # in the same tenant must set cost_mgmt_suffix (already required for unique
+  # cost-export task names), which is appended here to avoid a name collision.
+  name               = "Advisor Recommendations Reader${local.cost_mgmt_suffix}"
   role_definition_id = random_uuid.advisor_recommendations_reader.id
 
   scope       = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"

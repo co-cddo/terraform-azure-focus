@@ -285,7 +285,8 @@ Python dependencies are managed using a two-file approach:
       `Contributor` at the subscription scope (where you will be provisioning
       resources)
     - `User Access Administrator` at the Tenant Root Group management group
-      scope*
+      scope* — used to manage RBAC for the function app's managed identity
+      across the tenant
   - Billing:
     - Enterprise Agreement (EA): `EnrollmentReader` at the billing account
       scope (see
@@ -294,8 +295,22 @@ Python dependencies are managed using a two-file approach:
       the billing account scope
 
 > [!TIP]
-> \* *Role assignment privileges can be constrained to `Carbon Optimization
-> Reader`, `Management Group Reader` and `Reader`*
+> \* The management-group-scoped `User Access Administrator` is only used to
+> manage RBAC for the function app's managed identity at the Tenant Root Group,
+> so it can be constrained. The module:
+>
+> - creates a custom `Advisor Recommendations Reader` role definition (so the
+>   grant needs `Microsoft.Authorization/roleDefinitions` write and delete), and
+> - assigns `Carbon Optimization Reader` and that custom Advisor role to the
+>   function's managed identity (so the grant needs to assign those two roles).
+>
+> The custom role is named
+> `Advisor Recommendations Reader` for
+> the default deployment; additional deployments in the same tenant must set
+> `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
+> collision. Its role ID is a random GUID fixed in Terraform state — stable for a
+> given deployment but different between deployments — so constrain the grant
+> against the deployed role's ID.
 
 ## Usage
 
@@ -480,6 +495,7 @@ pre-commit hook.
 | <a name="output_deployment_storage_account_name"></a> [deployment\_storage\_account\_name](#output\_deployment\_storage\_account\_name) | The name of the deployment storage account |
 | <a name="output_deployment_storage_private_endpoint_ip"></a> [deployment\_storage\_private\_endpoint\_ip](#output\_deployment\_storage\_private\_endpoint\_ip) | The private IP address of the deployment storage blob private endpoint |
 | <a name="output_ea_billing_role_definition_ids"></a> [ea\_billing\_role\_definition\_ids](#output\_ea\_billing\_role\_definition\_ids) | The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL |
+| <a name="output_enterprise_billing_manual_action_required"></a> [enterprise\_billing\_manual\_action\_required](#output\_enterprise\_billing\_manual\_action\_required) | Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY. Empty for Microsoft Customer Agreement customers. |
 | <a name="output_event_grid_subscription_name"></a> [event\_grid\_subscription\_name](#output\_event\_grid\_subscription\_name) | The name of the Event Grid subscription for blob created events |
 | <a name="output_event_grid_system_topic_name"></a> [event\_grid\_system\_topic\_name](#output\_event\_grid\_system\_topic\_name) | The name of the Event Grid system topic for storage events |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |
