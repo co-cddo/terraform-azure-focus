@@ -362,7 +362,7 @@ def save_recommendations_to_s3(data, file_name):
 
 @app.function_name(name="AdvisorRecommendationsExporter")
 # TODO: Revert schedule
-@app.timer_trigger(schedule="0 59 11 * * 1-5", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 30 11 * * 1-5", arg_name="timer", run_on_startup=False)
 def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports Azure Advisor cost recommendations daily at 2 AM"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
@@ -552,7 +552,7 @@ def carbon_api_date_range_info(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.function_name(name="CarbonEmissionsExporter")
 # TODO: Revert schedule
-@app.timer_trigger(schedule="0 59 11 * * 1-5", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 20 13 * * 1-5", arg_name="timer", run_on_startup=False)
 def carbon_emissions_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports carbon emissions data monthly on the 20th
 
@@ -692,7 +692,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
 
 @app.function_name(name="BackfillTrigger")
 # TODO: Revert schedule
-@app.timer_trigger(schedule="0 59 11 * * 1-5", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 20 13 * * 1-5", arg_name="timer", run_on_startup=False)
 def backfill_trigger(timer: func.TimerRequest) -> None:
     """Timer trigger function that triggers the running of backfill for both cost export and carbon export.
 
