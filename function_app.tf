@@ -9,6 +9,18 @@ resource "azurerm_service_plan" "cost_export" {
   tags                = var.tags
 }
 
+# User-assigned identity for the function app. Used in preference to a system-assigned
+# identity so the principal/object ID is stable across function-app replacement: the
+# application RBAC grants in rbac.tf (and any constrained delegation that pins this
+# principal) survive a recreate of the function app, which a system-assigned identity
+# would not - Azure mints a new object ID on every recreate.
+resource "azurerm_user_assigned_identity" "cost_export" {
+  name                = "id-cost-export-${random_string.unique.result}"
+  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = azurerm_resource_group.cost_export.location
+  tags                = var.tags
+}
+
 resource "azurerm_function_app_flex_consumption" "cost_export" {
   name                = "func-cost-export-${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -33,7 +45,8 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   public_network_access_enabled = var.deploy_from_external_network
 
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.cost_export.id]
   }
 
   site_config {
@@ -69,16 +82,22 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
-    "ENTRA_APP_CLIENT_ID"                       = azuread_application.aws_app.client_id
-    "ENTRA_APP_URN"                             = local.identifier_uri
-    "AWS_ROLE_ARN"                              = local.aws_role_arn
-    "AWS_REGION"                                = var.aws_region
-    "S3_FOCUS_PATH"                             = local.aws_target_file_path
-    "S3_UTILIZATION_PATH"                       = local.aws_target_file_path
-    "S3_RECOMMENDATIONS_PATH"                   = local.aws_target_file_path
-    "S3_CARBON_PATH"                            = local.aws_target_file_path
-    "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
-    "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
+    # The queue-trigger identity-based connection must name the user-assigned identity explicitly:
+    # unlike a system-assigned identity, the host cannot infer which identity to use otherwise.
+    "StorageAccountManagedIdentity__credential" = "managedidentity"
+    "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
+    # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
+    "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
+    "ENTRA_APP_CLIENT_ID"        = azuread_application.aws_app.client_id
+    "ENTRA_APP_URN"              = local.identifier_uri
+    "AWS_ROLE_ARN"               = local.aws_role_arn
+    "AWS_REGION"                 = var.aws_region
+    "S3_FOCUS_PATH"              = local.aws_target_file_path
+    "S3_UTILIZATION_PATH"        = local.aws_target_file_path
+    "S3_RECOMMENDATIONS_PATH"    = local.aws_target_file_path
+    "S3_CARBON_PATH"             = local.aws_target_file_path
+    "CARBON_DIRECTORY_NAME"      = local.carbon_directory_name
+    "CARBON_API_TENANT_ID"       = data.azurerm_client_config.current.tenant_id
     # We use the tenant root management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
     "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
     # Mapping of billing account index to billing account ID for S3 path organization

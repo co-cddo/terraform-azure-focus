@@ -20,16 +20,11 @@ resource "azuread_service_principal" "aws_app" {
   client_id                    = azuread_application.aws_app.client_id
   app_role_assignment_required = false
   owners                       = [data.azurerm_client_config.current.object_id]
-
-  feature_tags {
-    enterprise = true
-    gallery    = true
-  }
 }
 
 resource "azuread_app_role_assignment" "aws_app" {
   app_role_id         = random_uuid.app_uuid.id
-  principal_object_id = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_object_id = azurerm_user_assigned_identity.cost_export.principal_id
   resource_object_id  = azuread_service_principal.aws_app.object_id
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
@@ -69,7 +64,7 @@ resource "time_sleep" "wait_for_deployer_rbac" {
 resource "azurerm_role_assignment" "grant_func_queue_contributor" {
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 }
 
@@ -83,7 +78,7 @@ resource "azurerm_role_assignment" "event_grid_queue_sender" {
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Carbon Optimization Reader"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 }
 
@@ -128,7 +123,7 @@ resource "azurerm_role_definition" "advisor_recommendations_reader" {
 resource "azurerm_role_assignment" "advisor_recommendations_reader" {
   scope              = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_id = azurerm_role_definition.advisor_recommendations_reader.role_definition_resource_id
-  principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id       = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type     = "ServicePrincipal"
 }
 
@@ -144,7 +139,7 @@ resource "azapi_resource_action" "add_role_assignment" {
   response_export_values = ["*"]
   body = {
     properties = {
-      principalId      = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+      principalId      = azurerm_user_assigned_identity.cost_export.principal_id
       roleDefinitionId = local.billing_account_reader_role_ids[each.value]
     }
   }
@@ -154,7 +149,7 @@ resource "azapi_resource_action" "add_role_assignment" {
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
   scope              = azurerm_storage_account.cost_export.id
   role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
-  principal_id       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id       = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type     = "ServicePrincipal"
 }
 
@@ -178,7 +173,7 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
 resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained" {
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Owner"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 
   condition_version = "2.0"
@@ -218,7 +213,7 @@ resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained
 #   response_export_values = ["*"]
 #   body = {
 #     properties = {
-#       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#       principalId = azurerm_user_assigned_identity.cost_export.principal_id
 #       # "Enrollment Reader" for enterprise account customers - https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals
 #       roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"
 #       # principalTenantId = ????

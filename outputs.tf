@@ -50,7 +50,7 @@ output "publish_code_command" {
 
 output "cost_export_app_principal_id" {
   description = "The principal id of the cost export app - use this to assign Enrollment Reader role"
-  value       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  value       = azurerm_user_assigned_identity.cost_export.principal_id
 }
 
 output "tenant_id" {
@@ -74,7 +74,7 @@ output "enterprise_billing_manual_action_required" {
     [
       "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
       "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
-      "  Function app managed identity (principal/object) ID: ${azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id}",
+      "  Function app managed identity (principal/object) ID: ${azurerm_user_assigned_identity.cost_export.principal_id}",
       "  Tenant ID: ${data.azurerm_client_config.current.tenant_id}",
       "  Role definition ID(s) (one per billing account):",
     ],

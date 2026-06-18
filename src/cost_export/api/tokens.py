@@ -48,7 +48,7 @@ class TokenManager:
     current_timestamp = datetime.now().timestamp()  # in epoch seconds
     if (self._aws_token_timestamp is None) or ((current_timestamp - self._aws_token_timestamp) > Config.aws_token_timeout_in_seconds):
       try:
-        default_credential = ManagedIdentityCredential()
+        default_credential = ManagedIdentityCredential(client_id=Config.managed_identity_client_id)
         token = default_credential.get_token(Config.urn)
 
         role = boto3.client('sts').assume_role_with_web_identity(
@@ -82,7 +82,7 @@ class TokenManager:
     current_timestamp = datetime.now().timestamp()  # in epoch seconds
     if (self._azure_token_timestamp is None) or ((current_timestamp - self._azure_token_timestamp) > Config.azure_token_timeout_in_seconds):
       try:
-        credential = ManagedIdentityCredential()
+        credential = ManagedIdentityCredential(client_id=Config.managed_identity_client_id)
         token = credential.get_token("https://management.azure.com/.default")
         self._azure_token = token.token
 
