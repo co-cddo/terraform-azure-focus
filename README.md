@@ -248,14 +248,14 @@ Python dependencies are managed using a two-file approach:
 
 | File | Purpose | Edit manually? |
 |---|---|---|
-| `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** — this is the source of truth |
-| `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** — always machine-generated |
+| `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** - this is the source of truth |
+| `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** - always machine-generated |
 
 `requirements.txt` is committed to the repository and is what Azure's Oryx build system installs using `--require-hashes`. It must contain every package in the dependency tree (direct and transitive) pinned with `==` and hashed. Do not edit it by hand.
 
 #### To add, remove, or update a dependency
 
-1. **Edit `src/cost_export/requirements.in`** — add, remove, or change the version of the direct dependency. Versions are pinned with `==`.
+1. **Edit `src/cost_export/requirements.in`** - add, remove, or change the version of the direct dependency. Versions are pinned with `==`.
 
    > **Note on boto3/s3fs compatibility:** `boto3` is capped at `<1.43` because `s3fs` pulls in `aiobotocore`, which requires `botocore<1.43.1`. `boto3>=1.43` requires `botocore>=1.43.15`, making the two incompatible. If you bump either package, re-check this constraint.
 
@@ -265,7 +265,7 @@ Python dependencies are managed using a two-file approach:
    make python-lock
    ```
 
-   This resolves the full dependency tree for **Linux / Python 3.13** (matching the Function App runtime) and overwrites `requirements.txt` with all packages pinned and hashed. `uv` is pre-installed in the dev container and fetches a Python 3.13 interpreter automatically — no local Python 3.13 required.
+   This resolves the full dependency tree for **Linux / Python 3.13** (matching the Function App runtime) and overwrites `requirements.txt` with all packages pinned and hashed. `uv` is pre-installed in the dev container and fetches a Python 3.13 interpreter automatically - no local Python 3.13 required.
 
 3. **Commit both files:**
 
@@ -279,7 +279,7 @@ Python dependencies are managed using a two-file approach:
 - An existing virtual network with two subnets, one of which has a delegation
   for `Microsoft.App.environments` (`function_app_subnet_id`).
 - The deployment privileges below, granted to the principal that runs
-  `terraform apply`. **These are assumed to be in place before the module runs —
+  `terraform apply`. **These are assumed to be in place before the module runs -
   the module does not create them.**
 
 ## Privileges
@@ -300,9 +300,9 @@ prerequisites.
 |---|---|---|
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. `Contributor` cannot assign roles. |
-| Tenant Root management group | **User Access Administrator** (constrainable — see below) | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
-| Billing account — **MCA** | **Billing account contributor** | Create the daily FOCUS export at billing-account scope and assign the `Billing account reader` billing role to the function identity. |
-| Billing account — **EA** | **EnrollmentReader** + a manual step | Create the daily FOCUS export. The function identity's billing role **cannot** be assigned by Terraform (needs Enterprise Administrator) — the `enterprise_billing_manual_action_required` output prints the exact manual step. |
+| Tenant Root management group | **User Access Administrator** (constrainable - see below) | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
+| Billing account - **MCA** | **Billing account contributor** | Create the daily FOCUS export at billing-account scope and assign the `Billing account reader` billing role to the function identity. |
+| Billing account - **EA** | **EnrollmentReader** + a manual step | Create the daily FOCUS export. The function identity's billing role **cannot** be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` output prints the exact manual step. |
 
 > [!TIP]
 > The management-group `User Access Administrator` only manages RBAC for the
@@ -315,8 +315,8 @@ prerequisites.
 > The custom role is named `Advisor Recommendations Reader` for the default
 > deployment; additional deployments in the same tenant must set
 > `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
-> collision. Its role ID is a random GUID fixed in Terraform state — stable for a
-> given deployment but different between deployments — so constrain the grant
+> collision. Its role ID is a random GUID fixed in Terraform state - stable for a
+> given deployment but different between deployments - so constrain the grant
 > against the *deployed* role's ID.
 
 ### b) Privileges assigned by the module
@@ -331,10 +331,10 @@ system topic and for each Cost Management export.
 | Deploying principal | Storage Queue Data Contributor | cost-export resource group | Apply-time only: the provider also reads queue properties. |
 | Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
 | Function identity | Storage Queue Data Contributor | cost-export storage account | Read the queue that triggers the `CostExportProcessor`. |
-| Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role — no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
+| Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
 | Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
 | Function identity | Advisor Recommendations Reader (custom role) | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Grants only `Microsoft.Advisor/recommendations/read`. |
-| Function identity | Billing account reader (billing role) | each billing account | Enumerate subscriptions and create/run FOCUS cost exports. **MCA only** — assigned automatically; **EA** must be done manually. |
+| Function identity | Billing account reader (billing role) | each billing account | Enumerate subscriptions and create/run FOCUS cost exports. **MCA only** - assigned automatically; **EA** must be done manually. |
 | Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
 | Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
 
@@ -349,7 +349,7 @@ management group: `Advisor Recommendations Reader`, granting only
   plane with Entra ID (`storage_use_azuread = true`). On create and refresh the
   provider reads **both** blob and queue service properties; without the queue
   role the read fails and the provider surfaces a misleading
-  `KeyBasedAuthenticationNotPermitted` (403) — see
+  `KeyBasedAuthenticationNotPermitted` (403) - see
   [terraform-provider-azurerm#29984](https://github.com/hashicorp/terraform-provider-azurerm/issues/29984).
   The deployer grants are scoped to the resource group and have a short
   propagation delay before the storage account is created.
@@ -359,16 +359,16 @@ management group: `Advisor Recommendations Reader`, granting only
   the export's own managed identity. Narrower grants (a custom "authorization
   actions only" role, Storage Account Contributor, or the data-plane blob roles)
   fail at create time with `401 "User is not authorized to access the specified
-  storage account"` — `Owner` is what Cost Management actually requires (see this
+  storage account"` - `Owner` is what Cost Management actually requires (see this
   [Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/5830148/cross-subscription-export-fails-due-to-storage-acc)).
   Because `Owner` is broad, it is constrained with an ABAC condition so the
   function identity may only assign or remove the `Storage Blob Data Contributor`
-  role on this account — every other `Owner` action is allowed, but it cannot use
+  role on this account - every other `Owner` action is allowed, but it cannot use
   `roleAssignments/write` to grant arbitrary roles.
 - **Advisor read role.** Azure Advisor RBAC-trims recommendations to scopes the
   caller can read: without a read role the recommendations API returns `200` with
   an empty array (never `403`), so the exporter silently finds nothing. The custom
-  role is the least-privilege option — only `Microsoft.Advisor/recommendations/read`,
+  role is the least-privilege option - only `Microsoft.Advisor/recommendations/read`,
   rather than full `Reader`.
 - **Billing roles.** For MCA the `Billing account reader` role is assigned to the
   function identity automatically. For EA this cannot be automated (it needs
