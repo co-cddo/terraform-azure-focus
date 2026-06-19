@@ -11,8 +11,7 @@
 
 ## Description
 
-This Terraform module exports Azure cost-related data and writes it to the configured AWS S3 bucket.
-The supported data sets are described below:
+This Terraform module exports Azure cost data and writes it to a configured AWS S3 bucket. Supported data sets are described below:
 
 - **Cost Data**: Daily parquet files containing standardized cost and usage
   details in FOCUS format; daily schedule requires an end date - defaults to
