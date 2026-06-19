@@ -300,12 +300,12 @@ prerequisites.
 |---|---|---|
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. `Contributor` cannot assign roles. |
-| Tenant Root management group | **User Access Administrator** (constrainable - see below) | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
+| Tenant Root management group | **User Access Administrator** (_constrainable - see below*_) | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
 | Billing account - **MCA** | **Billing account contributor** | Create the daily FOCUS export at billing-account scope and assign the `Billing account reader` billing role to the function identity. |
-| Billing account - **EA** | **EnrollmentReader** + a manual step | Create the daily FOCUS export. The function identity's billing role **cannot** be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` output prints the exact manual step. |
+| Billing account - **EA** | **EnrollmentReader** + a manual step | Create the daily FOCUS export. The function identity's billing role **cannot** be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` [output](#output_enterprise_billing_manual_action_required) prints the exact manual step. |
 
 > [!TIP]
-> The management-group `User Access Administrator` only manages RBAC for the
+> *The management-group `User Access Administrator` only manages RBAC for the
 > function identity at the Tenant Root Group, so it can be constrained to:
 >
 > - `Microsoft.Authorization/roleDefinitions` write and delete (to create the
@@ -373,8 +373,8 @@ management group: `Advisor Recommendations Reader`, granting only
 - **Billing roles.** For MCA the `Billing account reader` role is assigned to the
   function identity automatically. For EA this cannot be automated (it needs
   Enterprise Administrator), so the `enterprise_billing_manual_action_required`
-  output prints the principal ID, tenant ID and role-definition IDs needed to do
-  it by hand.
+  [output](#output_enterprise_billing_manual_action_required) prints the principal
+  ID, tenant ID and role-definition IDs needed to do it by hand.
 
 ## Usage
 
