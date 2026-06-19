@@ -16,7 +16,7 @@ This Terraform module exports Azure cost data and writes it to a configured AWS 
 - **Cost Data**: Daily parquet files containing standardised cost and usage
   details in FOCUS format
 - **Azure Advisor Recommendations**: Daily JSON files containing cost
-  optimization recommendations from Azure Advisor
+  optimisation recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint
   metrics across Scope 1 and Scope 3 emissions
 
@@ -220,7 +220,7 @@ The module creates three distinct export pipelines for each of the data sets:
 - **Monthly Trigger**: `CarbonEmissionsExporter` function runs every day to
   download the latest data as soon as it becomes available (around the 19th
   of each month)
-  - API Call: Function calls Azure Carbon Optimization API against
+  - API Call: Function calls Azure Carbon API against
     `MonthlySummaryReport` for previous month's Scope 1 & 3 emissions
     - Batches the API call per 100 subscriptions, and merges all each of the
       datasets into one - refer to "subscription batching" below.
@@ -229,7 +229,7 @@ The module creates three distinct export pipelines for each of the data sets:
   - Upload: JSON data uploaded to S3 in partitioned structure:
     `billing_period=YYYYMMDD/`
 
-The Carbon Optimization API provides a rolling 12-month window of emissions
+The Carbon API provides a rolling 12-month window of emissions
 data. The available date range is calculated dynamically based on Microsoft's
 data availability policy:
 
@@ -251,7 +251,7 @@ calculated date range.
 
 ### Carbon API Subscription Batching
 
-The Carbon Optimization API has a maximum limit of 100 subscriptions per
+The Carbon API has a maximum limit of 100 subscriptions per
 request. The functions automatically handle large subscription lists through
 intelligent batching:
 
@@ -543,7 +543,7 @@ pre-commit hook.
 | <a name="output_billing_account_ids"></a> [billing\_account\_ids](#output\_billing\_account\_ids) | Billing account IDs configured for cost reporting |
 | <a name="output_billing_accounts_map"></a> [billing\_accounts\_map](#output\_billing\_accounts\_map) | Map of billing account indices to IDs and scopes |
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
-| <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
+| <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimisation export (timer-triggered function) |
 | <a name="output_cost_export_app_principal_id"></a> [cost\_export\_app\_principal\_id](#output\_cost\_export\_app\_principal\_id) | The principal id of the cost export app - use this to assign Enrollment Reader role |
 | <a name="output_cost_export_storage_account_id"></a> [cost\_export\_storage\_account\_id](#output\_cost\_export\_storage\_account\_id) | The resource id of the cost export storage account |
 | <a name="output_cost_export_storage_account_name"></a> [cost\_export\_storage\_account\_name](#output\_cost\_export\_storage\_account\_name) | The name of the cost export storage account |
