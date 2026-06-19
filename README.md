@@ -237,8 +237,7 @@ be explicitly set.
   integration
 - **Zero Trust**: No public network access (except during deployment if
   `deploy_from_external_network=true`)
-- **Managed Identity**: Azure resources authenticate using system-assigned
-  managed identities
+- **Managed Identity**: Azure resources authenticate using managed identities
 - **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived
   AWS credentials
 - **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
