@@ -60,11 +60,19 @@ prerequisites.
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
-> function identity at the Tenant Root Group, so it can be constrained to:
+> function identity at the Tenant Root Group, so it can be constrained to a
+> custom role with the following actions:
 >
-> - `Microsoft.Authorization/roleDefinitions` write and delete (to create the
->   custom Advisor role), and
-> - assigning the `Carbon Optimization Reader` and custom Advisor roles only.
+> ```text
+> Microsoft.Authorization/roleDefinitions/write
+> Microsoft.Authorization/roleDefinitions/delete
+> Microsoft.Authorization/roleAssignments/write
+> Microsoft.Authorization/roleAssignments/delete
+> ```
+>
+> The first two are needed to create and destroy the custom Advisor role
+> definition; the last two to assign `Carbon Optimization Reader` and the
+> custom Advisor role to the function identity.
 >
 > The custom role is named `Advisor Recommendations Reader` for the default
 > deployment; additional deployments in the same tenant must set
