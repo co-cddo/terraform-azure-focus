@@ -286,13 +286,13 @@ Python dependencies are managed using a two-file approach:
 
 This section describes every privilege involved, split into what the deploying
 principal must already hold (a) and what the module grants at apply time (b).
-Least privilege is a primary goal — the grants below are intentionally as
+Least privilege is a primary goal; the grants below are intentionally as
 narrow as the Azure platform allows.
 
 ### a) Deployment privileges (prerequisite, granted outside this module)
 
 The principal running `terraform apply` (`current_principal_type` = `User` or
-`ServicePrincipal`) needs the following. Note the module grants itself the
+`ServicePrincipal`) needs the following. Note the module grants the deployment principal the
 storage **data-plane** roles it needs during apply (see (b)), so those are *not*
 prerequisites.
 
