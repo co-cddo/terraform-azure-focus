@@ -8,7 +8,6 @@
 -->
 
 ![GitHub Actions](../../actions/workflows/terraform.yml/badge.svg)
-<!-- ![Python Tests](../../actions/workflows/python-tests.yml/badge.svg) -->
 
 ## Description
 
@@ -40,6 +39,146 @@ datasets and forwarding them to AWS S3. The following diagram illustrates the
 data flow and component architecture for all three export types:
 
 ![Azure FOCUS Cost Export Architecture](images/infra.png)
+
+## Prerequisites
+
+- An existing virtual network with two subnets, one of which has a delegation
+  for `Microsoft.App.environments` (`function_app_subnet_id`).
+- [Deployment privileges](#a-deployment-privileges-prerequisite-granted-outside-this-module), granted to the principal that runs
+  `terraform apply`. **These are assumed to be in place before the module runs -
+  the module does not create them.**
+
+## Privileges
+
+This section describes every privilege involved, split into what the deploying
+principal must already hold (a) and what the module grants at apply time (b).
+Least privilege is a primary goal - the grants below are intentionally as
+narrow as the Azure platform allows.
+
+### a) Deployment privileges (prerequisite, must be granted outside this module)
+
+The principal running `terraform apply` (`current_principal_type` = `User` or
+`ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
+storage **data-plane** roles it needs during apply (see (b)), so those are *not*
+prerequisites.
+
+| Scope | Role | Why it is needed |
+|---|---|---|
+| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
+| Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
+| Tenant Root management group | **User Access Administrator*** | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
+| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. `Owner` is required for the latter — `Billing account contributor` can create the export but cannot grant roles to others. |
+| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role will not be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` [output](#output_enterprise_billing_manual_action_required) prints the exact manual step. |
+
+> [!TIP]
+> *The management-group `User Access Administrator` only manages RBAC for the
+> function identity at the Tenant Root Group, so it can be constrained to:
+>
+> - `Microsoft.Authorization/roleDefinitions` write and delete (to create the
+>   custom Advisor role), and
+> - assigning the `Carbon Optimization Reader` and custom Advisor roles only.
+>
+> The custom role is named `Advisor Recommendations Reader` for the default
+> deployment; additional deployments in the same tenant must set
+> `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
+> collision.
+
+### b) Privileges assigned by the module
+
+The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
+system topic and for each Cost Management export.
+
+| Principal | Role | Scope | Purpose |
+|---|---|---|---|
+| Deploying principal | Storage Blob Data Contributor | cost-export resource group | Apply-time only: the azurerm provider reads the storage account's blob properties over Entra ID. |
+| Deploying principal | Storage Queue Data Contributor | cost-export resource group | Apply-time only: the provider also reads queue properties. |
+| Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
+| Function identity | Storage Queue Data Contributor | cost-export storage account | Read the queue that triggers the `CostExportProcessor`. |
+| Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
+| Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
+| Function identity | Advisor Recommendations Reader (custom role) | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Grants only `Microsoft.Advisor/recommendations/read`. |
+| Function identity | Billing account reader (billing role) | each billing account | Enumerate subscriptions and create/run FOCUS cost exports. **MCA only** - assigned automatically; **EA** must be done manually. |
+| Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
+| Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
+
+The module also **creates one custom role definition** at the Tenant Root
+management group: `Advisor Recommendations Reader`, granting only
+`Microsoft.Advisor/recommendations/read`.
+
+#### Why these specific grants
+
+- **Storage data-plane roles (deployer and function).** The cost-export storage
+  account disables shared access keys, so the provider authenticates to its data
+  plane with Entra ID (`storage_use_azuread = true`). On create and refresh the
+  provider reads **both** blob and queue service properties; without the queue
+  role the read fails and the provider surfaces a misleading
+  `KeyBasedAuthenticationNotPermitted` (403) - see
+  [terraform-provider-azurerm#29984](https://github.com/hashicorp/terraform-provider-azurerm/issues/29984).
+  The deployer grants are scoped to the resource group and have a short
+  propagation delay before the storage account is created.
+- **Constrained `Owner` for the function.** When creating an export to a
+  firewall-protected storage account, Cost Management validates that the caller
+  can access the destination and then assigns `Storage Blob Data Contributor` to
+  the export's own managed identity. Narrower grants (a custom "authorization
+  actions only" role, Storage Account Contributor, or the data-plane blob roles)
+  fail at create time with `401 "User is not authorized to access the specified
+  storage account"` - `Owner` is what Cost Management actually requires (see this
+  [Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/5830148/cross-subscription-export-fails-due-to-storage-acc)).
+  Because `Owner` is broad, it is constrained with an ABAC condition so the
+  function identity may only assign or remove the `Storage Blob Data Contributor`
+  role on this account - every other `Owner` action is allowed, but it cannot use
+  `roleAssignments/write` to grant arbitrary roles.
+- **Advisor read role.** Azure Advisor RBAC-trims recommendations to scopes the
+  caller can read: without a read role the recommendations API returns `200` with
+  an empty array (never `403`), so the exporter silently finds nothing. The custom
+  role is the least-privilege option - only `Microsoft.Advisor/recommendations/read`,
+  rather than full `Reader`.
+- **Billing roles.** For MCA the `Billing account reader` role is assigned to the
+  function identity automatically. For EA this cannot be automated (it needs
+  Enterprise Administrator), so the `enterprise_billing_manual_action_required`
+  [output](#output_enterprise_billing_manual_action_required) prints the principal
+  ID, tenant ID and role-definition IDs needed to do it by hand.
+
+## Usage
+
+```hcl
+provider "azurerm" {
+  # These need to be explicitly registered
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  # Required: the cost_export storage account disables shared access keys, so the provider
+  # must use Entra ID for storage data-plane operations. Without this, apply fails with
+  # KeyBasedAuthenticationNotPermitted (403).
+  storage_use_azuread = true
+  features {}
+}
+
+module "example" {
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
+
+  aws_account_id                      = "<aws-account-id>"
+  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
+  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
+  virtual_network_name                = "existing-vnet"
+  virtual_network_resource_group_name = "existing-infra"
+  resource_group_name                 = "rg-cost-export"
+  # Setting to false or omitting this argument assumes that you have
+  # private GitHub runners configured in the existing virtual network.
+  # It is not recommended to set this to true in production
+  deploy_from_external_network        = false
+
+  # Uncomment when running in CI/CD with a service principal
+  # (e.g., GitHub Actions)
+  # current_principal_type = "ServicePrincipal"
+}
+```
+
+> [!TIP]
+> If you don't have a suitable existing Virtual Network with two subnets
+> (one of which has a delegation to Microsoft.App.environments), please
+> refer to the example configuration [here](examples/existing-infrastructure),
+> which provisions the prerequisite baseline infrastructure before consuming
+> the module.
 
 ## Data Flow
 
@@ -274,146 +413,6 @@ Python dependencies are managed using a two-file approach:
    git commit -m "chore: update python dependencies"
    ```
 
-## Prerequisites
-
-- An existing virtual network with two subnets, one of which has a delegation
-  for `Microsoft.App.environments` (`function_app_subnet_id`).
-- [Deployment privileges](#a-deployment-privileges-prerequisite-granted-outside-this-module), granted to the principal that runs
-  `terraform apply`. **These are assumed to be in place before the module runs -
-  the module does not create them.**
-
-## Privileges
-
-This section describes every privilege involved, split into what the deploying
-principal must already hold (a) and what the module grants at apply time (b).
-Least privilege is a primary goal; the grants below are intentionally as
-narrow as the Azure platform allows.
-
-### a) Deployment privileges (prerequisite, granted outside this module)
-
-The principal running `terraform apply` (`current_principal_type` = `User` or
-`ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
-storage **data-plane** roles it needs during apply (see (b)), so those are *not*
-prerequisites.
-
-| Scope | Role | Why it is needed |
-|---|---|---|
-| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
-| Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
-| Tenant Root management group | **User Access Administrator*** | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
-| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. `Owner` is required for the latter — `Billing account contributor` can create the export but cannot grant roles to others. |
-| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role will not be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` [output](#output_enterprise_billing_manual_action_required) prints the exact manual step. |
-
-> [!TIP]
-> *The management-group `User Access Administrator` only manages RBAC for the
-> function identity at the Tenant Root Group, so it can be constrained to:
->
-> - `Microsoft.Authorization/roleDefinitions` write and delete (to create the
->   custom Advisor role), and
-> - assigning the `Carbon Optimization Reader` and custom Advisor roles only.
->
-> The custom role is named `Advisor Recommendations Reader` for the default
-> deployment; additional deployments in the same tenant must set
-> `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
-> collision.
-
-### b) Privileges assigned by the module
-
-The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
-system topic and for each Cost Management export.
-
-| Principal | Role | Scope | Purpose |
-|---|---|---|---|
-| Deploying principal | Storage Blob Data Contributor | cost-export resource group | Apply-time only: the azurerm provider reads the storage account's blob properties over Entra ID. |
-| Deploying principal | Storage Queue Data Contributor | cost-export resource group | Apply-time only: the provider also reads queue properties. |
-| Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
-| Function identity | Storage Queue Data Contributor | cost-export storage account | Read the queue that triggers the `CostExportProcessor`. |
-| Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
-| Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
-| Function identity | Advisor Recommendations Reader (custom role) | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Grants only `Microsoft.Advisor/recommendations/read`. |
-| Function identity | Billing account reader (billing role) | each billing account | Enumerate subscriptions and create/run FOCUS cost exports. **MCA only** - assigned automatically; **EA** must be done manually. |
-| Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
-| Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
-
-The module also **creates one custom role definition** at the Tenant Root
-management group: `Advisor Recommendations Reader`, granting only
-`Microsoft.Advisor/recommendations/read`.
-
-#### Why these specific grants
-
-- **Storage data-plane roles (deployer and function).** The cost-export storage
-  account disables shared access keys, so the provider authenticates to its data
-  plane with Entra ID (`storage_use_azuread = true`). On create and refresh the
-  provider reads **both** blob and queue service properties; without the queue
-  role the read fails and the provider surfaces a misleading
-  `KeyBasedAuthenticationNotPermitted` (403) - see
-  [terraform-provider-azurerm#29984](https://github.com/hashicorp/terraform-provider-azurerm/issues/29984).
-  The deployer grants are scoped to the resource group and have a short
-  propagation delay before the storage account is created.
-- **Constrained `Owner` for the function.** When creating an export to a
-  firewall-protected storage account, Cost Management validates that the caller
-  can access the destination and then assigns `Storage Blob Data Contributor` to
-  the export's own managed identity. Narrower grants (a custom "authorization
-  actions only" role, Storage Account Contributor, or the data-plane blob roles)
-  fail at create time with `401 "User is not authorized to access the specified
-  storage account"` - `Owner` is what Cost Management actually requires (see this
-  [Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/5830148/cross-subscription-export-fails-due-to-storage-acc)).
-  Because `Owner` is broad, it is constrained with an ABAC condition so the
-  function identity may only assign or remove the `Storage Blob Data Contributor`
-  role on this account - every other `Owner` action is allowed, but it cannot use
-  `roleAssignments/write` to grant arbitrary roles.
-- **Advisor read role.** Azure Advisor RBAC-trims recommendations to scopes the
-  caller can read: without a read role the recommendations API returns `200` with
-  an empty array (never `403`), so the exporter silently finds nothing. The custom
-  role is the least-privilege option - only `Microsoft.Advisor/recommendations/read`,
-  rather than full `Reader`.
-- **Billing roles.** For MCA the `Billing account reader` role is assigned to the
-  function identity automatically. For EA this cannot be automated (it needs
-  Enterprise Administrator), so the `enterprise_billing_manual_action_required`
-  [output](#output_enterprise_billing_manual_action_required) prints the principal
-  ID, tenant ID and role-definition IDs needed to do it by hand.
-
-## Usage
-
-```hcl
-provider "azurerm" {
-  # These need to be explicitly registered
-  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  # Required: the cost_export storage account disables shared access keys, so the provider
-  # must use Entra ID for storage data-plane operations. Without this, apply fails with
-  # KeyBasedAuthenticationNotPermitted (403).
-  storage_use_azuread = true
-  features {}
-}
-
-module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
-
-  aws_account_id                      = "<aws-account-id>"
-  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
-  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
-  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
-  virtual_network_name                = "existing-vnet"
-  virtual_network_resource_group_name = "existing-infra"
-  resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have
-  # private GitHub runners configured in the existing virtual network.
-  # It is not recommended to set this to true in production
-  deploy_from_external_network        = false
-
-  # Uncomment when running in CI/CD with a service principal
-  # (e.g., GitHub Actions)
-  # current_principal_type = "ServicePrincipal"
-}
-```
-
-> [!TIP]
-> If you don't have a suitable existing Virtual Network with two subnets
-> (one of which has a delegation to Microsoft.App.environments), please
-> refer to the example configuration [here](examples/existing-infrastructure),
-> which provisions the prerequisite baseline infrastructure before consuming
-> the module.
-
 ## Dev Container
 
 > [!IMPORTANT]
@@ -422,7 +421,7 @@ module "example" {
 > hooks, etc.) is pre-installed at pinned versions. You do not need to install
 > anything locally beyond Docker.
 
-### Getting Started
+### Setup
 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 2. Open the repo in VS Code
