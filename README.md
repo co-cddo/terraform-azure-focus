@@ -292,7 +292,7 @@ narrow as the Azure platform allows.
 ### a) Deployment privileges (prerequisite, granted outside this module)
 
 The principal running `terraform apply` (`current_principal_type` = `User` or
-`ServicePrincipal`) needs the following. Note the module grants the deployment principal the
+`ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
 storage **data-plane** roles it needs during apply (see (b)), so those are *not*
 prerequisites.
 
@@ -301,7 +301,7 @@ prerequisites.
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group | **User Access Administrator*** | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
-| Billing account - **MCA** | **Billing account contributor** | Create the daily FOCUS export at billing-account scope and assign the `Billing account reader` billing role to the function identity. |
+| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. `Owner` is required for the latter — `Billing account contributor` can create the export but cannot grant roles to others. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role will not be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` [output](#output_enterprise_billing_manual_action_required) prints the exact manual step. |
 
 > [!TIP]
@@ -315,14 +315,11 @@ prerequisites.
 > The custom role is named `Advisor Recommendations Reader` for the default
 > deployment; additional deployments in the same tenant must set
 > `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
-> collision. Its role ID is a random GUID fixed in Terraform state - stable for a
-> given deployment but different between deployments - so constrain the grant
-> against the *deployed* role's ID.
+> collision.
 
 ### b) Privileges assigned by the module
 
-The module uses a **user-assigned managed identity** for the function app (the
-"function identity" below) and **system-assigned** identities for the Event Grid
+The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
 system topic and for each Cost Management export.
 
 | Principal | Role | Scope | Purpose |
