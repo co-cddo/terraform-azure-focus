@@ -13,10 +13,8 @@
 
 This Terraform module exports Azure cost data and writes it to a configured AWS S3 bucket. Supported data sets are described below:
 
-- **Cost Data**: Daily parquet files containing standardized cost and usage
-  details in FOCUS format; daily schedule requires an end date - defaults to
-  10 years from deployment but can be changed with module variable
-  `cost_export_daily_schedule_to_years`
+- **Cost Data**: Daily parquet files containing standardised cost and usage
+  details in FOCUS format
 - **Azure Advisor Recommendations**: Daily JSON files containing cost
   optimization recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint
