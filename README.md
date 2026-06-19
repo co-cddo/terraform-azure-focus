@@ -22,15 +22,6 @@ This Terraform module exports Azure cost data and writes it to a configured AWS 
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint
   metrics across Scope 1 and Scope 3 emissions
 
-> [!NOTE]
-> There is currently an
-> [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993)
-> with publishing Function App code on the Flex Consumption Plan using a
-> managed identity. We have had to revert to using the storage account
-> connection string for now. More details can be found
-> [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f)
-> (behind a paywall, sadly).
-
 ## Architecture
 
 This module creates a fully integrated solution for exporting multiple Azure
@@ -137,6 +128,26 @@ management group: `Advisor Recommendations Reader`, granting only
   Enterprise Administrator), so the `enterprise_billing_manual_action_required`
   [output](#output_enterprise_billing_manual_action_required) prints the principal
   ID, tenant ID and role-definition IDs needed to do it by hand.
+
+## Security Features
+
+- **Private Networking**: All components use private endpoints and VNet
+  integration
+- **Zero Trust**: No public network access (except during deployment if
+  `deploy_from_external_network=true`)
+- **Managed Identity**: Azure resources authenticate using managed identities
+- **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived
+  AWS credentials
+- **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
+
+> [!NOTE]
+> There is currently an
+> [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993)
+> with publishing Function App code on the Flex Consumption Plan using a
+> managed identity. We have had to revert to using the storage account
+> connection string for now. More details can be found
+> [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f)
+> (behind a paywall, sadly).
 
 ## Usage
 
@@ -368,17 +379,6 @@ schedule.
 
 The backfill start date (`backfill_start_date`) module terraform variable must
 be explicitly set.
-
-## Security Features
-
-- **Private Networking**: All components use private endpoints and VNet
-  integration
-- **Zero Trust**: No public network access (except during deployment if
-  `deploy_from_external_network=true`)
-- **Managed Identity**: Azure resources authenticate using managed identities
-- **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived
-  AWS credentials
-- **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
 
 ### Updating Python Dependencies
 
