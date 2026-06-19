@@ -32,7 +32,7 @@ data flow and component architecture for all three export types:
 
 - An existing virtual network with two subnets, one of which has a delegation
   for `Microsoft.App.environments` (`function_app_subnet_id`).
-- [Deployment privileges](#a-deployment-privileges-prerequisite-granted-outside-this-module), granted to the principal that runs
+- [Deployment privileges](#a-deployment-privileges-prerequisite-must-be-granted-outside-this-module), granted to the principal that runs
   `terraform apply`. **These are assumed to be in place before the module runs -
   the module does not create them.**
 
