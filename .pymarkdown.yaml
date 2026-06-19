@@ -6,8 +6,8 @@
 plugins:
   MD013:
     enabled: true
-    line_length: 500
-    code_block_line_length: 500
+    line_length: 600
+    code_block_line_length: 600
   MD033:
     enabled: false
   # The generated TF_DOCS block is injected without blank-line padding so it

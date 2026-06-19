@@ -1,10 +1,9 @@
-#### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
-
 resource "random_uuid" "app_uuid" {}
 resource "azuread_application" "aws_app" {
   display_name = "cost-export-${random_string.unique.result}"
   owners       = [data.azurerm_client_config.current.object_id]
 
+  #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
   app_role {
     id                   = random_uuid.app_uuid.id
     allowed_member_types = ["User", "Application"]
@@ -29,15 +28,10 @@ resource "azuread_app_role_assignment" "aws_app" {
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
-# The cost_export storage account disables shared access keys (storage.tf), so the azurerm
-# provider authenticates to its data plane with Entra ID (storage_use_azuread = true). The
-# azurerm_storage_account resource reads BOTH blob and queue service properties on the data
-# plane during create and refresh, so the deploying principal needs both data roles - without
-# the queue role the queue-properties read fails and the provider's fallback surfaces a
-# misleading "KeyBasedAuthenticationNotPermitted" 403 (see hashicorp/terraform-provider-azurerm
-# issue #29984). The grants are scoped to the resource group (created before the storage account)
-# so they exist ahead of the create-time poll; the storage account depends on
-# time_sleep.wait_for_deployer_rbac to allow RBAC propagation before it is created.
+# Apply-time data-plane access for the deployer: the cost_export storage account disables shared
+# keys, so the provider reads blob + queue properties over Entra ID during create/refresh and needs
+# both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
+# propagate before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
   scope              = azurerm_resource_group.cost_export.id
   role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
@@ -84,24 +78,11 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
 
 resource "random_uuid" "advisor_recommendations_reader" {}
 
-# Azure Advisor RBAC-trims recommendations to scopes the caller can read: without a
-# read role the recommendations API returns 200 with an empty value array (never 403),
-# so the AdvisorRecommendationsExporter silently finds nothing across every subscription.
-# Carbon Optimization Reader (above) only covers carbon emissions data, not Advisor.
-#
-# This custom role is the minimal-privilege attempt: it grants only the Advisor read
-# actions rather than full Reader (*/read). OPEN QUESTION being tested on this branch -
-# Advisor's docs say "you must have access to the resource associated with the
-# recommendation to view it", which may mean Advisor also requires */read on the
-# underlying resource (VM, disk, public IP, ...). If the exporter still returns empty
-# after applying this, that requirement is confirmed and we should fall back to the
-# built-in Reader role. See https://learn.microsoft.com/en-us/azure/advisor/permissions
-# (the "Available actions to build custom roles" section).
+# Least-privilege Advisor read role (only Microsoft.Advisor/recommendations/read). Without a read
+# role the recommendations API returns 200 with an empty array (never 403). See README "Privileges".
 resource "azurerm_role_definition" "advisor_recommendations_reader" {
-  # Custom role names must be unique within a tenant. The default deployment
-  # keeps the bare name "Advisor Recommendations Reader"; additional deployments
-  # in the same tenant must set cost_mgmt_suffix (already required for unique
-  # cost-export task names), which is appended here to avoid a name collision.
+  # Custom role names must be unique within a tenant: additional deployments must set cost_mgmt_suffix
+  # (appended here) to avoid a name collision; the default deployment keeps the bare name.
   name               = "Advisor Recommendations Reader${local.cost_mgmt_suffix}"
   role_definition_id = random_uuid.advisor_recommendations_reader.id
 
@@ -145,7 +126,7 @@ resource "azapi_resource_action" "add_role_assignment" {
   }
 }
 
-# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
+# Function writes export output and creates export tasks that deliver to this storage account.
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
   scope              = azurerm_storage_account.cost_export.id
   role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
@@ -153,23 +134,11 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
   principal_type     = "ServicePrincipal"
 }
 
-# https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
-# When creating an export to a firewall-protected storage account, Cost Management performs a
-# control-plane validation that the caller can access the destination storage account, and then
-# assigns "Storage Blob Data Contributor" to the export's own managed identity on that account.
-# Narrower grants (a custom "Authorization actions only" role, Storage Account Contributor, or the
-# data-plane blob roles) are NOT sufficient and fail at create time with 401 "User is not
-# authorized to access the specified storage account". Owner is what Cost Management actually
-# requires here - see the Microsoft Q&A confirming Contributor/Owner is needed and narrower roles
-# do not work:
-# https://learn.microsoft.com/en-us/answers/questions/5830148/cross-subscription-export-fails-due-to-storage-acc
-#
-# Owner is broad, so the grant is constrained with an ABAC condition: on this storage account the
-# function identity may only assign or remove the "Storage Blob Data Contributor" role - exactly
-# the assignment Cost Management makes for the export identity. Every other Owner action is
-# allowed, but the function identity cannot use Owner's roleAssignments/write to grant arbitrary
-# roles (privilege escalation). The previous condition here was a no-op: "(NOT write) OR (NOT read)"
-# is always true for any single action.
+# Cost Management requires Owner here: when creating an export to a firewall-protected storage
+# account it validates caller access and then assigns "Storage Blob Data Contributor" to the
+# export's own identity; narrower roles fail at create with 401. Owner is broad, so the ABAC
+# condition below restricts the function to assigning/removing ONLY that role on this account
+# (no privilege escalation via roleAssignments/write). Full rationale in README "Privileges".
 resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained" {
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Owner"
