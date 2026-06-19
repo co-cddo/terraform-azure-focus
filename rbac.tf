@@ -33,6 +33,7 @@ resource "azuread_app_role_assignment" "aws_app" {
 # both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
 # propagate before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
+  count              = var.manage_role_assignments ? 1 : 0
   scope              = azurerm_resource_group.cost_export.id
   role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
   principal_id       = data.azurerm_client_config.current.object_id
@@ -40,6 +41,7 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
 }
 
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_resource_group.cost_export.id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
@@ -47,7 +49,8 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
 }
 
 resource "time_sleep" "wait_for_deployer_rbac" {
-  create_duration = "60s"
+  # No module-created grants to propagate when RBAC is managed externally.
+  create_duration = var.manage_role_assignments ? "60s" : "0s"
 
   depends_on = [
     azurerm_role_assignment.grant_deployer_cost_export_blob,
@@ -56,6 +59,7 @@ resource "time_sleep" "wait_for_deployer_rbac" {
 }
 
 resource "azurerm_role_assignment" "grant_func_queue_contributor" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
@@ -63,6 +67,7 @@ resource "azurerm_role_assignment" "grant_func_queue_contributor" {
 }
 
 resource "azurerm_role_assignment" "event_grid_queue_sender" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Message Sender"
   principal_id         = azurerm_eventgrid_system_topic.storage_events.identity[0].principal_id
@@ -70,47 +75,28 @@ resource "azurerm_role_assignment" "event_grid_queue_sender" {
 }
 
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Carbon Optimization Reader"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 }
 
-resource "random_uuid" "advisor_recommendations_reader" {}
-
-# Least-privilege Advisor read role (only Microsoft.Advisor/recommendations/read). Without a read
-# role the recommendations API returns 200 with an empty array (never 403). See README "Privileges".
-resource "azurerm_role_definition" "advisor_recommendations_reader" {
-  # Custom role names must be unique within a tenant: additional deployments must set cost_mgmt_suffix
-  # (appended here) to avoid a name collision; the default deployment keeps the bare name.
-  name               = "Advisor Recommendations Reader${local.cost_mgmt_suffix}"
-  role_definition_id = random_uuid.advisor_recommendations_reader.id
-
-  scope       = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  description = "Read-only access to Azure Advisor recommendations."
-
-  permissions {
-    actions = [
-      "Microsoft.Advisor/recommendations/read"
-    ]
-    not_actions = []
-  }
-
-  assignable_scopes = [
-    "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}",
-  ]
-}
-
-resource "azurerm_role_assignment" "advisor_recommendations_reader" {
-  scope              = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  role_definition_id = azurerm_role_definition.advisor_recommendations_reader.role_definition_resource_id
-  principal_id       = azurerm_user_assigned_identity.cost_export.principal_id
-  principal_type     = "ServicePrincipal"
+# The AdvisorRecommendationsExporter reads Advisor recommendations tenant-wide. Without a read role
+# the recommendations API returns 200 with an empty array (never 403). "Advisor Recommendations
+# Contributor" is the least-privilege built-in role granting Microsoft.Advisor/recommendations/read
+# - there is no read-only Advisor recommendations built-in. See README "Privileges".
+resource "azurerm_role_assignment" "advisor_recommendations_contributor" {
+  count                = var.manage_role_assignments ? 1 : 0
+  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+  role_definition_name = "Advisor Recommendations Contributor"
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 # this only works for MCA customers
 resource "azapi_resource_action" "add_role_assignment" {
-  for_each = var.is_enterprise_customer ? [] : toset(var.billing_account_ids)
+  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
@@ -128,6 +114,7 @@ resource "azapi_resource_action" "add_role_assignment" {
 
 # Function writes export output and creates export tasks that deliver to this storage account.
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
+  count              = var.manage_role_assignments ? 1 : 0
   scope              = azurerm_storage_account.cost_export.id
   role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
   principal_id       = azurerm_user_assigned_identity.cost_export.principal_id
@@ -140,6 +127,7 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
 # condition below restricts the function to assigning/removing ONLY that role on this account
 # (no privilege escalation via roleAssignments/write). Full rationale in README "Privileges".
 resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Owner"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id

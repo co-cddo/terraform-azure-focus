@@ -48,13 +48,14 @@ narrow as the Azure platform allows.
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
 storage **data-plane** roles it needs during apply (see (b)), so those are *not*
-prerequisites.
+prerequisites — unless `manage_role_assignments = false`, in which case they are
+(see the note in (b)).
 
 | Scope | Role | Why it is needed |
 |---|---|---|
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
-| Tenant Root management group | **User Access Administrator*** | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
+| Tenant Root management group | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the important note below. |
 
@@ -67,29 +68,28 @@ prerequisites.
 > role assignment.
 >
 > In the portal: **Tenant Root Group → Access control (IAM) → the deployment
-> service principal's `User Access Administrator` assignment → View/Edit → Configure (under 'Constrain roles'), then add the two roles the module assigns:
+> service principal's `User Access Administrator` assignment → View/Edit →
+> Configure** (under 'Constrain roles'), then add the two built-in roles the
+> module assigns:
 >
 > - `Carbon Optimization Reader`
-> - `Advisor Recommendations Reader` (the custom role this module creates)
->
-> Two limitations to be aware of:
->
-> - The condition constrains role **assignments** only. Creating and destroying
->   the custom Advisor **role definition** still needs
->   `Microsoft.Authorization/roleDefinitions/write` and `/delete`, which
->   `User Access Administrator` provides and "Constrain roles" does **not**
->   restrict.
-> - The condition matches the custom role by its **role-definition GUID** (fixed
->   in Terraform state). It is named `Advisor Recommendations Reader` for the
->   default deployment; additional deployments in the same tenant must set
->   `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
->   collision. If the role is recreated (new deployment, suffix change, or its
->   `random_uuid` regenerates) you must re-add it to the condition.
+> - `Advisor Recommendations Contributor`
 
 ### b) Privileges assigned by the module
 
 The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
 system topic and for each Cost Management export.
+
+> [!NOTE]
+> Every grant in the table below is created only when `manage_role_assignments`
+> is `true` (the default). Set it to `false` if RBAC is owned by a separate
+> team/process: the module then creates **none** of these assignments and you
+> must pre-provision every one yourself — **including the deploying principal's
+> `Storage Blob Data Contributor` and `Storage Queue Data Contributor` roles**,
+> without which `terraform apply` fails when the provider reads the cost-export
+> storage account over Entra ID. The Entra `AssumeRoleWithWebIdentity` app-role
+> assignment is the one exception: it is always created, as it is internal to the
+> module's own federation app.
 
 | Principal | Role | Scope | Purpose |
 |---|---|---|---|
@@ -99,14 +99,10 @@ system topic and for each Cost Management export.
 | Function identity | Storage Queue Data Contributor | cost-export storage account | Read the queue that triggers the `CostExportProcessor`. |
 | Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
 | Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
-| Function identity | Advisor Recommendations Reader (custom role) | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Grants only `Microsoft.Advisor/recommendations/read`. |
+| Function identity | Advisor Recommendations Contributor | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Least-privilege built-in for this - see note below. |
 | Function identity | Billing account reader | MCA Billing account(s) (if any) | Enumerate subscriptions and create/run FOCUS cost exports. |
 | Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
 | Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
-
-The module also **creates one custom role definition** at the Tenant Root
-management group: `Advisor Recommendations Reader`, granting only
-`Microsoft.Advisor/recommendations/read`.
 
 > [!IMPORTANT]
 > **Enterprise Agreement (EA) customers** must assign the function identity's
@@ -143,9 +139,11 @@ management group: `Advisor Recommendations Reader`, granting only
   `roleAssignments/write` to grant arbitrary roles.
 - **Advisor read role.** Azure Advisor RBAC-trims recommendations to scopes the
   caller can read: without a read role the recommendations API returns `200` with
-  an empty array (never `403`), so the exporter silently finds nothing. The custom
-  role is the least-privilege option - only `Microsoft.Advisor/recommendations/read`,
-  rather than full `Reader`.
+  an empty array (never `403`), so the exporter silently finds nothing. The
+  exporter only reads, but there is **no read-only built-in** for Advisor
+  recommendations - `Advisor Recommendations Contributor`
+  (`recommendations/read` + `write` + `available/action`) is the least-privilege
+  built-in that includes the read action, and it avoids maintaining a custom role.
 - **Billing roles.** For MCA the `Billing account reader` role is assigned to the
   function identity automatically.
 
@@ -555,6 +553,7 @@ pre-commit hook.
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
 | <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created. | `string` | `null` | no |
 | <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
+| <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is always created (it is internal to the module's federation app). | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
 
 ## Outputs

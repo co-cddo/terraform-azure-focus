@@ -111,6 +111,12 @@ variable "is_enterprise_customer" {
   default     = false
 }
 
+variable "manage_role_assignments" {
+  description = "Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is always created (it is internal to the module's federation app)."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
