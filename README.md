@@ -299,7 +299,7 @@ prerequisites.
 | Scope | Role | Why it is needed |
 |---|---|---|
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
-| Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. `Contributor` cannot assign roles. |
+| Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group | **User Access Administrator** (_constrainable - see below*_) | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
 | Billing account - **MCA** | **Billing account contributor** | Create the daily FOCUS export at billing-account scope and assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** + a manual step | Create the daily FOCUS export. The function identity's billing role **cannot** be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` [output](#output_enterprise_billing_manual_action_required) prints the exact manual step. |
