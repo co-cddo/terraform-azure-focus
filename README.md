@@ -56,7 +56,7 @@ prerequisites.
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group | **User Access Administrator*** | Create the custom Advisor role definition and assign `Carbon Optimization Reader` + the custom Advisor role to the function identity, tenant-wide. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
-| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role will not be assigned by Terraform (needs Enterprise Administrator) - the `enterprise_billing_manual_action_required` [output](#output_enterprise_billing_manual_action_required) prints the exact manual step. |
+| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the important note below. |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
@@ -85,13 +85,23 @@ system topic and for each Cost Management export.
 | Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
 | Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
 | Function identity | Advisor Recommendations Reader (custom role) | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Grants only `Microsoft.Advisor/recommendations/read`. |
-| Function identity | Billing account reader (billing role) | each billing account | Enumerate subscriptions and create/run FOCUS cost exports. **MCA only** - assigned automatically; **EA** must be done manually. |
+| Function identity | Billing account reader | MCA Billing account(s) (if any) | Enumerate subscriptions and create/run FOCUS cost exports. |
 | Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
 | Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
 
 The module also **creates one custom role definition** at the Tenant Root
 management group: `Advisor Recommendations Reader`, granting only
 `Microsoft.Advisor/recommendations/read`.
+
+> [!IMPORTANT]
+> **Enterprise Agreement (EA) customers** must assign the function identity's
+> billing role manually after `terraform apply`. This module cannot do it — it
+> requires Enterprise Administrator privileges. The
+> `enterprise_billing_manual_action_required`
+> [output](#output_enterprise_billing_manual_action_required) prints the function
+> identity's principal ID, the tenant ID and the role-definition IDs you need.
+> Until this is done, the FOCUS cost export and backfill will not work for EA
+> billing accounts.
 
 #### Why these specific grants
 
@@ -122,10 +132,7 @@ management group: `Advisor Recommendations Reader`, granting only
   role is the least-privilege option - only `Microsoft.Advisor/recommendations/read`,
   rather than full `Reader`.
 - **Billing roles.** For MCA the `Billing account reader` role is assigned to the
-  function identity automatically. For EA this cannot be automated (it needs
-  Enterprise Administrator), so the `enterprise_billing_manual_action_required`
-  [output](#output_enterprise_billing_manual_action_required) prints the principal
-  ID, tenant ID and role-definition IDs needed to do it by hand.
+  function identity automatically.
 
 ## Security Features
 
