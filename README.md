@@ -60,24 +60,31 @@ prerequisites.
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
-> function identity at the Tenant Root Group, so it can be constrained to a
-> custom role with the following actions:
+> function identity at the Tenant Root Group, so it should be constrained.
+> `User Access Administrator` grants the full `Microsoft.Authorization/*` action
+> set - including the ability to assign **any** role - so on its own it is a
+> privilege-escalation path. Lock it down with an Azure **ABAC condition** on the
+> role assignment.
 >
-> ```text
-> Microsoft.Authorization/roleDefinitions/write
-> Microsoft.Authorization/roleDefinitions/delete
-> Microsoft.Authorization/roleAssignments/write
-> Microsoft.Authorization/roleAssignments/delete
-> ```
+> In the portal: **Tenant Root Group → Access control (IAM) → the deployment
+> service principal's `User Access Administrator` assignment → View/Edit → Configure (under 'Constrain roles'), then add the two roles the module assigns:
 >
-> The first two are needed to create and destroy the custom Advisor role
-> definition; the last two to assign `Carbon Optimization Reader` and the
-> custom Advisor role to the function identity.
+> - `Carbon Optimization Reader`
+> - `Advisor Recommendations Reader` (the custom role this module creates)
 >
-> The custom role is named `Advisor Recommendations Reader` for the default
-> deployment; additional deployments in the same tenant must set
-> `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
-> collision.
+> Two limitations to be aware of:
+>
+> - The condition constrains role **assignments** only. Creating and destroying
+>   the custom Advisor **role definition** still needs
+>   `Microsoft.Authorization/roleDefinitions/write` and `/delete`, which
+>   `User Access Administrator` provides and "Constrain roles" does **not**
+>   restrict.
+> - The condition matches the custom role by its **role-definition GUID** (fixed
+>   in Terraform state). It is named `Advisor Recommendations Reader` for the
+>   default deployment; additional deployments in the same tenant must set
+>   `cost_mgmt_suffix` (appended to the role name) to avoid a tenant-wide name
+>   collision. If the role is recreated (new deployment, suffix change, or its
+>   `random_uuid` regenerates) you must re-add it to the condition.
 
 ### b) Privileges assigned by the module
 
@@ -103,7 +110,7 @@ management group: `Advisor Recommendations Reader`, granting only
 
 > [!IMPORTANT]
 > **Enterprise Agreement (EA) customers** must assign the function identity's
-> billing role manually after `terraform apply`. This module cannot do it — it
+> billing role manually after `terraform apply`. This module cannot do it - it
 > requires Enterprise Administrator privileges. The
 > `enterprise_billing_manual_action_required`
 > [output](#output_enterprise_billing_manual_action_required) prints the function
