@@ -22,8 +22,8 @@ This Terraform module exports Azure cost data and writes it to a configured AWS 
 
 ## Architecture
 
-This module creates a fully integrated solution for exporting multiple Azure
-datasets and forwarding them to AWS S3. The following diagram illustrates the
+This module creates a fully integrated solution for exporting multiple cost-related
+datasets from Azure and forwarding them to AWS S3. The following diagram illustrates the
 data flow and component architecture for all three export types:
 
 ![Azure FOCUS Cost Export Architecture](images/infra.png)
