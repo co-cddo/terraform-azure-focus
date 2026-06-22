@@ -191,18 +191,23 @@ resource "null_resource" "backfill_exports_cleanup_warning" {
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["pwsh", "-NoProfile", "-Command"]
-    # Print to the warning stream for local runs, and additionally emit a GitHub
-    # Actions warning annotation so the reminder surfaces in the run summary/
-    # annotation panel rather than being buried in the destroy log (this
-    # null_resource is torn down early, so its output scrolls off otherwise).
-    # Newlines are encoded as %0A so the multi-line message survives the
-    # single-line ::warning:: workflow command.
+    # Print to the warning stream for local runs, and on GitHub Actions also
+    # append to the job summary so the reminder surfaces on the run's Summary
+    # page rather than being buried in the destroy log (this null_resource is
+    # torn down early, so its output scrolls off otherwise).
+    #
+    # A ::warning:: workflow-command annotation does NOT work here: Terraform
+    # prefixes every line of local-exec output with the resource address, so
+    # the runner never sees "::warning" at the start of the line. Writing to the
+    # $GITHUB_STEP_SUMMARY file is plain file I/O and is unaffected by that.
     command = <<-EOT
       $msg = $env:BACKFILL_CLEANUP_WARNING
       Write-Warning $msg
-      if ($env:GITHUB_ACTIONS -eq 'true') {
-        $oneLine = ($msg -replace "`r?`n", '%0A')
-        Write-Output "::warning title=Backfill export cleanup::$oneLine"
+      if ($env:GITHUB_STEP_SUMMARY) {
+        $nl = [Environment]::NewLine
+        $fence = '```'
+        $summary = "## Backfill export cleanup$nl$nl$fence$nl$msg$nl$fence"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
       }
     EOT
     environment = {
