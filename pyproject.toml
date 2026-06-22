@@ -6,30 +6,6 @@ requires-python = ">=3.13"
 [build-system]
 requires = ["setuptools", "wheel"]
 
-[tool.pytest.ini_options]
-testpaths = [
-    "src/cost_export"
-]
-python_files = [
-    "test_*.py",
-    "*_test.py"
-]
-python_functions = [
-    "test_*"
-]
-addopts = [
-    "-v",
-    "--tb=short",
-    "--strict-markers",
-    "--disable-warnings",
-    "--color=yes"
-]
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "carbon_api: Carbon API related tests"
-]
-
 [tool.black]
 line-length = 120
 target-version = ['py39', 'py310', 'py311']

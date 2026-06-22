@@ -185,7 +185,6 @@ python-setup:
 	@echo "--> Setting up Python test environment"
 	@cd src/cost_export && python3 -m pip install --upgrade pip
 	@cd src/cost_export && python3 -m pip install -r requirements.txt
-	@cd src/cost_export && python3 -m pip install -r requirements-test.txt
 
 tests-python: python-setup
 	@echo "--> Running Python tests for carbon export functions"
