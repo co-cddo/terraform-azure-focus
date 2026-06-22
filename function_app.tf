@@ -191,7 +191,20 @@ resource "null_resource" "backfill_exports_cleanup_warning" {
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["pwsh", "-NoProfile", "-Command"]
-    command     = "Write-Warning $env:BACKFILL_CLEANUP_WARNING"
+    # Print to the warning stream for local runs, and additionally emit a GitHub
+    # Actions warning annotation so the reminder surfaces in the run summary/
+    # annotation panel rather than being buried in the destroy log (this
+    # null_resource is torn down early, so its output scrolls off otherwise).
+    # Newlines are encoded as %0A so the multi-line message survives the
+    # single-line ::warning:: workflow command.
+    command = <<-EOT
+      $msg = $env:BACKFILL_CLEANUP_WARNING
+      Write-Warning $msg
+      if ($env:GITHUB_ACTIONS -eq 'true') {
+        $oneLine = ($msg -replace "`r?`n", '%0A')
+        Write-Output "::warning title=Backfill export cleanup::$oneLine"
+      }
+    EOT
     environment = {
       BACKFILL_CLEANUP_WARNING = self.triggers.warning
     }
