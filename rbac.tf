@@ -1,4 +1,5 @@
 resource "random_uuid" "app_uuid" {}
+
 resource "azuread_application" "aws_app" {
   display_name = "cost-export-${random_string.unique.result}"
   owners       = [data.azurerm_client_config.current.object_id]
