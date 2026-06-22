@@ -35,6 +35,10 @@ data flow and component architecture for all three export types:
 - [Deployment privileges](#a-deployment-privileges-prerequisite-must-be-granted-outside-this-module), granted to the principal that runs
   `terraform apply`. **These are assumed to be in place before the module runs -
   the module does not create them.**
+- [PowerShell 7 (`pwsh`)](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
+  on the machine that runs `terraform apply`/`terraform destroy`. The module uses
+  `local-exec` provisioners that invoke `pwsh` to publish the function code and to
+  print the backfill-export cleanup warning on destroy, so `pwsh` must be on `PATH`. Note that all GitHub runner images include the current LTS release by default.
 
 ## Privileges
 
