@@ -398,6 +398,25 @@ schedule.
 The backfill start date (`backfill_start_date`) module terraform variable must
 be explicitly set.
 
+### Cleaning Up Backfill Exports on Destroy
+
+Backfill runs create one-off Cost Management export jobs (named
+`focus-backfill-<int>-<YYYY>-<MM>`) per billing-account scope at
+runtime. These are created by the function app, **not** by Terraform, so they are
+**not** removed when the module is destroyed. Left behind, they count against the
+per-scope Cost Management export quota.
+
+Terraform cannot delete them for you, but `terraform destroy` prints a reminder
+(via the `null_resource.backfill_exports_cleanup_warning` resource). When running
+in GitHub Actions the same reminder is appended to the job summary so it does not
+scroll off in the destroy log.
+
+To clean them up after a destroy:
+
+- Select the `Exports` tab on the `Cost Management + Billing` blade in the Azure portal
+- Search `focus-backfill-`
+- Multi-select exports and delete in small batches
+
 ### Updating Python Dependencies
 
 Python dependencies are managed using a two-file approach:
