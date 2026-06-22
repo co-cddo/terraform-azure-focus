@@ -132,10 +132,14 @@ resource "azurerm_monitor_diagnostic_setting" "function_app" {
 }
 
 resource "azurerm_application_insights" "this" {
-  name                                  = "ai-func-cost-export-${random_string.unique.result}"
-  location                              = azurerm_resource_group.cost_export.location
-  resource_group_name                   = azurerm_resource_group.cost_export.name
-  application_type                      = "web"
+  name                = "ai-func-cost-export-${random_string.unique.result}"
+  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = azurerm_resource_group.cost_export.name
+  application_type    = "web"
+  # Point the component at the module's own workspace so telemetry lands there instead of an
+  # Azure auto-provisioned "managed" workspace (classic App Insights is retired, so without this
+  # Azure creates a separate workspace in an ai_*_managed resource group).
+  workspace_id                          = local.effective_log_analytics_workspace_id
   daily_data_cap_in_gb                  = 5
   daily_data_cap_notifications_disabled = false
   disable_ip_masking                    = false
