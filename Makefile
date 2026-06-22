@@ -12,7 +12,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-.PHONY: all security lint format documentation documentation-examples validate-all validate validate-examples init examples tests tests-python python-setup python-lint python-format
+.PHONY: all security lint format documentation documentation-examples validate-all validate validate-examples init examples tests python-validate python-validate-quick python-setup python-lint python-format
 
 TERRAFORM_DOCS_DOCKER=docker run --rm --volume "$$(pwd):/workspace" --workdir /workspace -u $$(id -u) quay.io/terraform-docs/terraform-docs:0.20.0
 
@@ -22,7 +22,7 @@ all:
 	$(MAKE) init
 	$(MAKE) validate
 	$(MAKE) tests
-	$(MAKE) tests-python
+	$(MAKE) python-validate
 	$(MAKE) lint
 	$(MAKE) security
 	$(MAKE) format
@@ -180,16 +180,16 @@ python-lock:
 	  --python-version 3.13 --python-platform linux \
 	  --output-file requirements.txt requirements.in
 
-# Python testing targets for carbon export functions
+# Python validation targets for carbon export functions
 python-setup:
-	@echo "--> Setting up Python test environment"
+	@echo "--> Setting up Python environment"
 	@cd src/cost_export && python3 -m pip install --upgrade pip
 	@cd src/cost_export && python3 -m pip install -r requirements.txt
 
-tests-python: python-setup
-	@echo "--> Running Python tests for carbon export functions"
+python-validate: python-setup
+	@echo "--> Validating Python for carbon export functions"
 	@cd src/cost_export && echo "Validating Python syntax..." && python3 -m py_compile function_app.py common.py
-	@echo "✅ All Python tests completed successfully"
+	@echo "✅ Python validation completed successfully"
 
 python-lint:
 	@echo "--> Running Python linting checks"
@@ -202,7 +202,7 @@ python-format:
 	@cd src/cost_export && isort --profile black *.py
 	@echo "✅ Python code formatted successfully"
 
-python-test-quick:
+python-validate-quick:
 	@echo "--> Running quick Python syntax validation"
 	@cd src/cost_export && python3 -m py_compile function_app.py common.py
 	@echo "✅ Quick Python validation completed"

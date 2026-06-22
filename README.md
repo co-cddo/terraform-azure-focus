@@ -516,44 +516,6 @@ terraform init
 terraform plan
 ```
 
-## Testing
-
-This module includes comprehensive tests for the carbon export functionality,
-including dynamic date range calculations, idempotency features, and
-subscription batching logic.
-
-### Running Tests Locally
-
-Use the Makefile targets for easy test execution:
-
-```bash
-# Run all Python tests
-make tests-python
-
-# Quick validation (syntax check + unit tests)
-make python-test-quick
-
-# Run individual test suites
-cd src/cost_export
-python3 test_carbon_date_range.py
-python3 test_carbon_idempotency.py
-python3 test_carbon_batching.py
-python3 test_carbon_batching_unit.py
-```
-
-### Test Coverage
-
-The test suite covers:
-
-- **Dynamic Date Range Calculation**: Validates that carbon API date ranges
-  are calculated correctly based on Microsoft's data availability rules
-- **Idempotency**: Ensures carbon export functions can be safely re-run
-  without duplicate processing
-- **Subscription Batching**: Tests the automatic batching logic that handles
-  large subscription lists (>100) for the Carbon API
-- **Error Handling**: Validates graceful handling of API limits and failures
-- **Syntax Validation**: Ensures all Python code compiles correctly
-
 ## Terraform Documentation
 
 Terraform module documentation is maintained by a `terraform-docs`
