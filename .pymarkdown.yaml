@@ -5,7 +5,9 @@
 # the rules those generated/example blocks trip; all others keep their defaults.
 plugins:
   MD013:
-    enabled: false
+    enabled: true
+    line_length: 2000
+    code_block_line_length: 2000
   MD033:
     enabled: false
   # The generated TF_DOCS block is injected without blank-line padding so it
