@@ -9,6 +9,18 @@ resource "azurerm_service_plan" "cost_export" {
   tags                = var.tags
 }
 
+# User-assigned identity for the function app. Used in preference to a system-assigned
+# identity so the principal/object ID is stable across function-app replacement: the
+# application RBAC grants in rbac.tf (and any constrained delegation that pins this
+# principal) survive a recreate of the function app, which a system-assigned identity
+# would not - Azure mints a new object ID on every recreate.
+resource "azurerm_user_assigned_identity" "cost_export" {
+  name                = "id-cost-export-${random_string.unique.result}"
+  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = azurerm_resource_group.cost_export.location
+  tags                = var.tags
+}
+
 resource "azurerm_function_app_flex_consumption" "cost_export" {
   name                = "func-cost-export-${random_string.unique.result}"
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -33,7 +45,8 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   public_network_access_enabled = var.deploy_from_external_network
 
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.cost_export.id]
   }
 
   site_config {
@@ -69,16 +82,22 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
-    "ENTRA_APP_CLIENT_ID"                       = azuread_application.aws_app.client_id
-    "ENTRA_APP_URN"                             = local.identifier_uri
-    "AWS_ROLE_ARN"                              = local.aws_role_arn
-    "AWS_REGION"                                = var.aws_region
-    "S3_FOCUS_PATH"                             = local.aws_target_file_path
-    "S3_UTILIZATION_PATH"                       = local.aws_target_file_path
-    "S3_RECOMMENDATIONS_PATH"                   = local.aws_target_file_path
-    "S3_CARBON_PATH"                            = local.aws_target_file_path
-    "CARBON_DIRECTORY_NAME"                     = local.carbon_directory_name
-    "CARBON_API_TENANT_ID"                      = data.azurerm_client_config.current.tenant_id
+    # The queue-trigger identity-based connection must name the user-assigned identity explicitly:
+    # unlike a system-assigned identity, the host cannot infer which identity to use otherwise.
+    "StorageAccountManagedIdentity__credential" = "managedidentity"
+    "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
+    # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
+    "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
+    "ENTRA_APP_CLIENT_ID"        = azuread_application.aws_app.client_id
+    "ENTRA_APP_URN"              = local.identifier_uri
+    "AWS_ROLE_ARN"               = local.aws_role_arn
+    "AWS_REGION"                 = var.aws_region
+    "S3_FOCUS_PATH"              = local.aws_target_file_path
+    "S3_UTILIZATION_PATH"        = local.aws_target_file_path
+    "S3_RECOMMENDATIONS_PATH"    = local.aws_target_file_path
+    "S3_CARBON_PATH"             = local.aws_target_file_path
+    "CARBON_DIRECTORY_NAME"      = local.carbon_directory_name
+    "CARBON_API_TENANT_ID"       = data.azurerm_client_config.current.tenant_id
     # We use the tenant root management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
     "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
     # Mapping of billing account index to billing account ID for S3 path organization
@@ -95,11 +114,32 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 }
 
+resource "azurerm_monitor_diagnostic_setting" "function_app" {
+  name                       = "diag-function-app"
+  target_resource_id         = azurerm_function_app_flex_consumption.cost_export.id
+  log_analytics_workspace_id = local.effective_log_analytics_workspace_id
+
+  # FunctionAppLogs are emitted by the Functions host (not the in-process worker), so they
+  # persist even when an invocation is hard-killed (timeout / OOM / instance recycle) before
+  # the worker can flush its Application Insights telemetry.
+  enabled_log {
+    category_group = "allLogs"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
 resource "azurerm_application_insights" "this" {
-  name                                  = "ai-func-cost-export-${random_string.unique.result}"
-  location                              = azurerm_resource_group.cost_export.location
-  resource_group_name                   = azurerm_resource_group.cost_export.name
-  application_type                      = "web"
+  name                = "ai-func-cost-export-${random_string.unique.result}"
+  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = azurerm_resource_group.cost_export.name
+  application_type    = "web"
+  # Point the component at the module's own workspace so telemetry lands there instead of an
+  # Azure auto-provisioned "managed" workspace (classic App Insights is retired, so without this
+  # Azure creates a separate workspace in an ai_*_managed resource group).
+  workspace_id                          = local.effective_log_analytics_workspace_id
   daily_data_cap_in_gb                  = 5
   daily_data_cap_notifications_disabled = false
   disable_ip_masking                    = false
@@ -124,6 +164,54 @@ resource "null_resource" "publish_function_code" {
   }
 
   depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+}
+
+# Backfill runs create one-off Cost Management export jobs ("focus-backfill{suffix}-<account>-<year>-<month>")
+# per billing-account scope at runtime. These are NOT managed by Terraform, so destroying this module leaves
+# them behind in Azure Cost Management (where they count against the per-scope export quota). This resource
+# prints a reminder, during `terraform destroy`, to delete them from the portal.
+#
+# Destroy-time provisioners may only reference `self`, so the message - including the suffix - is baked into
+# `triggers` at create time and read back from state on destroy.
+resource "null_resource" "backfill_exports_cleanup_warning" {
+  triggers = {
+    warning = join("\n", [
+      "",
+      "WARNING: one-off 'focus-backfill${local.cost_mgmt_suffix}-*' Cost Management export jobs may have been left behind by backfill runs.",
+      "They are created at runtime by the function app (not by Terraform) and are not removed by this destroy.",
+      "Delete them so they do not count against the per-scope Cost Management export quota.",
+      "In the Azure portal, open 'Cost Management + Billing' > 'Exports' for each billing-account scope,",
+      "find the exports named 'focus-backfill${local.cost_mgmt_suffix}-*', and delete them.",
+      "",
+    ])
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["pwsh", "-NoProfile", "-Command"]
+    # Print to the warning stream for local runs, and on GitHub Actions also
+    # append to the job summary so the reminder surfaces on the run's Summary
+    # page rather than being buried in the destroy log (this null_resource is
+    # torn down early, so its output scrolls off otherwise).
+    #
+    # A ::warning:: workflow-command annotation does NOT work here: Terraform
+    # prefixes every line of local-exec output with the resource address, so
+    # the runner never sees "::warning" at the start of the line. Writing to the
+    # $GITHUB_STEP_SUMMARY file is plain file I/O and is unaffected by that.
+    command = <<-EOT
+      $msg = $env:BACKFILL_CLEANUP_WARNING
+      Write-Warning $msg
+      if ($env:GITHUB_STEP_SUMMARY) {
+        $nl = [Environment]::NewLine
+        $fence = '```'
+        $summary = "## Backfill export cleanup$nl$nl$fence$nl$msg$nl$fence"
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+      }
+    EOT
+    environment = {
+      BACKFILL_CLEANUP_WARNING = self.triggers.warning
+    }
+  }
 }
 
 resource "null_resource" "set_function_app_public_network_access_disabled" {

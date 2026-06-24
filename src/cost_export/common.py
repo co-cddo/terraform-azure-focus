@@ -31,6 +31,13 @@ def is_uuid(value):
 
 class Config:
     client_id = _get_required_env("ENTRA_APP_CLIENT_ID")  # Example: "00000000-0000-0000-0000-000000000000"
+
+    # Client id of the user-assigned managed identity the function runs as. Required so
+    # ManagedIdentityCredential targets the correct identity when the app has a user-assigned
+    # identity (a bare ManagedIdentityCredential() only resolves a system-assigned identity).
+    # Left unset for local/backfill runs (and any system-assigned setup), where None tells
+    # ManagedIdentityCredential to fall back to its default behaviour.
+    managed_identity_client_id = os.environ.get("MANAGED_IDENTITY_CLIENT_ID")
     urn = _get_required_env("ENTRA_APP_URN")  # Example: "api://AWS-Federation-App"
     arn = _get_required_env("AWS_ROLE_ARN")  # Example: "arn:aws:iam::000000000000:role/aad_s3"
     s3_focus_path = _get_required_env("S3_FOCUS_PATH")  # Example: "s3://s3bucketname/test/"

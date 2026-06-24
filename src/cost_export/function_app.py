@@ -94,7 +94,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         # (the cost_export storage account has shared access keys disabled)
         blob_service_client = BlobServiceClient(
             account_url=Config.storage_account_blob_endpoint,
-            credential=ManagedIdentityCredential(),
+            credential=ManagedIdentityCredential(client_id=Config.managed_identity_client_id),
         )
         container_client = blob_service_client.get_container_client(Config.container_name)
 

@@ -8,21 +8,159 @@
 -->
 
 ![GitHub Actions](../../actions/workflows/terraform.yml/badge.svg)
-<!-- ![Python Tests](../../actions/workflows/python-tests.yml/badge.svg) -->
 
 ## Description
 
-This Terraform module exports Azure cost-related data and forwards to AWS S3.
-The supported data sets are described below:
+This Terraform module exports Azure cost data and writes it to a configured AWS S3 bucket. Supported data sets are described below:
 
-- **Cost Data**: Daily parquet files containing standardized cost and usage
-  details in FOCUS format; daily schedule requires an end date - defaults to
-  10 years from deployment but can be changed with module variable
-  `cost_export_daily_schedule_to_years`
+- **Cost Data**: Daily parquet files containing standardised cost and usage
+  details in FOCUS format
 - **Azure Advisor Recommendations**: Daily JSON files containing cost
-  optimization recommendations from Azure Advisor
+  optimisation recommendations from Azure Advisor
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint
   metrics across Scope 1 and Scope 3 emissions
+
+## Architecture
+
+This module creates a fully integrated solution for exporting multiple cost-related
+datasets from Azure and forwarding them to AWS S3. The following diagram illustrates the
+data flow and component architecture for all three export types:
+
+![Azure FOCUS Cost Export Architecture](images/infra.png)
+
+## Prerequisites
+
+- An existing virtual network with two subnets, one of which has a delegation
+  for `Microsoft.App.environments` (`function_app_subnet_id`).
+- [Deployment privileges](#a-deployment-privileges-prerequisite-must-be-granted-outside-this-module), granted to the principal that runs
+  `terraform apply`. **These are assumed to be in place before the module runs -
+  the module does not create them.**
+- [PowerShell 7 (`pwsh`)](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
+  on the machine that runs `terraform apply`/`terraform destroy`. The module uses
+  `local-exec` provisioners that invoke `pwsh` to publish the function code and to
+  print the backfill-export cleanup warning on destroy, so `pwsh` must be on `PATH`. Note that all GitHub runner images include the current LTS release by default.
+
+## Privileges
+
+This section describes every privilege involved, split into what the deploying
+principal must already hold (a) and what the module grants at apply time (b).
+Least privilege is a primary goal - the grants below are intentionally as
+narrow as the Azure platform allows.
+
+### a) Deployment privileges (prerequisite, must be granted outside this module)
+
+The principal running `terraform apply` (`current_principal_type` = `User` or
+`ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
+storage **data-plane** roles it needs during apply (see (b)), so those are *not*
+prerequisites — unless `manage_role_assignments = false`, in which case they are
+(see the note in (b)).
+
+| Scope | Role | Why it is needed |
+|---|---|---|
+| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
+| Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
+| Tenant Root management group | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
+| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
+| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the important note below. |
+
+> [!TIP]
+> *The management-group `User Access Administrator` only manages RBAC for the
+> function identity at the Tenant Root Group, so it should be constrained.
+> `User Access Administrator` grants the full `Microsoft.Authorization/*` action
+> set - including the ability to assign **any** role - so on its own it is a
+> privilege-escalation path. Lock it down with an Azure **ABAC condition** on the
+> role assignment.
+>
+> In the portal: **Tenant Root Group → Access control (IAM) → the deployment
+> service principal's `User Access Administrator` assignment → View/Edit →
+> Configure** (under 'Constrain roles'), then add the two built-in roles the
+> module assigns:
+>
+> - `Carbon Optimization Reader`
+> - `Advisor Recommendations Contributor`
+
+### b) Privileges assigned by the module
+
+The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
+system topic and for each Cost Management export.
+
+> [!NOTE]
+> Every grant in the table below is created only when `manage_role_assignments`
+> is `true` (the default). Set it to `false` if RBAC is owned by a separate
+> team/process: the module then creates **none** of these assignments and you
+> must pre-provision every one yourself — **including the deploying principal's
+> `Storage Blob Data Contributor` and `Storage Queue Data Contributor` roles**,
+> without which `terraform apply` fails when the provider reads the cost-export
+> storage account over Entra ID. The Entra `AssumeRoleWithWebIdentity` app-role
+> assignment is the one exception: it is always created, as it is internal to the
+> module's own federation app.
+
+| Principal | Role | Scope | Purpose |
+|---|---|---|---|
+| Deploying principal | Storage Blob Data Contributor | cost-export resource group | Apply-time only: the azurerm provider reads the storage account's blob properties over Entra ID. |
+| Deploying principal | Storage Queue Data Contributor | cost-export resource group | Apply-time only: the provider also reads queue properties. |
+| Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
+| Function identity | Storage Queue Data Contributor | cost-export storage account | Read the queue that triggers the `CostExportProcessor`. |
+| Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
+| Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
+| Function identity | Advisor Recommendations Contributor | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Least-privilege built-in for this - see note below. |
+| Function identity | Billing account reader | MCA Billing account(s) (if any) | Enumerate subscriptions and create/run FOCUS cost exports. |
+| Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
+| Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
+
+> [!IMPORTANT]
+> **Enterprise Agreement (EA) customers** must assign the function identity's
+> billing role manually after `terraform apply`. This module cannot do it - it
+> requires Enterprise Administrator privileges. The
+> `enterprise_billing_manual_action_required`
+> [output](#output_enterprise_billing_manual_action_required) prints the function
+> identity's principal ID, the tenant ID and the role-definition IDs you need.
+> Until this is done, the FOCUS cost export and backfill will not work for EA
+> billing accounts.
+
+#### Why these specific grants
+
+- **Storage data-plane roles (deployer and function).** The cost-export storage
+  account disables shared access keys, so the provider authenticates to its data
+  plane with Entra ID (`storage_use_azuread = true`). On create and refresh the
+  provider reads **both** blob and queue service properties; without the queue
+  role the read fails and the provider surfaces a misleading
+  `KeyBasedAuthenticationNotPermitted` (403) - see
+  [terraform-provider-azurerm#29984](https://github.com/hashicorp/terraform-provider-azurerm/issues/29984).
+  The deployer grants are scoped to the resource group and have a short
+  propagation delay before the storage account is created.
+- **Constrained `Owner` for the function.** When creating an export to a
+  firewall-protected storage account, Cost Management validates that the caller
+  can access the destination and then assigns `Storage Blob Data Contributor` to
+  the export's own managed identity. Narrower grants (a custom "authorization
+  actions only" role, Storage Account Contributor, or the data-plane blob roles)
+  fail at create time with `401 "User is not authorized to access the specified
+  storage account"` - `Owner` is what Cost Management actually requires (see this
+  [Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/5830148/cross-subscription-export-fails-due-to-storage-acc)).
+  Because `Owner` is broad, it is constrained with an ABAC condition so the
+  function identity may only assign or remove the `Storage Blob Data Contributor`
+  role on this account - every other `Owner` action is allowed, but it cannot use
+  `roleAssignments/write` to grant arbitrary roles.
+- **Advisor read role.** Azure Advisor RBAC-trims recommendations to scopes the
+  caller can read: without a read role the recommendations API returns `200` with
+  an empty array (never `403`), so the exporter silently finds nothing. The
+  exporter only reads, but there is **no read-only built-in** for Advisor
+  recommendations - `Advisor Recommendations Contributor`
+  (`recommendations/read` + `write` + `available/action`) is the least-privilege
+  built-in that includes the read action, and it avoids maintaining a custom role.
+- **Billing roles.** For MCA the `Billing account reader` role is assigned to the
+  function identity automatically.
+
+## Security Features
+
+- **Private Networking**: All components use private endpoints and VNet
+  integration
+- **Zero Trust**: No public network access (except during deployment if
+  `deploy_from_external_network=true`)
+- **Managed Identity**: Azure resources authenticate using managed identities
+- **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived
+  AWS credentials
+- **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
 
 > [!NOTE]
 > There is currently an
@@ -33,13 +171,46 @@ The supported data sets are described below:
 > [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f)
 > (behind a paywall, sadly).
 
-## Architecture
+## Usage
 
-This module creates a fully integrated solution for exporting multiple Azure
-datasets and forwarding them to AWS S3. The following diagram illustrates the
-data flow and component architecture for all three export types:
+```hcl
+provider "azurerm" {
+  # These need to be explicitly registered
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  # Required: the cost_export storage account disables shared access keys, so the provider
+  # must use Entra ID for storage data-plane operations. Without this, apply fails with
+  # KeyBasedAuthenticationNotPermitted (403).
+  storage_use_azuread = true
+  features {}
+}
 
-![Azure FOCUS Cost Export Architecture](images/infra.png)
+module "example" {
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
+
+  aws_account_id                      = "<aws-account-id>"
+  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
+  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
+  virtual_network_name                = "existing-vnet"
+  virtual_network_resource_group_name = "existing-infra"
+  resource_group_name                 = "rg-cost-export"
+  # Setting to false or omitting this argument assumes that you have
+  # private GitHub runners configured in the existing virtual network.
+  # It is not recommended to set this to true in production
+  deploy_from_external_network        = false
+
+  # Uncomment when running in CI/CD with a service principal
+  # (e.g., GitHub Actions)
+  # current_principal_type = "ServicePrincipal"
+}
+```
+
+> [!TIP]
+> If you don't have a suitable existing Virtual Network with two subnets
+> (one of which has a delegation to Microsoft.App.environments), please
+> refer to the example configuration [here](examples/existing-infrastructure),
+> which provisions the prerequisite baseline infrastructure before consuming
+> the module.
 
 ## Data Flow
 
@@ -73,7 +244,7 @@ The module creates three distinct export pipelines for each of the data sets:
 - **Monthly Trigger**: `CarbonEmissionsExporter` function runs every day to
   download the latest data as soon as it becomes available (around the 19th
   of each month)
-  - API Call: Function calls Azure Carbon Optimization API against
+  - API Call: Function calls Azure Carbon API against
     `MonthlySummaryReport` for previous month's Scope 1 & 3 emissions
     - Batches the API call per 100 subscriptions, and merges all each of the
       datasets into one - refer to "subscription batching" below.
@@ -82,7 +253,7 @@ The module creates three distinct export pipelines for each of the data sets:
   - Upload: JSON data uploaded to S3 in partitioned structure:
     `billing_period=YYYYMMDD/`
 
-The Carbon Optimization API provides a rolling 12-month window of emissions
+The Carbon API provides a rolling 12-month window of emissions
 data. The available date range is calculated dynamically based on Microsoft's
 data availability policy:
 
@@ -104,7 +275,7 @@ calculated date range.
 
 ### Carbon API Subscription Batching
 
-The Carbon Optimization API has a maximum limit of 100 subscriptions per
+The Carbon API has a maximum limit of 100 subscriptions per
 request. The functions automatically handle large subscription lists through
 intelligent batching:
 
@@ -231,17 +402,43 @@ schedule.
 The backfill start date (`backfill_start_date`) module terraform variable must
 be explicitly set.
 
-## Security Features
+> [!WARNING]
+> **Do not test `BackfillTrigger` (or any long-running function) with the portal
+> "Run" button / Code + Test pane.** On the Flex Consumption plan, a manual
+> invocation (logged as `Reason=This function was programmatically called via the
+> host APIs`) makes the scale controller treat the instance as idle and **scale it
+> in (`DrainMode`) roughly two minutes in**, terminating the invocation before it
+> finishes. There is **no exception** in the logs because the worker process is
+> killed, not faulted. `BackfillTrigger` takes ~8 minutes to build a full
+> schedule, so a manual run never completes and leaves the schedule lock unwritten.
+>
+> **Timer-fired (scheduled) runs are not affected** - they run to completion. To
+> exercise the backfill on demand, temporarily change the cron schedule so the
+> timer itself fires, rather than clicking Run.
+>
+> Observe runs via **`FunctionAppLogs` in the Log Analytics workspace** (host-side,
+> survives the kill: look for `Executing`/`Executed Functions.BackfillTrigger` and
+> `DrainMode`), not the Code + Test live stream - that stream also stops after ~2
+> minutes and will make a healthy scheduled run *look* like it died.
 
-- **Private Networking**: All components use private endpoints and VNet
-  integration
-- **Zero Trust**: No public network access (except during deployment if
-  `deploy_from_external_network=true`)
-- **Managed Identity**: Azure resources authenticate using system-assigned
-  managed identities
-- **Cross-Cloud Federation**: OIDC federation eliminates need for long-lived
-  AWS credentials
-- **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
+### Cleaning Up Backfill Exports on Destroy
+
+Backfill runs create one-off Cost Management export jobs (named
+`focus-backfill-<int>-<YYYY>-<MM>`) per billing-account scope at
+runtime. These are created by the function app, **not** by Terraform, so they are
+**not** removed when the module is destroyed. Left behind, they count against the
+per-scope Cost Management export quota.
+
+Terraform cannot delete them for you, but `terraform destroy` prints a reminder
+(via the `null_resource.backfill_exports_cleanup_warning` resource). When running
+in GitHub Actions the same reminder is appended to the job summary so it does not
+scroll off in the destroy log.
+
+To clean them up after a destroy:
+
+- Select the `Exports` tab on the `Cost Management + Billing` blade in the Azure portal
+- Search `focus-backfill-`
+- Multi-select exports and delete in small batches
 
 ### Updating Python Dependencies
 
@@ -249,14 +446,14 @@ Python dependencies are managed using a two-file approach:
 
 | File | Purpose | Edit manually? |
 |---|---|---|
-| `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** — this is the source of truth |
-| `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** — always machine-generated |
+| `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** - this is the source of truth |
+| `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** - always machine-generated |
 
 `requirements.txt` is committed to the repository and is what Azure's Oryx build system installs using `--require-hashes`. It must contain every package in the dependency tree (direct and transitive) pinned with `==` and hashed. Do not edit it by hand.
 
 #### To add, remove, or update a dependency
 
-1. **Edit `src/cost_export/requirements.in`** — add, remove, or change the version of the direct dependency. Versions are pinned with `==`.
+1. **Edit `src/cost_export/requirements.in`** - add, remove, or change the version of the direct dependency. Versions are pinned with `==`.
 
    > **Note on boto3/s3fs compatibility:** `boto3` is capped at `<1.43` because `s3fs` pulls in `aiobotocore`, which requires `botocore<1.43.1`. `boto3>=1.43` requires `botocore>=1.43.15`, making the two incompatible. If you bump either package, re-check this constraint.
 
@@ -266,7 +463,7 @@ Python dependencies are managed using a two-file approach:
    make python-lock
    ```
 
-   This resolves the full dependency tree for **Linux / Python 3.13** (matching the Function App runtime) and overwrites `requirements.txt` with all packages pinned and hashed. `uv` is pre-installed in the dev container and fetches a Python 3.13 interpreter automatically — no local Python 3.13 required.
+   This resolves the full dependency tree for **Linux / Python 3.13** (matching the Function App runtime) and overwrites `requirements.txt` with all packages pinned and hashed. `uv` is pre-installed in the dev container and fetches a Python 3.13 interpreter automatically - no local Python 3.13 required.
 
 3. **Commit both files:**
 
@@ -274,69 +471,6 @@ Python dependencies are managed using a two-file approach:
    git add src/cost_export/requirements.in src/cost_export/requirements.txt
    git commit -m "chore: update python dependencies"
    ```
-
-## Prerequisites
-
-- An existing virtual network with two subnets, one of which has a delegation
-  for Microsoft.App.environments (`function_app_subnet_id`)
-- Role assignments:
-  - Azure RBAC:
-    - `Reader and Data Access`, `User Access Administrator` and
-      `Contributor` at the subscription scope (where you will be provisioning
-      resources)
-    - `User Access Administrator` at the Tenant Root Group management group
-      scope*
-  - Billing:
-    - Enterprise Agreement (EA): `EnrollmentReader` at the billing account
-      scope (see
-      [Assign Enterprise Agreement roles to service principals](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals))
-    - Microsoft Customer Agreement (MCA): `Billing account contributor` at
-      the billing account scope
-
-> [!TIP]
-> \* *Role assignment privileges can be constrained to `Carbon Optimization
-> Reader`, `Management Group Reader` and `Reader`*
-
-## Usage
-
-```hcl
-provider "azurerm" {
-  # These need to be explicitly registered
-  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  # Required: the cost_export storage account disables shared access keys, so the provider
-  # must use Entra ID for storage data-plane operations. Without this, apply fails with
-  # KeyBasedAuthenticationNotPermitted (403).
-  storage_use_azuread = true
-  features {}
-}
-
-module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
-
-  aws_account_id                      = "<aws-account-id>"
-  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
-  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
-  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
-  virtual_network_name                = "existing-vnet"
-  virtual_network_resource_group_name = "existing-infra"
-  resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have
-  # private GitHub runners configured in the existing virtual network.
-  # It is not recommended to set this to true in production
-  deploy_from_external_network        = false
-
-  # Uncomment when running in CI/CD with a service principal
-  # (e.g., GitHub Actions)
-  # current_principal_type = "ServicePrincipal"
-}
-```
-
-> [!TIP]
-> If you don't have a suitable existing Virtual Network with two subnets
-> (one of which has a delegation to Microsoft.App.environments), please
-> refer to the example configuration [here](examples/existing-infrastructure),
-> which provisions the prerequisite baseline infrastructure before consuming
-> the module.
 
 ## Dev Container
 
@@ -346,7 +480,7 @@ module "example" {
 > hooks, etc.) is pre-installed at pinned versions. You do not need to install
 > anything locally beyond Docker.
 
-### Getting Started
+### Setup
 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 2. Open the repo in VS Code
@@ -382,44 +516,6 @@ terraform init
 terraform plan
 ```
 
-## Testing
-
-This module includes comprehensive tests for the carbon export functionality,
-including dynamic date range calculations, idempotency features, and
-subscription batching logic.
-
-### Running Tests Locally
-
-Use the Makefile targets for easy test execution:
-
-```bash
-# Run all Python tests
-make tests-python
-
-# Quick validation (syntax check + unit tests)
-make python-test-quick
-
-# Run individual test suites
-cd src/cost_export
-python3 test_carbon_date_range.py
-python3 test_carbon_idempotency.py
-python3 test_carbon_batching.py
-python3 test_carbon_batching_unit.py
-```
-
-### Test Coverage
-
-The test suite covers:
-
-- **Dynamic Date Range Calculation**: Validates that carbon API date ranges
-  are calculated correctly based on Microsoft's data availability rules
-- **Idempotency**: Ensures carbon export functions can be safely re-run
-  without duplicate processing
-- **Subscription Batching**: Tests the automatic batching logic that handles
-  large subscription lists (>100) for the Carbon API
-- **Error Handling**: Validates graceful handling of API limits and failures
-- **Syntax Validation**: Ensures all Python code compiles correctly
-
 ## Terraform Documentation
 
 Terraform module documentation is maintained by a `terraform-docs`
@@ -443,7 +539,7 @@ pre-commit hook.
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
-| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31') | `list(string)` | n/a | yes |
+| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant\_id). | `list(string)` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the new resource group | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
@@ -461,6 +557,7 @@ pre-commit hook.
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
 | <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created. | `string` | `null` | no |
 | <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
+| <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is always created (it is internal to the module's federation app). | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
 
 ## Outputs
@@ -480,6 +577,7 @@ pre-commit hook.
 | <a name="output_deployment_storage_account_name"></a> [deployment\_storage\_account\_name](#output\_deployment\_storage\_account\_name) | The name of the deployment storage account |
 | <a name="output_deployment_storage_private_endpoint_ip"></a> [deployment\_storage\_private\_endpoint\_ip](#output\_deployment\_storage\_private\_endpoint\_ip) | The private IP address of the deployment storage blob private endpoint |
 | <a name="output_ea_billing_role_definition_ids"></a> [ea\_billing\_role\_definition\_ids](#output\_ea\_billing\_role\_definition\_ids) | The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL |
+| <a name="output_enterprise_billing_manual_action_required"></a> [enterprise\_billing\_manual\_action\_required](#output\_enterprise\_billing\_manual\_action\_required) | Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY. Empty for Microsoft Customer Agreement customers. |
 | <a name="output_event_grid_subscription_name"></a> [event\_grid\_subscription\_name](#output\_event\_grid\_subscription\_name) | The name of the Event Grid subscription for blob created events |
 | <a name="output_event_grid_system_topic_name"></a> [event\_grid\_system\_topic\_name](#output\_event\_grid\_system\_topic\_name) | The name of the Event Grid system topic for storage events |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |

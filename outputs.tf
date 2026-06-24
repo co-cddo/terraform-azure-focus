@@ -50,7 +50,7 @@ output "publish_code_command" {
 
 output "cost_export_app_principal_id" {
   description = "The principal id of the cost export app - use this to assign Enrollment Reader role"
-  value       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  value       = azurerm_user_assigned_identity.cost_export.principal_id
 }
 
 output "tenant_id" {
@@ -61,6 +61,26 @@ output "tenant_id" {
 output "ea_billing_role_definition_ids" {
   description = "The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL"
   value       = [for v in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"]
+}
+
+# Enterprise Agreement billing role assignments cannot be created by Terraform or the deploying
+# service principal - they require Enterprise Administrator privileges (see the commented-out
+# azapi block in rbac.tf). This output is empty for MCA customers (where "Billing account reader"
+# is assigned automatically) and, for EA customers, prints the manual action plus the IDs needed
+# to perform it - so it stands out in terraform apply / CI output.
+output "enterprise_billing_manual_action_required" {
+  description = "Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY. Empty for Microsoft Customer Agreement customers."
+  value = var.is_enterprise_customer ? join("\n", concat(
+    [
+      "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
+      "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
+      "  Function app managed identity (principal/object) ID: ${azurerm_user_assigned_identity.cost_export.principal_id}",
+      "  Tenant ID: ${data.azurerm_client_config.current.tenant_id}",
+      "  Role definition ID(s) (one per billing account):",
+    ],
+    [for v in var.billing_account_ids : "    /providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"],
+    ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
+  )) : ""
 }
 
 output "random_string_suffix" {

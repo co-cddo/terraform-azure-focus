@@ -1,10 +1,10 @@
-#### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
-
 resource "random_uuid" "app_uuid" {}
+
 resource "azuread_application" "aws_app" {
   display_name = "cost-export-${random_string.unique.result}"
   owners       = [data.azurerm_client_config.current.object_id]
 
+  #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
   app_role {
     id                   = random_uuid.app_uuid.id
     allowed_member_types = ["User", "Application"]
@@ -20,37 +20,29 @@ resource "azuread_service_principal" "aws_app" {
   client_id                    = azuread_application.aws_app.client_id
   app_role_assignment_required = false
   owners                       = [data.azurerm_client_config.current.object_id]
-
-  feature_tags {
-    enterprise = true
-    gallery    = true
-  }
 }
 
 resource "azuread_app_role_assignment" "aws_app" {
   app_role_id         = random_uuid.app_uuid.id
-  principal_object_id = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_object_id = azurerm_user_assigned_identity.cost_export.principal_id
   resource_object_id  = azuread_service_principal.aws_app.object_id
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
-# The cost_export storage account disables shared access keys (storage.tf), so the azurerm
-# provider authenticates to its data plane with Entra ID (storage_use_azuread = true). The
-# azurerm_storage_account resource reads BOTH blob and queue service properties on the data
-# plane during create and refresh, so the deploying principal needs both data roles - without
-# the queue role the queue-properties read fails and the provider's fallback surfaces a
-# misleading "KeyBasedAuthenticationNotPermitted" 403 (see hashicorp/terraform-provider-azurerm
-# issue #29984). The grants are scoped to the resource group (created before the storage account)
-# so they exist ahead of the create-time poll; the storage account depends on
-# time_sleep.wait_for_deployer_rbac to allow RBAC propagation before it is created.
+# Apply-time data-plane access for the deployer: the cost_export storage account disables shared
+# keys, so the provider reads blob + queue properties over Entra ID during create/refresh and needs
+# both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
+# propagate before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
-  scope                = azurerm_resource_group.cost_export.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = data.azurerm_client_config.current.object_id
-  principal_type       = var.current_principal_type
+  count              = var.manage_role_assignments ? 1 : 0
+  scope              = azurerm_resource_group.cost_export.id
+  role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
+  principal_id       = data.azurerm_client_config.current.object_id
+  principal_type     = var.current_principal_type
 }
 
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_resource_group.cost_export.id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
@@ -58,7 +50,8 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
 }
 
 resource "time_sleep" "wait_for_deployer_rbac" {
-  create_duration = "60s"
+  # No module-created grants to propagate when RBAC is managed externally.
+  create_duration = var.manage_role_assignments ? "60s" : "0s"
 
   depends_on = [
     azurerm_role_assignment.grant_deployer_cost_export_blob,
@@ -67,13 +60,15 @@ resource "time_sleep" "wait_for_deployer_rbac" {
 }
 
 resource "azurerm_role_assignment" "grant_func_queue_contributor" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 }
 
 resource "azurerm_role_assignment" "event_grid_queue_sender" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_storage_account.cost_export.id
   role_definition_name = "Storage Queue Data Message Sender"
   principal_id         = azurerm_eventgrid_system_topic.storage_events.identity[0].principal_id
@@ -81,30 +76,28 @@ resource "azurerm_role_assignment" "event_grid_queue_sender" {
 }
 
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
-  # TODO: Verify this scope is ok
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
   role_definition_name = "Carbon Optimization Reader"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 }
 
-resource "azurerm_role_assignment" "management_group_reader" {
+# The AdvisorRecommendationsExporter reads Advisor recommendations tenant-wide. Without a read role
+# the recommendations API returns 200 with an empty array (never 403). "Advisor Recommendations
+# Contributor" is the least-privilege built-in role granting Microsoft.Advisor/recommendations/read
+# - there is no read-only Advisor recommendations built-in. See README "Privileges".
+resource "azurerm_role_assignment" "advisor_recommendations_contributor" {
+  count                = var.manage_role_assignments ? 1 : 0
   scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  role_definition_name = "Management Group Reader"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
-}
-
-resource "azurerm_role_assignment" "advisor_reader" {
-  scope                = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
-  role_definition_name = "Reader"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  role_definition_name = "Advisor Recommendations Contributor"
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
 }
 
 # this only works for MCA customers
 resource "azapi_resource_action" "add_role_assignment" {
-  for_each = var.is_enterprise_customer ? [] : toset(var.billing_account_ids)
+  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
@@ -114,11 +107,55 @@ resource "azapi_resource_action" "add_role_assignment" {
   response_export_values = ["*"]
   body = {
     properties = {
-      principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-      # TODO: Look this up dynamically https://learn.microsoft.com/en-us/rest/api/billing/billing-role-definition/list-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
-      roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/50000000-aaaa-bbbb-cccc-100000000001"
+      principalId      = azurerm_user_assigned_identity.cost_export.principal_id
+      roleDefinitionId = local.billing_account_reader_role_ids[each.value]
     }
   }
+}
+
+# Function writes export output and creates export tasks that deliver to this storage account.
+resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
+  count              = var.manage_role_assignments ? 1 : 0
+  scope              = azurerm_storage_account.cost_export.id
+  role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
+  principal_id       = azurerm_user_assigned_identity.cost_export.principal_id
+  principal_type     = "ServicePrincipal"
+}
+
+# Cost Management requires Owner here: when creating an export to a firewall-protected storage
+# account it validates caller access and then assigns "Storage Blob Data Contributor" to the
+# export's own identity; narrower roles fail at create with 401. Owner is broad, so the ABAC
+# condition below restricts the function to assigning/removing ONLY that role on this account
+# (no privilege escalation via roleAssignments/write). Full rationale in README "Privileges".
+resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained" {
+  count                = var.manage_role_assignments ? 1 : 0
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Owner"
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
+  principal_type       = "ServicePrincipal"
+
+  condition_version = "2.0"
+  condition         = <<-EOT
+  (
+    (
+      !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
+    )
+    OR
+    (
+      @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.storage_blob_data_contributor_role_id}}
+    )
+  )
+  AND
+  (
+    (
+      !(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})
+    )
+    OR
+    (
+      @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${local.storage_blob_data_contributor_role_id}}
+    )
+  )
+  EOT
 }
 
 # for Enterprise Agreement customers - assign the "Enrollment Reader" role (24f8edb6-1668-4659-b5e2-40bb5f3a7d7e)
@@ -134,7 +171,7 @@ resource "azapi_resource_action" "add_role_assignment" {
 #   response_export_values = ["*"]
 #   body = {
 #     properties = {
-#       principalId = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+#       principalId = azurerm_user_assigned_identity.cost_export.principal_id
 #       # "Enrollment Reader" for enterprise account customers - https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals
 #       roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/${each.value}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"
 #       # principalTenantId = ????
@@ -167,29 +204,3 @@ resource "azapi_resource_action" "add_role_assignment" {
 #   method      = "DELETE"
 #   when        = "destroy"
 # }
-
-# required permission on function to write to storage because it creates Cost Mgmt Export tasks with a destination to storage (function needs permission to write to that storage endpoint on create)
-resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
-  scope                = azurerm_storage_account.cost_export.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
-}
-
-# https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites
-resource "azurerm_role_assignment" "grant_func_storage_account_contributor" {
-  scope                = azurerm_storage_account.cost_export.id
-  role_definition_name = "Owner"
-  principal_id         = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
-  principal_type       = "ServicePrincipal"
-  condition_version    = "2.0"
-  condition            = <<-EOT
-  (
-    !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
-  )
-  OR
-  (
-    !(ActionMatches{'Microsoft.Authorization/permissions/read'})
-  )
-  EOT
-}
