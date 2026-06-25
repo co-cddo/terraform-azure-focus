@@ -133,3 +133,65 @@ variable "log_analytics_workspace_id" {
     error_message = "log_analytics_workspace_id must be null or a valid Log Analytics workspace resource ID."
   }
 }
+
+variable "custom_resource_names" {
+  description = <<-EOT
+    Override the auto-generated names for resources created by this module.
+    Every attribute is optional and defaults to null, which means the module
+    uses its built-in name (typically a prefix plus an 8-character random suffix).
+    Storage account names must be 3-24 characters, lowercase alphanumeric only.
+    WARNING: Changing a resource name after initial deployment will cause Terraform
+    to destroy and recreate that resource.
+  EOT
+  type = object({
+    storage_account_cost_export = optional(string)
+    storage_account_deployment  = optional(string)
+    service_plan                = optional(string)
+    user_assigned_identity      = optional(string)
+    function_app                = optional(string)
+    application_insights        = optional(string)
+    log_analytics_workspace     = optional(string)
+    event_grid_system_topic     = optional(string)
+    event_grid_subscription     = optional(string)
+    entra_application           = optional(string)
+    cost_export_prefix          = optional(string)
+    private_endpoints = optional(object({
+      storage_blob    = optional(string)
+      storage_queue   = optional(string)
+      deployment_blob = optional(string)
+      function_app    = optional(string)
+    }))
+    private_service_connections = optional(object({
+      storage_blob    = optional(string)
+      storage_queue   = optional(string)
+      deployment_blob = optional(string)
+      function_app    = optional(string)
+    }))
+  })
+  default = {}
+
+  validation {
+    condition = (
+      var.custom_resource_names.storage_account_cost_export == null ||
+      can(regex("^[a-z0-9]{3,24}$", var.custom_resource_names.storage_account_cost_export))
+    )
+    error_message = "storage_account_cost_export must be 3-24 characters, lowercase letters and digits only."
+  }
+
+  validation {
+    condition = (
+      var.custom_resource_names.storage_account_deployment == null ||
+      can(regex("^[a-z0-9]{3,24}$", var.custom_resource_names.storage_account_deployment))
+    )
+    error_message = "storage_account_deployment must be 3-24 characters, lowercase letters and digits only."
+  }
+
+  validation {
+    condition = (
+      var.custom_resource_names.storage_account_cost_export == null ||
+      var.custom_resource_names.storage_account_deployment == null ||
+      var.custom_resource_names.storage_account_cost_export != var.custom_resource_names.storage_account_deployment
+    )
+    error_message = "storage_account_cost_export and storage_account_deployment must be different names."
+  }
+}

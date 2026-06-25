@@ -1,7 +1,7 @@
 resource "random_uuid" "app_uuid" {}
 
 resource "azuread_application" "aws_app" {
-  display_name = "cost-export-${random_string.unique.result}"
+  display_name = local.names.entra_application
   owners       = [data.azurerm_client_config.current.object_id]
 
   #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/

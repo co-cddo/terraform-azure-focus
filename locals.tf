@@ -38,4 +38,31 @@ locals {
     for k, v in data.azapi_resource_list.billing_role_definitions :
     k => one([for r in v.output.value : r.id if r.properties.roleName == "Billing account reader"])
   }
+
+  pe_overrides  = var.custom_resource_names.private_endpoints != null ? var.custom_resource_names.private_endpoints : {}
+  psc_overrides = var.custom_resource_names.private_service_connections != null ? var.custom_resource_names.private_service_connections : {}
+
+  names = {
+    storage_account_cost_export = coalesce(var.custom_resource_names.storage_account_cost_export, "stcostexport${random_string.unique.result}")
+    storage_account_deployment  = coalesce(var.custom_resource_names.storage_account_deployment, "stcostexdply${random_string.unique.result}")
+    service_plan                = coalesce(var.custom_resource_names.service_plan, "asp-cost-export")
+    user_assigned_identity      = coalesce(var.custom_resource_names.user_assigned_identity, "id-cost-export-${random_string.unique.result}")
+    function_app                = coalesce(var.custom_resource_names.function_app, "func-cost-export-${random_string.unique.result}")
+    application_insights        = coalesce(var.custom_resource_names.application_insights, "ai-func-cost-export-${random_string.unique.result}")
+    log_analytics_workspace     = coalesce(var.custom_resource_names.log_analytics_workspace, "log-cost-export-${random_string.unique.result}")
+    event_grid_system_topic     = coalesce(var.custom_resource_names.event_grid_system_topic, "evgt-storage-${random_string.unique.result}")
+    event_grid_subscription     = coalesce(var.custom_resource_names.event_grid_subscription, "evgs-blob-created-${random_string.unique.result}")
+    entra_application           = coalesce(var.custom_resource_names.entra_application, "cost-export-${random_string.unique.result}")
+    cost_export_prefix          = coalesce(var.custom_resource_names.cost_export_prefix, "focus-daily-cost-export")
+
+    pe_storage_blob    = coalesce(local.pe_overrides.storage_blob, "pe-storage-cost-export")
+    pe_storage_queue   = coalesce(local.pe_overrides.storage_queue, "pe-storage-queue-cost-export")
+    pe_deployment_blob = coalesce(local.pe_overrides.deployment_blob, "pe-storage-cost-export-deployment")
+    pe_function_app    = coalesce(local.pe_overrides.function_app, "pe-func-cost-export")
+
+    psc_storage_blob    = coalesce(local.psc_overrides.storage_blob, "psc-storage-cost-export")
+    psc_storage_queue   = coalesce(local.psc_overrides.storage_queue, "psc-storage-queue-cost-export")
+    psc_deployment_blob = coalesce(local.psc_overrides.deployment_blob, "psc-storage-cost-export-deployment")
+    psc_function_app    = coalesce(local.psc_overrides.function_app, "psc-func-cost-export")
+  }
 }

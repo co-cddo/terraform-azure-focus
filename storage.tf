@@ -5,7 +5,8 @@ resource "azurerm_storage_account" "cost_export" {
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account
   # checkov:skip=CKV2_AZURE_38:We don't need soft delete since this account is neither source nor destination for cost data
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
-  name                     = "stcostexport${random_string.unique.result}"
+  # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
+  name                     = local.names.storage_account_cost_export
   resource_group_name      = azurerm_resource_group.cost_export.name
   location                 = azurerm_resource_group.cost_export.location
   account_tier             = "Standard"
@@ -64,8 +65,9 @@ resource "azurerm_storage_account" "deployment" {
   # account for its deployment package (storage_access_key) and AzureWebJobsStorage, neither
   # of which can use managed identity yet due to a provider bug. See function_app.tf TODO:
   # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
+  # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
 
-  name                     = "stcostexdply${random_string.unique.result}"
+  name                     = local.names.storage_account_deployment
   resource_group_name      = azurerm_resource_group.cost_export.name
   location                 = azurerm_resource_group.cost_export.location
   account_tier             = "Standard"

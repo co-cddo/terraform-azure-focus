@@ -1,7 +1,7 @@
 resource "azurerm_service_plan" "cost_export" {
   # checkov:skip=CKV_AZURE_225:Zone redundancy not required at present
   # checkov:skip=CKV_AZURE_212:Failover not required at present
-  name                = "asp-cost-export"
+  name                = local.names.service_plan
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   os_type             = "Linux"
@@ -22,7 +22,7 @@ resource "azurerm_user_assigned_identity" "cost_export" {
 }
 
 resource "azurerm_function_app_flex_consumption" "cost_export" {
-  name                = "func-cost-export-${random_string.unique.result}"
+  name                = local.names.function_app
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   tags                = var.tags
@@ -132,7 +132,7 @@ resource "azurerm_monitor_diagnostic_setting" "function_app" {
 }
 
 resource "azurerm_application_insights" "this" {
-  name                = "ai-func-cost-export-${random_string.unique.result}"
+  name                = "appi-func-cost-export-${random_string.unique.result}"
   location            = azurerm_resource_group.cost_export.location
   resource_group_name = azurerm_resource_group.cost_export.name
   application_type    = "web"
