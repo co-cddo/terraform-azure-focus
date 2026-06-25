@@ -15,7 +15,7 @@ resource "azurerm_service_plan" "cost_export" {
 # principal) survive a recreate of the function app, which a system-assigned identity
 # would not - Azure mints a new object ID on every recreate.
 resource "azurerm_user_assigned_identity" "cost_export" {
-  name                = "id-cost-export-${random_string.unique.result}"
+  name                = local.names.user_assigned_identity
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   tags                = var.tags
@@ -132,7 +132,7 @@ resource "azurerm_monitor_diagnostic_setting" "function_app" {
 }
 
 resource "azurerm_application_insights" "this" {
-  name                = "appi-func-cost-export-${random_string.unique.result}"
+  name                = local.names.application_insights
   location            = azurerm_resource_group.cost_export.location
   resource_group_name = azurerm_resource_group.cost_export.name
   application_type    = "web"
