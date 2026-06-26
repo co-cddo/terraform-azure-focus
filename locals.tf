@@ -39,8 +39,18 @@ locals {
     k => one([for r in v.output.value : r.id if r.properties.roleName == "Billing account reader"])
   }
 
-  pe_overrides  = var.custom_resource_names.private_endpoints != null ? var.custom_resource_names.private_endpoints : {}
-  psc_overrides = var.custom_resource_names.private_service_connections != null ? var.custom_resource_names.private_service_connections : {}
+  pe_overrides = var.custom_resource_names.private_endpoints != null ? var.custom_resource_names.private_endpoints : {
+    storage_blob    = null
+    storage_queue   = null
+    deployment_blob = null
+    function_app    = null
+  }
+  psc_overrides = var.custom_resource_names.private_service_connections != null ? var.custom_resource_names.private_service_connections : {
+    storage_blob    = null
+    storage_queue   = null
+    deployment_blob = null
+    function_app    = null
+  }
 
   names = {
     storage_account_cost_export = coalesce(var.custom_resource_names.storage_account_cost_export, "stcostexport${random_string.unique.result}")
