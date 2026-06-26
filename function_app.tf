@@ -79,7 +79,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   app_settings = {
     "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export.primary_blob_endpoint
     "CONTAINER_NAME"                            = azapi_resource.cost_export.name
-    "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
     # The queue-trigger identity-based connection must name the user-assigned identity explicitly:
