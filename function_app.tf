@@ -39,7 +39,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   runtime_name                  = "python"
   runtime_version               = "3.13"
   maximum_instance_count        = 50
-  instance_memory_in_mb         = 2048
+  instance_memory_in_mb         = 4096
   https_only                    = true
   virtual_network_subnet_id     = var.function_app_subnet_id
   public_network_access_enabled = var.deploy_from_external_network
