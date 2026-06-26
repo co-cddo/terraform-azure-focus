@@ -58,7 +58,7 @@ locals {
     service_plan                = coalesce(var.custom_resource_names.service_plan, "asp-cost-export")
     user_assigned_identity      = coalesce(var.custom_resource_names.user_assigned_identity, "id-cost-export-${random_string.unique.result}")
     function_app                = coalesce(var.custom_resource_names.function_app, "func-cost-export-${random_string.unique.result}")
-    application_insights        = coalesce(var.custom_resource_names.application_insights, "appi-func-cost-export-${random_string.unique.result}")
+    application_insights        = coalesce(var.custom_resource_names.application_insights, "ai-func-cost-export-${random_string.unique.result}")
     log_analytics_workspace     = coalesce(var.custom_resource_names.log_analytics_workspace, "log-cost-export-${random_string.unique.result}")
     event_grid_system_topic     = coalesce(var.custom_resource_names.event_grid_system_topic, "evgt-storage-${random_string.unique.result}")
     event_grid_subscription     = coalesce(var.custom_resource_names.event_grid_subscription, "evgs-blob-created-${random_string.unique.result}")

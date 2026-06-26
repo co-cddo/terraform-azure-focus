@@ -102,4 +102,10 @@ module "cost_forwarding" {
   cost_mgmt_suffix                    = "dev"
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
+
+  # Optional: override individual resource names.
+  # Existing deployments should keep the defaults to avoid forced resource replacement.
+  # custom_resource_names = {
+  #   application_insights = "appi-func-cost-export-<suffix>"
+  # }
 }

@@ -62,8 +62,8 @@ resource "azurerm_storage_account" "deployment" {
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
   # checkov:skip=CKV2_AZURE_40:Shared access keys remain enabled here: the Flex Consumption function app uses this
-  # account for its deployment package (storage_access_key) and AzureWebJobsStorage, neither
-  # of which can use managed identity yet due to a provider bug. See function_app.tf TODO:
+  # account for its deployment package via storage_access_key, which cannot use managed identity
+  # yet due to a provider bug. See function_app.tf TODO:
   # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
 
@@ -152,10 +152,10 @@ resource "azurerm_monitor_diagnostic_setting" "deployment_blob" {
   }
 }
 
-# The Functions host uses this account's queue service for AzureWebJobsStorage; surfacing its
-# operations helps troubleshoot host-level trigger issues (e.g. why a timer didn't fire).
-# Blob (host singleton leases/locks) is already covered by deployment_blob above; table and
-# file services are not in use on this account (see the storage account skip comments).
+# The Flex Consumption host uses this account's queue service for internal operations (e.g.
+# timer singleton leases); surfacing its operations helps troubleshoot host-level trigger
+# issues (e.g. why a timer didn't fire). Blob (host singleton leases/locks) is already
+# covered by deployment_blob above; table and file services are not in use on this account.
 resource "azurerm_monitor_diagnostic_setting" "deployment_queue" {
   name                       = "diag-queue"
   target_resource_id         = "${azurerm_storage_account.deployment.id}/queueServices/default"
