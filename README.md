@@ -208,7 +208,7 @@ module "example" {
 > [!TIP]
 > If you don't have a suitable existing Virtual Network with two subnets
 > (one of which has a delegation to Microsoft.App.environments), please
-> refer to the example configuration [here](examples/existing-infrastructure),
+> refer to the example configuration [here](examples/greenfield),
 > which provisions the prerequisite baseline infrastructure before consuming
 > the module.
 
@@ -507,10 +507,10 @@ The container will build on first use and subsequent opens will be fast.
 
 ## Terraform Example
 
-See [examples/existing-infrastructure](examples/existing-infrastructure) for a working example.
+See [examples/greenfield](examples/greenfield) for a working example.
 
 ```sh
-cd examples/existing-infrastructure
+cd examples/greenfield
 az login
 terraform init
 terraform plan
