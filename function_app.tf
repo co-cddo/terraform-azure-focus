@@ -138,17 +138,17 @@ resource "azurerm_application_insights" "this" {
   # Point the component at the module's own workspace so telemetry lands there instead of an
   # Azure auto-provisioned "managed" workspace (classic App Insights is retired, so without this
   # Azure creates a separate workspace in an ai_*_managed resource group).
-  workspace_id                          = local.effective_log_analytics_workspace_id
-  daily_data_cap_in_gb                  = 5
-  daily_data_cap_notifications_disabled = false
-  disable_ip_masking                    = false
-  force_customer_storage_for_profiler   = false
-  internet_ingestion_enabled            = true
-  internet_query_enabled                = true
-  local_authentication_disabled         = false
-  retention_in_days                     = 90
-  sampling_percentage                   = 100
-  tags                                  = var.tags
+  workspace_id                         = local.effective_log_analytics_workspace_id
+  daily_data_cap_in_gb                 = 5
+  daily_data_cap_notifications_enabled = true
+  ip_masking_enabled                   = true
+  force_customer_storage_for_profiler  = false
+  internet_ingestion_enabled           = true
+  internet_query_enabled               = true
+  local_authentication_enabled         = true
+  retention_in_days                    = 90
+  sampling_percentage                  = 100
+  tags                                 = var.tags
 }
 
 resource "null_resource" "publish_function_code" {
