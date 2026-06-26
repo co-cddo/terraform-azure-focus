@@ -62,7 +62,7 @@ run "with_custom_names" {
       service_plan                = "asp-cost-export"
       user_assigned_identity      = "id-cost-export-${run.without_custom_names.random_string_suffix}"
       function_app                = "func-cost-export-${run.without_custom_names.random_string_suffix}"
-      application_insights        = "appi-func-cost-export-${run.without_custom_names.random_string_suffix}"
+      application_insights        = "ai-func-cost-export-${run.without_custom_names.random_string_suffix}"
       log_analytics_workspace     = "log-cost-export-${run.without_custom_names.random_string_suffix}"
       event_grid_system_topic     = "evgt-storage-${run.without_custom_names.random_string_suffix}"
       event_grid_subscription     = "evgs-blob-created-${run.without_custom_names.random_string_suffix}"
