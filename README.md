@@ -208,7 +208,7 @@ module "example" {
 > [!TIP]
 > If you don't have a suitable existing Virtual Network with two subnets
 > (one of which has a delegation to Microsoft.App.environments), please
-> refer to the example configuration [here](examples/existing-infrastructure),
+> refer to the example configuration [here](examples/greenfield),
 > which provisions the prerequisite baseline infrastructure before consuming
 > the module.
 
@@ -507,10 +507,10 @@ The container will build on first use and subsequent opens will be fast.
 
 ## Terraform Example
 
-See [examples/existing-infrastructure](examples/existing-infrastructure) for a working example.
+See [examples/greenfield](examples/greenfield) for a working example.
 
 ```sh
-cd examples/existing-infrastructure
+cd examples/greenfield
 az login
 terraform init
 terraform plan
@@ -529,7 +529,7 @@ pre-commit hook.
 | <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.0 |
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | >= 1.7.0 |
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | > 2.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | > 4.0 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.79.0 |
 | <a name="provider_null"></a> [null](#provider\_null) | >= 3.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | >= 3.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | >= 0.7.0 |
@@ -551,6 +551,7 @@ pre-commit hook.
 | <a name="input_cost_export_daily_schedule_to_years"></a> [cost\_export\_daily\_schedule\_to\_years](#input\_cost\_export\_daily\_schedule\_to\_years) | The number of years from initial deployment to set the end date of the daily schedule for cost export | `number` | `15` | no |
 | <a name="input_cost_mgmt_suffix"></a> [cost\_mgmt\_suffix](#input\_cost\_mgmt\_suffix) | [optional] suffix to add to cost mgmt export tasks - to allow multiple deployments of this module in one tenant | `string` | `""` | no |
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
+| <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/>    cost_export_prefix          = optional(string)<br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_is_enterprise_customer"></a> [is\_enterprise\_customer](#input\_is\_enterprise\_customer) | Set to true if you are an Enterprise Agreement customer | `bool` | `false` | no |
@@ -589,6 +590,7 @@ pre-commit hook.
 | <a name="output_random_string_suffix"></a> [random\_string\_suffix](#output\_random\_string\_suffix) | The random suffix appended to generated resource names |
 | <a name="output_recommendations_export_name"></a> [recommendations\_export\_name](#output\_recommendations\_export\_name) | The name of the Azure Advisor recommendations export (timer-triggered function) |
 | <a name="output_report_scopes"></a> [report\_scopes](#output\_report\_scopes) | Report scopes created for each billing account |
+| <a name="output_resource_names"></a> [resource\_names](#output\_resource\_names) | The resolved resource names (defaults or custom\_resource\_names overrides) |
 | <a name="output_storage_private_endpoint_ip"></a> [storage\_private\_endpoint\_ip](#output\_storage\_private\_endpoint\_ip) | The private IP address of the cost export storage blob private endpoint |
 | <a name="output_storage_queue_private_endpoint_ip"></a> [storage\_queue\_private\_endpoint\_ip](#output\_storage\_queue\_private\_endpoint\_ip) | The private IP address of the cost export storage queue private endpoint |
 | <a name="output_tenant_id"></a> [tenant\_id](#output\_tenant\_id) | The tenant id - use this to assign the Enrollment Reader role |

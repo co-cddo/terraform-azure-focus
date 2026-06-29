@@ -70,7 +70,7 @@ provider "registry.terraform.io/hashicorp/azuread" {
 
 provider "registry.terraform.io/hashicorp/azurerm" {
   version     = "4.79.0"
-  constraints = ">= 4.79.0"
+  constraints = ">= 4.14.0, >= 4.79.0"
   hashes = [
     "h1:gGRthc4CoxQrOMJubv456CQnyH0kcUvZ2BGK4J+mFL4=",
     "h1:hEVrA2r7nS0jSd32CwsWNfifS8tV0xhoGuc1T9qU074=",

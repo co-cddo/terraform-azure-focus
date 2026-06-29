@@ -1,5 +1,5 @@
 resource "azurerm_eventgrid_system_topic" "storage_events" {
-  name                = "evgt-storage-${random_string.unique.result}"
+  name                = local.names.event_grid_system_topic
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   source_resource_id  = azurerm_storage_account.cost_export.id
@@ -29,7 +29,7 @@ resource "azurerm_monitor_diagnostic_setting" "storage_events" {
 }
 
 resource "azurerm_eventgrid_event_subscription" "focus_blob_created" {
-  name                  = "evgs-blob-created-${random_string.unique.result}"
+  name                  = local.names.event_grid_subscription
   scope                 = azurerm_storage_account.cost_export.id
   event_delivery_schema = "EventGridSchema"
 

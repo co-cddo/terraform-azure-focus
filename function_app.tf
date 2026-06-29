@@ -1,7 +1,7 @@
 resource "azurerm_service_plan" "cost_export" {
   # checkov:skip=CKV_AZURE_225:Zone redundancy not required at present
   # checkov:skip=CKV_AZURE_212:Failover not required at present
-  name                = "asp-cost-export"
+  name                = local.names.service_plan
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   os_type             = "Linux"
@@ -15,14 +15,14 @@ resource "azurerm_service_plan" "cost_export" {
 # principal) survive a recreate of the function app, which a system-assigned identity
 # would not - Azure mints a new object ID on every recreate.
 resource "azurerm_user_assigned_identity" "cost_export" {
-  name                = "id-cost-export-${random_string.unique.result}"
+  name                = local.names.user_assigned_identity
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   tags                = var.tags
 }
 
 resource "azurerm_function_app_flex_consumption" "cost_export" {
-  name                = "func-cost-export-${random_string.unique.result}"
+  name                = local.names.function_app
   resource_group_name = azurerm_resource_group.cost_export.name
   location            = azurerm_resource_group.cost_export.location
   tags                = var.tags
@@ -39,7 +39,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   runtime_name                  = "python"
   runtime_version               = "3.13"
   maximum_instance_count        = 50
-  instance_memory_in_mb         = 2048
+  instance_memory_in_mb         = 4096
   https_only                    = true
   virtual_network_subnet_id     = var.function_app_subnet_id
   public_network_access_enabled = var.deploy_from_external_network
@@ -79,7 +79,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   app_settings = {
     "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export.primary_blob_endpoint
     "CONTAINER_NAME"                            = azapi_resource.cost_export.name
-    "AzureWebJobsStorage"                       = azurerm_storage_account.deployment.primary_connection_string
     "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
     # The queue-trigger identity-based connection must name the user-assigned identity explicitly:
@@ -132,24 +131,24 @@ resource "azurerm_monitor_diagnostic_setting" "function_app" {
 }
 
 resource "azurerm_application_insights" "this" {
-  name                = "ai-func-cost-export-${random_string.unique.result}"
+  name                = local.names.application_insights
   location            = azurerm_resource_group.cost_export.location
   resource_group_name = azurerm_resource_group.cost_export.name
   application_type    = "web"
   # Point the component at the module's own workspace so telemetry lands there instead of an
   # Azure auto-provisioned "managed" workspace (classic App Insights is retired, so without this
   # Azure creates a separate workspace in an ai_*_managed resource group).
-  workspace_id                          = local.effective_log_analytics_workspace_id
-  daily_data_cap_in_gb                  = 5
-  daily_data_cap_notifications_disabled = false
-  disable_ip_masking                    = false
-  force_customer_storage_for_profiler   = false
-  internet_ingestion_enabled            = true
-  internet_query_enabled                = true
-  local_authentication_disabled         = false
-  retention_in_days                     = 90
-  sampling_percentage                   = 100
-  tags                                  = var.tags
+  workspace_id                         = local.effective_log_analytics_workspace_id
+  daily_data_cap_in_gb                 = 5
+  daily_data_cap_notifications_enabled = true
+  ip_masking_enabled                   = true
+  force_customer_storage_for_profiler  = false
+  internet_ingestion_enabled           = true
+  internet_query_enabled               = true
+  local_authentication_enabled         = true
+  retention_in_days                    = 90
+  sampling_percentage                  = 100
+  tags                                 = var.tags
 }
 
 resource "null_resource" "publish_function_code" {

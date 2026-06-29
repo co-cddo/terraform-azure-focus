@@ -88,6 +88,11 @@ output "random_string_suffix" {
   value       = random_string.unique.result
 }
 
+output "resource_names" {
+  description = "The resolved resource names (defaults or custom_resource_names overrides)"
+  value       = local.names
+}
+
 output "cost_export_storage_account_name" {
   description = "The name of the cost export storage account"
   value       = azurerm_storage_account.cost_export.name

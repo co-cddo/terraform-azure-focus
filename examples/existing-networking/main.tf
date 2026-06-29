@@ -32,4 +32,10 @@ module "example" {
 
   # Uncomment the following line if running in CI/CD with a service principal
   # current_principal_type = "ServicePrincipal"
+
+  # Optional: override individual resource names.
+  # Existing deployments should keep the defaults to avoid forced resource replacement.
+  # custom_resource_names = {
+  #   application_insights = "appi-func-cost-export-<suffix>"
+  # }
 }

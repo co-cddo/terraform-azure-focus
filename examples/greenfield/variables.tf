@@ -18,26 +18,26 @@ variable "billing_account_ids" {
   type        = list(string)
 }
 
-variable "existing_resource_group_name" {
-  description = "Name of the existing resource group containing the VNet"
+variable "network_resource_group_name" {
+  description = "Name of the resource group for networking resources"
   type        = string
-  default     = "existing-infra"
+  default     = "rg-networking"
 }
 
-variable "existing_vnet_name" {
-  description = "Name of the existing virtual network"
+variable "vnet_name" {
+  description = "Name of the virtual network"
   type        = string
-  default     = "existing-vnet"
+  default     = "vnet-focus"
 }
 
 variable "default_subnet_name" {
-  description = "Name of the existing default subnet"
+  description = "Name of the default subnet"
   type        = string
   default     = "default"
 }
 
 variable "functionapp_subnet_name" {
-  description = "Name of the existing function app subnet"
+  description = "Name of the function app subnet"
   type        = string
   default     = "functionapp"
 }

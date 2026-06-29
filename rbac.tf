@@ -1,7 +1,7 @@
 resource "random_uuid" "app_uuid" {}
 
 resource "azuread_application" "aws_app" {
-  display_name = "cost-export-${random_string.unique.result}"
+  display_name = local.names.entra_application
   owners       = [data.azurerm_client_config.current.object_id]
 
   #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
@@ -34,11 +34,11 @@ resource "azuread_app_role_assignment" "aws_app" {
 # both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
 # propagate before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
-  count              = var.manage_role_assignments ? 1 : 0
-  scope              = azurerm_resource_group.cost_export.id
-  role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
-  principal_id       = data.azurerm_client_config.current.object_id
-  principal_type     = var.current_principal_type
+  count                = var.manage_role_assignments ? 1 : 0
+  scope                = azurerm_resource_group.cost_export.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+  principal_type       = var.current_principal_type
 }
 
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
@@ -115,11 +115,11 @@ resource "azapi_resource_action" "add_role_assignment" {
 
 # Function writes export output and creates export tasks that deliver to this storage account.
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
-  count              = var.manage_role_assignments ? 1 : 0
-  scope              = azurerm_storage_account.cost_export.id
-  role_definition_id = data.azurerm_role_definition.storage_blob_data_contributor.role_definition_id
-  principal_id       = azurerm_user_assigned_identity.cost_export.principal_id
-  principal_type     = "ServicePrincipal"
+  count                = var.manage_role_assignments ? 1 : 0
+  scope                = azurerm_storage_account.cost_export.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 # Cost Management requires Owner here: when creating an export to a firewall-protected storage

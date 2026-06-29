@@ -13,33 +13,33 @@ locals {
   deploy_from_external_network = true
 }
 
-# Create the resource group for existing infrastructure
-resource "azurerm_resource_group" "existing" {
-  name     = var.existing_resource_group_name
+# Create the resource group for networking
+resource "azurerm_resource_group" "networking" {
+  name     = var.network_resource_group_name
   location = var.location
 }
 
 # Create the virtual network
-resource "azurerm_virtual_network" "existing" {
-  name                = var.existing_vnet_name
+resource "azurerm_virtual_network" "this" {
+  name                = var.vnet_name
   address_space       = ["10.0.0.0/16"]
-  location            = azurerm_resource_group.existing.location
-  resource_group_name = azurerm_resource_group.existing.name
+  location            = azurerm_resource_group.networking.location
+  resource_group_name = azurerm_resource_group.networking.name
 }
 
 # Create the default subnet
 resource "azurerm_subnet" "default" {
   name                 = var.default_subnet_name
-  resource_group_name  = azurerm_resource_group.existing.name
-  virtual_network_name = azurerm_virtual_network.existing.name
+  resource_group_name  = azurerm_resource_group.networking.name
+  virtual_network_name = azurerm_virtual_network.this.name
   address_prefixes     = ["10.0.0.0/24"]
 }
 
 # Create the function app subnet with delegation
 resource "azurerm_subnet" "functionapp" {
   name                 = var.functionapp_subnet_name
-  resource_group_name  = azurerm_resource_group.existing.name
-  virtual_network_name = azurerm_virtual_network.existing.name
+  resource_group_name  = azurerm_resource_group.networking.name
+  virtual_network_name = azurerm_virtual_network.this.name
   address_prefixes     = ["10.0.1.0/24"]
 
   delegation {
@@ -63,14 +63,14 @@ resource "azurerm_subnet" "functionapp" {
 # practice and lets you add rules later without re-architecting.
 resource "azurerm_network_security_group" "default" {
   name                = "nsg-${var.default_subnet_name}"
-  location            = azurerm_resource_group.existing.location
-  resource_group_name = azurerm_resource_group.existing.name
+  location            = azurerm_resource_group.networking.location
+  resource_group_name = azurerm_resource_group.networking.name
 }
 
 resource "azurerm_network_security_group" "functionapp" {
   name                = "nsg-${var.functionapp_subnet_name}"
-  location            = azurerm_resource_group.existing.location
-  resource_group_name = azurerm_resource_group.existing.name
+  location            = azurerm_resource_group.networking.location
+  resource_group_name = azurerm_resource_group.networking.name
 }
 
 resource "azurerm_subnet_network_security_group_association" "default" {
@@ -92,8 +92,8 @@ module "cost_forwarding" {
   billing_account_ids                 = var.billing_account_ids
   subnet_id                           = azurerm_subnet.default.id
   function_app_subnet_id              = azurerm_subnet.functionapp.id
-  virtual_network_name                = azurerm_virtual_network.existing.name
-  virtual_network_resource_group_name = azurerm_resource_group.existing.name
+  virtual_network_name                = azurerm_virtual_network.this.name
+  virtual_network_resource_group_name = azurerm_resource_group.networking.name
   location                            = var.location
   resource_group_name                 = var.resource_group_name
   deploy_from_external_network        = local.deploy_from_external_network
@@ -102,4 +102,10 @@ module "cost_forwarding" {
   cost_mgmt_suffix                    = "dev"
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
+
+  # Optional: override individual resource names.
+  # Existing deployments should keep the defaults to avoid forced resource replacement.
+  # custom_resource_names = {
+  #   application_insights = "appi-func-cost-export-<suffix>"
+  # }
 }
