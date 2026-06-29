@@ -1,12 +1,19 @@
-resource "random_uuid" "app_uuid" {}
+# The AWS-federation Entra app, service principal, and app role are created only when the consumer
+# does not bring their own app registration (var.existing_entra_application_client_id). Creating
+# these requires directory-write privileges; consumers enforcing separation of duties between Entra
+# ID and Azure RBAC admins supply a pre-created app's client ID instead. See README "Privileges".
+resource "random_uuid" "app_uuid" {
+  count = local.create_entra_app ? 1 : 0
+}
 
 resource "azuread_application" "aws_app" {
+  count        = local.create_entra_app ? 1 : 0
   display_name = local.names.entra_application
   owners       = [data.azurerm_client_config.current.object_id]
 
   #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
   app_role {
-    id                   = random_uuid.app_uuid.id
+    id                   = random_uuid.app_uuid[0].id
     allowed_member_types = ["User", "Application"]
     description          = "My role description"
     display_name         = "AssumeRole"
@@ -17,15 +24,26 @@ resource "azuread_application" "aws_app" {
 }
 
 resource "azuread_service_principal" "aws_app" {
-  client_id                    = azuread_application.aws_app.client_id
+  count                        = local.create_entra_app ? 1 : 0
+  client_id                    = azuread_application.aws_app[0].client_id
   app_role_assignment_required = false
   owners                       = [data.azurerm_client_config.current.object_id]
 }
 
+# When bringing your own app registration and letting the module manage the app role assignment,
+# resolve the supplied app's service principal object ID and app role ID by directory READ (not
+# write). Not created in strict-separation mode (manage_entra_app_role_assignment = false), so no
+# directory access is needed there at all.
+data "azuread_service_principal" "existing_aws_app" {
+  count     = (!local.create_entra_app && var.manage_entra_app_role_assignment) ? 1 : 0
+  client_id = var.existing_entra_application_client_id
+}
+
 resource "azuread_app_role_assignment" "aws_app" {
-  app_role_id         = random_uuid.app_uuid.id
+  count               = var.manage_entra_app_role_assignment ? 1 : 0
+  app_role_id         = local.entra_app_role_id
   principal_object_id = azurerm_user_assigned_identity.cost_export.principal_id
-  resource_object_id  = azuread_service_principal.aws_app.object_id
+  resource_object_id  = local.entra_sp_object_id
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 

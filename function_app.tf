@@ -87,7 +87,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
     # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
     "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
-    "ENTRA_APP_CLIENT_ID"        = azuread_application.aws_app.client_id
+    "ENTRA_APP_CLIENT_ID"        = local.entra_app_client_id
     "ENTRA_APP_URN"              = local.identifier_uri
     "AWS_ROLE_ARN"               = local.aws_role_arn
     "AWS_REGION"                 = var.aws_region

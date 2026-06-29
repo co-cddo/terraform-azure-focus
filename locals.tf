@@ -11,6 +11,19 @@ locals {
   publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name}"
   publish_code_command        = var.deploy_from_external_network ? "Start-Sleep -Seconds 150 && ${local.publish_code_command_common}" : local.publish_code_command_common
   identifier_uri              = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
+
+  # When no existing app registration client ID is supplied, the module creates the AWS-federation
+  # Entra app, service principal, and app role itself (these require directory-write privileges).
+  # Supplying existing_entra_application_client_id points the module at a pre-created app instead,
+  # for separation of duties between Entra ID and Azure RBAC admins.
+  create_entra_app    = var.existing_entra_application_client_id == null
+  entra_app_client_id = local.create_entra_app ? azuread_application.aws_app[0].client_id : var.existing_entra_application_client_id
+
+  # SP object ID and app role ID for the app role assignment. Resolved from the module-created
+  # resources, or (when bringing your own app and the module manages the binding) from the
+  # data.azuread_service_principal lookup in rbac.tf. Only referenced when the binding is created.
+  entra_sp_object_id          = local.create_entra_app ? azuread_service_principal.aws_app[0].object_id : data.azuread_service_principal.existing_aws_app[0].object_id
+  entra_app_role_id           = local.create_entra_app ? random_uuid.app_uuid[0].id : data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"]
   focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)
   # FOCUS directory name should only contain major version number for the data set
   focus_directory_name  = "gds-focus-v${local.focus_dataset_major_version}"

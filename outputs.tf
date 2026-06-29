@@ -1,6 +1,6 @@
 output "aws_app_client_id" {
   description = "The aws app client id"
-  value       = azuread_application.aws_app.client_id
+  value       = local.entra_app_client_id
 }
 
 output "focus_container_name" {
@@ -81,6 +81,22 @@ output "enterprise_billing_manual_action_required" {
     [for v in var.billing_account_ids : "    /providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"],
     ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
   )) : ""
+}
+
+# When manage_entra_app_role_assignment = false (strict separation of duties), the module does not
+# create the binding between the function app's managed identity and the AWS-federation app role -
+# the deploying principal is assumed to have no directory-write privileges. This output prints the
+# details the Entra team needs to create that app role assignment out-of-band. Empty otherwise.
+output "entra_app_role_assignment_manual_action_required" {
+  description = "Strict separation of duties only (manage_entra_app_role_assignment = false): the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
+  value = var.manage_entra_app_role_assignment ? "" : join("\n", [
+    "ACTION REQUIRED (separation of duties): assign the 'AssumeRoleWithWebIdentity' app role of the AWS-federation Entra app to the cost-export function app's managed identity MANUALLY.",
+    "The deploying principal has no directory-write privileges (manage_entra_app_role_assignment = false), so Terraform cannot create this binding.",
+    "  App registration client ID: ${local.entra_app_client_id}",
+    "  App role value: AssumeRoleWithWebIdentity",
+    "  Function app managed identity (principal/object) ID to assign it to: ${azurerm_user_assigned_identity.cost_export.principal_id}",
+    "See https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/",
+  ])
 }
 
 output "random_string_suffix" {

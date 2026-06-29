@@ -117,6 +117,23 @@ variable "manage_role_assignments" {
   default     = true
 }
 
+variable "existing_entra_application_client_id" {
+  description = "[optional] Client (application) ID of a pre-existing Entra app registration to use for AWS OIDC federation. Set this for separation of duties: when supplied, the module does NOT create the app registration, service principal, or app role (all of which require directory-write privileges) and consumes this client ID instead. The pre-created app must expose an 'AssumeRoleWithWebIdentity' app role and the identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost_mgmt_suffix>' (the AWS OIDC token audience). Leave null to have the module create the app registration as before."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.existing_entra_application_client_id == null || can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.existing_entra_application_client_id))
+    error_message = "existing_entra_application_client_id must be null or a GUID."
+  }
+}
+
+variable "manage_entra_app_role_assignment" {
+  description = "Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra_app_role_assignment_manual_action_required' output prints the details for your Entra team to create it out-of-band."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
