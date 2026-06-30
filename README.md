@@ -177,15 +177,12 @@ system topic and for each Cost Management export.
 provider "azurerm" {
   # These need to be explicitly registered
   resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  # Required: the cost_export storage account disables shared access keys, so the provider
-  # must use Entra ID for storage data-plane operations. Without this, apply fails with
-  # KeyBasedAuthenticationNotPermitted (403).
   storage_use_azuread = true
   features {}
 }
 
 module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e" # v0.0.2
+  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=68901f7a0eeb6bd75d8a15d201a7ea8ef8ee99b6" # v2.0.0
 
   aws_account_id                      = "<aws-account-id>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
