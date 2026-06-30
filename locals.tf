@@ -22,8 +22,14 @@ locals {
   # SP object ID and app role ID for the app role assignment. Resolved from the module-created
   # resources, or (when bringing your own app and the module manages the binding) from the
   # data.azuread_service_principal lookup in rbac.tf. Only referenced when the binding is created.
-  entra_sp_object_id          = local.create_entra_app ? azuread_service_principal.aws_app[0].object_id : data.azuread_service_principal.existing_aws_app[0].object_id
-  entra_app_role_id           = local.create_entra_app ? random_uuid.app_uuid[0].id : data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"]
+  entra_sp_object_id = local.create_entra_app ? azuread_service_principal.aws_app[0].object_id : (
+    var.manage_entra_app_role_assignment ? data.azuread_service_principal.existing_aws_app[0].object_id : null
+  )
+
+  entra_app_role_id = local.create_entra_app ? random_uuid.app_uuid[0].id : (
+    var.manage_entra_app_role_assignment ? data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"] : null
+  )
+
   focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)
   # FOCUS directory name should only contain major version number for the data set
   focus_directory_name  = "gds-focus-v${local.focus_dataset_major_version}"
