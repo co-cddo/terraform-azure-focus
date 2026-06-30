@@ -1,3 +1,21 @@
+# Prevents destroy and create of app registration for instances of the solution deployed prior to the 'bring your own app registration' feature
+moved {
+  from = random_uuid.app_uuid
+  to   = random_uuid.app_uuid[0]
+}
+moved {
+  from = azuread_application.aws_app
+  to   = azuread_application.aws_app[0]
+}
+moved {
+  from = azuread_service_principal.aws_app
+  to   = azuread_service_principal.aws_app[0]
+}
+moved {
+  from = azuread_app_role_assignment.aws_app
+  to   = azuread_app_role_assignment.aws_app[0]
+}
+
 # The AWS-federation Entra app, service principal, and app role are created only when the consumer
 # does not bring their own app registration (var.existing_entra_application_client_id). Creating
 # these requires directory-write privileges; consumers enforcing separation of duties between Entra
