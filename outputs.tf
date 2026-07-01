@@ -90,12 +90,10 @@ output "enterprise_billing_manual_action_required" {
 output "entra_app_role_assignment_manual_action_required" {
   description = "Strict separation of duties only (manage_entra_app_role_assignment = false): the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
   value = var.manage_entra_app_role_assignment ? "" : join("\n", [
-    "ACTION REQUIRED (separation of duties): assign the 'AssumeRoleWithWebIdentity' app role of the AWS-federation Entra app to the cost-export function app's managed identity MANUALLY.",
-    "The deploying principal has no directory-write privileges (manage_entra_app_role_assignment = false), so Terraform cannot create this binding.",
-    "  App registration client ID: ${local.entra_app_client_id}",
-    "  App role value: AssumeRoleWithWebIdentity",
-    "  Function app managed identity (principal/object) ID to assign it to: ${azurerm_user_assigned_identity.cost_export.principal_id}",
-    "See https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/",
+    "ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.",
+    "",
+    "Run the following command (requires Directory.Read.All + AppRoleAssignment.ReadWrite.All):",
+    "  SP=$(az rest --method GET --uri \"https://graph.microsoft.com/v1.0/servicePrincipals(appId='${local.entra_app_client_id}')\" --query '{id:id, appRoleId:appRoles[?value==`AssumeRoleWithWebIdentity`].id|[0]}' -o json) && az rest --method POST --uri \"https://graph.microsoft.com/v1.0/servicePrincipals/$(echo $SP | jq -r .id)/appRoleAssignedTo\" --headers Content-Type=application/json --body \"{\\\"principalId\\\":\\\"${azurerm_user_assigned_identity.cost_export.principal_id}\\\",\\\"resourceId\\\":\\\"$(echo $SP | jq -r .id)\\\",\\\"appRoleId\\\":\\\"$(echo $SP | jq -r .appRoleId)\\\"}\"",
   ])
 }
 
