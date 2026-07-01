@@ -89,12 +89,24 @@ output "enterprise_billing_manual_action_required" {
 # details the Entra team needs to create that app role assignment out-of-band. Empty otherwise.
 output "entra_app_role_assignment_manual_action_required" {
   description = "Strict separation of duties only (manage_entra_app_role_assignment = false): the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
-  value = var.manage_entra_app_role_assignment ? "" : join("\n", [
-    "ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.",
-    "",
-    "Run the following command (requires Directory.Read.All + AppRoleAssignment.ReadWrite.All):",
-    "  SP=$(az rest --method GET --uri \"https://graph.microsoft.com/v1.0/servicePrincipals(appId='${local.entra_app_client_id}')\" --query '{id:id, appRoleId:appRoles[?value==`AssumeRoleWithWebIdentity`].id|[0]}' -o json) && az rest --method POST --uri \"https://graph.microsoft.com/v1.0/servicePrincipals/$(echo $SP | jq -r .id)/appRoleAssignedTo\" --headers Content-Type=application/json --body \"{\\\"principalId\\\":\\\"${azurerm_user_assigned_identity.cost_export.principal_id}\\\",\\\"resourceId\\\":\\\"$(echo $SP | jq -r .id)\\\",\\\"appRoleId\\\":\\\"$(echo $SP | jq -r .appRoleId)\\\"}\"",
-  ])
+  value       = var.manage_entra_app_role_assignment ? "" : <<-EOT
+    ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.
+    Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All.
+
+    # 1. Resolve the service principal object id and the app role id for the AWS-federation app:
+    SP_ID=$(az ad sp show --id ${local.entra_app_client_id} --query id -o tsv)
+    APP_ROLE_ID=$(az ad sp show --id ${local.entra_app_client_id} --query "appRoles[?value=='AssumeRoleWithWebIdentity'].id | [0]" -o tsv)
+
+    # 2. Assign the app role to the function app's managed identity:
+    az rest --method POST \
+      --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignedTo" \
+      --headers "Content-Type=application/json" \
+      --body "{
+        \"principalId\": \"${azurerm_user_assigned_identity.cost_export.principal_id}\",
+        \"resourceId\": \"$SP_ID\",
+        \"appRoleId\": \"$APP_ROLE_ID\"
+      }"
+  EOT
 }
 
 output "random_string_suffix" {
