@@ -179,9 +179,10 @@ directory-write privilege.
 | Variable | Effect |
 |---|---|
 | `existing_entra_application_client_id` | Client (application) ID of the pre-created app. When set, the module does **not** create the app / service principal / app role and consumes this ID instead. |
-| `manage_entra_app_role_assignment` | Whether the module creates the app-role binding (function identity → `AssumeRoleWithWebIdentity`). Default `true`. |
+| `manage_entra_app_role_assignment` | Whether the module creates the app-role binding (function identity → `AssumeRoleWithWebIdentity`). Default `true`. **Only takes effect when `existing_entra_application_client_id` is set**; when the module creates the app registration it already holds directory-write, so this is forced `true` and the binding is always created. |
 
-**Two modes for the app-role binding** (which depends on the module-created
+**Two modes for the app-role binding, both assuming you have supplied
+`existing_entra_application_client_id`** (the binding depends on the module-created
 function managed identity, so it cannot be fully pre-created):
 
 - `manage_entra_app_role_assignment = true` (default): the module still creates the
@@ -190,7 +191,7 @@ function managed identity, so it cannot be fully pre-created):
   needs `AppRoleAssignment.ReadWrite.All` or ownership of that one service principal -
   a far narrower grant than tenant-wide app management.
 - `manage_entra_app_role_assignment = false` (strict separation): the module performs
-  **no** Entra writes or reads. After apply, the
+  **no** Entra writes or reads at all. After apply, the
   `entra_app_role_assignment_manual_action_required`
   [output](#output_entra_app_role_assignment_manual_action_required) prints the
   function identity's principal ID and the app role to assign, for your Entra team to
