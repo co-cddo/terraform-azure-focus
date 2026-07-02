@@ -83,13 +83,15 @@ output "enterprise_billing_manual_action_required" {
   )) : ""
 }
 
-# When manage_entra_app_role_assignment = false (strict separation of duties), the module does not
-# create the binding between the function app's managed identity and the AWS-federation app role -
-# the deploying principal is assumed to have no directory-write privileges. This output prints the
-# details the Entra team needs to create that app role assignment out-of-band. Empty otherwise.
+# Only fires when bringing your own app registration AND manage_entra_app_role_assignment = false
+# (strict separation of duties): the module then creates no binding between the function app's
+# managed identity and the AWS-federation app role, as the deploying principal is assumed to have no
+# directory-write privileges. This output prints the details the Entra team needs to create that app
+# role assignment out-of-band. Empty otherwise, including whenever the module creates the app itself
+# (manage_entra_app_role_assignment is forced true in that case, so the module always binds).
 output "entra_app_role_assignment_manual_action_required" {
-  description = "Strict separation of duties only (manage_entra_app_role_assignment = false): the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
-  value       = var.manage_entra_app_role_assignment ? "" : <<-EOT
+  description = "Populated only when bringing your own app registration (existing_entra_application_client_id) with manage_entra_app_role_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
+  value       = local.manage_entra_app_role_assignment ? "" : <<-EOT
     ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.
     Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All.
 

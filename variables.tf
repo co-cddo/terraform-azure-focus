@@ -129,7 +129,7 @@ variable "existing_entra_application_client_id" {
 }
 
 variable "manage_entra_app_role_assignment" {
-  description = "Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra_app_role_assignment_manual_action_required' output prints the details for your Entra team to create it out-of-band."
+  description = "Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Only takes effect when bringing your own app registration (existing_entra_application_client_id set); when the module creates the app registration it already holds the privileges to create the binding, so this is forced true. Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra_app_role_assignment_manual_action_required' output prints the details for your Entra team to create it out-of-band."
   type        = bool
   default     = true
 }

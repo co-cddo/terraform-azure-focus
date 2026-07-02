@@ -6,6 +6,9 @@
 #                          registration but still manages the app-role binding.
 #   3. Strict separation - as (2) but manage_entra_app_role_assignment = false, so the module
 #                          performs NO Entra writes/reads and emits the manual-action output.
+#   4. Coercion          - the module creates the app AND manage_entra_app_role_assignment = false;
+#                          the flag is ignored (forced true) since delegating only the binding while
+#                          the module holds directory-write privileges makes no sense.
 
 mock_provider "azurerm" {}
 mock_provider "azuread" {}
@@ -161,5 +164,30 @@ run "byo_app_strict_separation" {
   assert {
     condition     = output.entra_app_role_assignment_manual_action_required != ""
     error_message = "The manual-action output should be populated in strict separation mode."
+  }
+}
+
+# 4. Module creates the app but manage_entra_app_role_assignment = false: the flag is nonsensical
+#    here (the module already holds directory-write), so it is forced true and the binding is created.
+run "module_creates_app_forces_binding" {
+  command = plan
+
+  variables {
+    manage_entra_app_role_assignment = false
+  }
+
+  assert {
+    condition     = length(azuread_application.aws_app) == 1
+    error_message = "The module should still create the app registration when no existing app is supplied."
+  }
+
+  assert {
+    condition     = length(azuread_app_role_assignment.aws_app) == 1
+    error_message = "manage_entra_app_role_assignment = false must be ignored when the module creates the app; the binding should still be created."
+  }
+
+  assert {
+    condition     = output.entra_app_role_assignment_manual_action_required == ""
+    error_message = "No manual action should be required when the module creates the binding itself."
   }
 }
