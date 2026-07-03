@@ -1,6 +1,6 @@
 output "aws_app_client_id" {
   description = "The aws app client id"
-  value       = azuread_application.aws_app.client_id
+  value       = local.entra_app_client_id
 }
 
 output "focus_container_name" {
@@ -81,6 +81,34 @@ output "enterprise_billing_manual_action_required" {
     [for v in var.billing_account_ids : "    /providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"],
     ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
   )) : ""
+}
+
+# Only fires when bringing your own app registration AND manage_entra_app_role_assignment = false
+# (strict separation of duties): the module then creates no binding between the function app's
+# managed identity and the AWS-federation app role, as the deploying principal is assumed to have no
+# directory-write privileges. This output prints the details the Entra team needs to create that app
+# role assignment out-of-band. Empty otherwise, including whenever the module creates the app itself
+# (manage_entra_app_role_assignment is forced true in that case, so the module always binds).
+output "entra_app_role_assignment_manual_action_required" {
+  description = "Populated only when bringing your own app registration (existing_entra_application_client_id) with manage_entra_app_role_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
+  value       = local.manage_entra_app_role_assignment ? "" : <<-EOT
+    ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.
+    Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All.
+
+    # 1. Resolve the service principal object id and the app role id for the AWS-federation app:
+    SP_ID=$(az ad sp show --id ${local.entra_app_client_id} --query id -o tsv)
+    APP_ROLE_ID=$(az ad sp show --id ${local.entra_app_client_id} --query "appRoles[?value=='AssumeRoleWithWebIdentity'].id | [0]" -o tsv)
+
+    # 2. Assign the app role to the function app's managed identity:
+    az rest --method POST \
+      --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignedTo" \
+      --headers "Content-Type=application/json" \
+      --body "{
+        \"principalId\": \"${azurerm_user_assigned_identity.cost_export.principal_id}\",
+        \"resourceId\": \"$SP_ID\",
+        \"appRoleId\": \"$APP_ROLE_ID\"
+      }"
+  EOT
 }
 
 output "random_string_suffix" {

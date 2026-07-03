@@ -92,8 +92,9 @@ system topic and for each Cost Management export.
 > `Storage Blob Data Contributor` and `Storage Queue Data Contributor` roles**,
 > without which `terraform apply` fails when the provider reads the cost-export
 > storage account over Entra ID. The Entra `AssumeRoleWithWebIdentity` app-role
-> assignment is the one exception: it is always created, as it is internal to the
-> module's own federation app.
+> assignment is governed separately by `manage_entra_app_role_assignment` (default
+> `true`), so by default it is still created here - see
+> [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration) below.
 
 | Principal | Role | Scope | Purpose |
 |---|---|---|---|
@@ -150,6 +151,52 @@ system topic and for each Cost Management export.
   built-in that includes the read action, and it avoids maintaining a custom role.
 - **Billing roles.** For MCA the `Billing account reader` role is assigned to the
   function identity automatically.
+
+### c) Separation of duties: bring your own Entra app registration
+
+By default the module creates the AWS-federation Entra app registration, its
+service principal, and its `AssumeRoleWithWebIdentity` app role. Creating these
+requires **directory-write** privileges (e.g. `Application Administrator` /
+`Cloud Application Administrator`), so the deploying principal would need both
+Azure RBAC rights **and** Entra ID app-management rights.
+
+If your organisation separates Entra ID administration from Azure RBAC
+administration, your Entra team can pre-create the app registration out-of-band
+and you point the module at it - the deploying principal then needs no
+directory-write privilege.
+
+**What the Entra team pre-creates:**
+
+- An app registration exposing an app role with value `AssumeRoleWithWebIdentity`
+  (member types `User` and `Application`).
+- The identifier URI `api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost_mgmt_suffix>`.
+  The module derives `ENTRA_APP_URN` (the AWS OIDC token audience) from this same
+  convention, and the AWS side relies on it too, so the pre-created app must use it
+  exactly.
+
+**Module inputs:**
+
+| Variable | Effect |
+|---|---|
+| `existing_entra_application_client_id` | Client (application) ID of the pre-created app. When set, the module does **not** create the app / service principal / app role and consumes this ID instead. |
+| `manage_entra_app_role_assignment` | Whether the module creates the app-role binding (function identity → `AssumeRoleWithWebIdentity`). Default `true`. **Only takes effect when `existing_entra_application_client_id` is set**; when the module creates the app registration it already holds directory-write, so this is forced `true` and the binding is always created. |
+
+**Two modes for the app-role binding, both assuming you have supplied
+`existing_entra_application_client_id`** (the binding depends on the module-created
+function managed identity, so it cannot be fully pre-created):
+
+- `manage_entra_app_role_assignment = true` (default): the module still creates the
+  binding. With a bring-your-own app it resolves the app's service principal via a
+  directory **read** (`data.azuread_service_principal`), so the deploying principal
+  needs `AppRoleAssignment.ReadWrite.All` or ownership of that one service principal -
+  a far narrower grant than tenant-wide app management.
+- `manage_entra_app_role_assignment = false` (strict separation): the module performs
+  **no** Entra writes or reads at all. After apply, the
+  `entra_app_role_assignment_manual_action_required`
+  [output](#output_entra_app_role_assignment_manual_action_required) prints the
+  function identity's principal ID and the app role to assign, for your Entra team to
+  create the binding out-of-band. The function cannot authenticate to AWS until this
+  is done.
 
 ## Security Features
 
@@ -550,12 +597,14 @@ pre-commit hook.
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
 | <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/>    cost_export_prefix          = optional(string)<br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
+| <a name="input_existing_entra_application_client_id"></a> [existing\_entra\_application\_client\_id](#input\_existing\_entra\_application\_client\_id) | [optional] Client (application) ID of a pre-existing Entra app registration to use for AWS OIDC federation. Set this for separation of duties: when supplied, the module does NOT create the app registration, service principal, or app role (all of which require directory-write privileges) and consumes this client ID instead. The pre-created app must expose an 'AssumeRoleWithWebIdentity' app role and the identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost\_mgmt\_suffix>' (the AWS OIDC token audience). Leave null to have the module create the app registration as before. | `string` | `null` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_is_enterprise_customer"></a> [is\_enterprise\_customer](#input\_is\_enterprise\_customer) | Set to true if you are an Enterprise Agreement customer | `bool` | `false` | no |
 | <a name="input_location"></a> [location](#input\_location) | The Azure region where resources will be created | `string` | `"uksouth"` | no |
 | <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created. | `string` | `null` | no |
 | <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
-| <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is always created (it is internal to the module's federation app). | `bool` | `true` | no |
+| <a name="input_manage_entra_app_role_assignment"></a> [manage\_entra\_app\_role\_assignment](#input\_manage\_entra\_app\_role\_assignment) | Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Only takes effect when bringing your own app registration (existing\_entra\_application\_client\_id set); when the module creates the app registration it already holds the privileges to create the binding, so this is forced true. Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra\_app\_role\_assignment\_manual\_action\_required' output prints the details for your Entra team to create it out-of-band. | `bool` | `true` | no |
+| <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage\_entra\_app\_role\_assignment. | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
 
 ## Outputs
@@ -576,6 +625,7 @@ pre-commit hook.
 | <a name="output_deployment_storage_private_endpoint_ip"></a> [deployment\_storage\_private\_endpoint\_ip](#output\_deployment\_storage\_private\_endpoint\_ip) | The private IP address of the deployment storage blob private endpoint |
 | <a name="output_ea_billing_role_definition_ids"></a> [ea\_billing\_role\_definition\_ids](#output\_ea\_billing\_role\_definition\_ids) | The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL |
 | <a name="output_enterprise_billing_manual_action_required"></a> [enterprise\_billing\_manual\_action\_required](#output\_enterprise\_billing\_manual\_action\_required) | Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY. Empty for Microsoft Customer Agreement customers. |
+| <a name="output_entra_app_role_assignment_manual_action_required"></a> [entra\_app\_role\_assignment\_manual\_action\_required](#output\_entra\_app\_role\_assignment\_manual\_action\_required) | Populated only when bringing your own app registration (existing\_entra\_application\_client\_id) with manage\_entra\_app\_role\_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding. |
 | <a name="output_event_grid_subscription_name"></a> [event\_grid\_subscription\_name](#output\_event\_grid\_subscription\_name) | The name of the Event Grid subscription for blob created events |
 | <a name="output_event_grid_system_topic_name"></a> [event\_grid\_system\_topic\_name](#output\_event\_grid\_system\_topic\_name) | The name of the Event Grid system topic for storage events |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |

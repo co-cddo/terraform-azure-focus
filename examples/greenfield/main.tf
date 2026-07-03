@@ -1,16 +1,12 @@
-provider "azurerm" {
-  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
-  subscription_id                = var.subscription_id
-  # The cost_export storage account disables shared access keys, so the provider must
-  # authenticate to the storage data plane with Entra ID instead of account keys.
-  # Without this, post-create data-plane polls fail with KeyBasedAuthenticationNotPermitted (403).
-  storage_use_azuread = true
-  features {}
-}
-
 locals {
   # Setting to true enables 'public' access to the Function App for the duration of the deployment. This is not recommended for production.
   deploy_from_external_network = true
+}
+provider "azurerm" {
+  resource_providers_to_register = ["Microsoft.CostManagementExports", "Microsoft.App"]
+  subscription_id                = var.subscription_id
+  storage_use_azuread            = true
+  features {}
 }
 
 # Create the resource group for networking
@@ -97,11 +93,11 @@ module "cost_forwarding" {
   location                            = var.location
   resource_group_name                 = var.resource_group_name
   deploy_from_external_network        = local.deploy_from_external_network
-  backfill_start_date                 = "2022-01-01"
-  logging_level                       = "INFO"
-  cost_mgmt_suffix                    = "dev"
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
+
+  # Uncomment the following line if running in CI/CD with a service principal
+  # current_principal_type = "ServicePrincipal"
 
   # Optional: override individual resource names.
   # Existing deployments should keep the defaults to avoid forced resource replacement.
