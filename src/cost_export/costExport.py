@@ -80,10 +80,7 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
 
     current_month, current_year = increment_month_year(current_month, current_year)
 
-  # if we get this far, then we have created the full schedule of backfill Cost Management export jobs
-  cost_export_backfill_schedule_lock_create()
-
-def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> None:
+def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> int:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 6
 
   logger.debug(f"run_cost_export_backfill ({account_idx}) from {start_date} for account: {account_id}; skip existing ({skip_existing}) with forced overwrite ({force_overwrite})")
@@ -130,10 +127,10 @@ def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx:
 
     current_month, current_year = decrement_month_year(current_month, current_year)
 
-  # if we get this far, and we've added zero job to run, then we can conclude we have ran all jobs
-  #  as all data exists
-  if number_of_jobs_running == 0:
-    cost_export_backfill_run_lock_create()
+  # return the number of jobs this account kicked off so the caller can decide, across the whole
+  #  fleet of billing accounts, whether every account has finished (see cost_export_backfill_impl).
+  # The run lock is global, so it must not be created here based on a single account's state.
+  return number_of_jobs_running
 
 def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = False, skip_existing: bool = True) -> None:
   logging.debug(f"cost_export_backfill: from {start_date}, overwrite({force_overwrite}), skip({skip_existing})")
@@ -152,14 +149,26 @@ def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = Fals
 
       create_cost_export_backfill_tasks(start_date=start_date, account_idx=int(idx), account_id=account_id)
 
+    # only lock the schedule once every billing account has had its full set of export tasks
+    #  created; if any account above raised, we skip this and retry the whole schedule next run
+    #  (task creation is idempotent).
+    cost_export_backfill_schedule_lock_create()
+
   else:
     logger.info("Cost export backfill schedule lock exists. Skipping backfill schedule.")
 
   # now having the schedule available, try running the backfills schedule
   if not cost_export_backfill_run_lock_exists():
+    total_jobs_running = 0
     for idx, account_id in Config.billing_account_mapping.items():
       logger.info(f"Run backfill for Billing Account ({idx}): {account_id}")
-      run_cost_export_backfill(start_date=start_date, account_idx=int(idx), account_id=account_id, skip_existing=skip_existing, force_overwrite=force_overwrite)
+      total_jobs_running += run_cost_export_backfill(start_date=start_date, account_idx=int(idx), account_id=account_id, skip_existing=skip_existing, force_overwrite=force_overwrite)
+
+    # only lock the run once every billing account has fully backfilled (zero jobs left to run
+    #  across the whole fleet). Creating it per-account lets a completed account lock out others
+    #  that still have months outstanding.
+    if total_jobs_running == 0:
+      cost_export_backfill_run_lock_create()
 
   else:
     logger.info("Cost export backfill run lock exists. Skipping backfill run.")
