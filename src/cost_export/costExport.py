@@ -80,7 +80,7 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
 
     current_month, current_year = increment_month_year(current_month, current_year)
 
-def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx: int, skip_existing:bool = True, force_overwrite:bool = False) -> int:
+def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx: int, skip_existing: bool = True, force_overwrite: bool = False) -> int:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 6
 
   logger.debug(f"run_cost_export_backfill ({account_idx}) from {start_date} for account: {account_id}; skip existing ({skip_existing}) with forced overwrite ({force_overwrite})")
@@ -151,8 +151,11 @@ def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = Fals
 
     # only lock the schedule once every billing account has had its full set of export tasks
     #  created; if any account above raised, we skip this and retry the whole schedule next run
-    #  (task creation is idempotent).
-    cost_export_backfill_schedule_lock_create()
+    #  (task creation is idempotent). Skip locking entirely when no billing accounts are
+    #  configured (e.g. missing/invalid BILLING_ACCOUNT_MAPPING) so a misconfiguration doesn't
+    #  stamp a global lock that blocks scheduling once accounts are added.
+    if Config.billing_account_mapping:
+      cost_export_backfill_schedule_lock_create()
 
   else:
     logger.info("Cost export backfill schedule lock exists. Skipping backfill schedule.")
@@ -166,8 +169,10 @@ def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = Fals
 
     # only lock the run once every billing account has fully backfilled (zero jobs left to run
     #  across the whole fleet). Creating it per-account lets a completed account lock out others
-    #  that still have months outstanding.
-    if total_jobs_running == 0:
+    #  that still have months outstanding. Guard on there being at least one configured account
+    #  so an empty BILLING_ACCOUNT_MAPPING doesn't stamp the lock and permanently short-circuit
+    #  backfill once accounts are configured.
+    if Config.billing_account_mapping and total_jobs_running == 0:
       cost_export_backfill_run_lock_create()
 
   else:

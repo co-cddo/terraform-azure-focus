@@ -18,7 +18,8 @@ from datetime import datetime
 # costExport uses flat imports (`from common import Config`, `from api.* import ...`), so the
 # package directory has to be importable directly.
 COST_EXPORT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if COST_EXPORT_DIR not in sys.path:
+_COST_EXPORT_DIR_ALREADY_ON_PATH = COST_EXPORT_DIR in sys.path
+if not _COST_EXPORT_DIR_ALREADY_ON_PATH:
     sys.path.insert(0, COST_EXPORT_DIR)
 
 
@@ -101,6 +102,13 @@ import costExport  # noqa: E402  (import after stubs are installed)
 
 def tearDownModule():
     _restore_modules()
+    # Undo the sys.path.insert done at import time so we don't change import resolution for
+    # other test modules; only remove it if we were the ones who added it.
+    if not _COST_EXPORT_DIR_ALREADY_ON_PATH:
+        try:
+            sys.path.remove(COST_EXPORT_DIR)
+        except ValueError:
+            pass
 
 
 # Fixed "current month" so the backfill window is deterministic regardless of the real clock.
@@ -185,6 +193,19 @@ class CostExportBackfillRunLockTest(unittest.TestCase):
         # Scheduled for both accounts, but the single global schedule lock is created only once.
         self.assertEqual(self.mocks["create_tasks"].call_count, 2)
         self.mocks["schedule_lock_create"].assert_called_once()
+
+    def test_no_locks_created_when_no_billing_accounts_configured(self):
+        """A misconfigured (empty) BILLING_ACCOUNT_MAPPING must not stamp either global lock;
+        otherwise backfill is permanently short-circuited once accounts are configured."""
+        costExport.Config.billing_account_mapping = {}
+        self.mocks["schedule_lock_exists"].return_value = False
+        self.mocks["run_lock_exists"].return_value = False
+
+        costExport.cost_export_backfill_impl(start_date=self.start_date)
+
+        self.mocks["create_tasks"].assert_not_called()
+        self.mocks["schedule_lock_create"].assert_not_called()
+        self.mocks["run_lock_create"].assert_not_called()
 
     def test_schedule_lock_not_created_if_an_account_fails_to_schedule(self):
         """If scheduling raises partway, the global schedule lock must not be stamped, so the whole
