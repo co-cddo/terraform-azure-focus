@@ -22,6 +22,23 @@ if COST_EXPORT_DIR not in sys.path:
     sys.path.insert(0, COST_EXPORT_DIR)
 
 
+# Modules replaced with stubs below. costExport is imported under those stubs, so it is
+# snapshotted/restored too; otherwise a later test module in the same process would import
+# the stub-contaminated costExport instead of the real one.
+_STUBBED_MODULES = (
+    "common",
+    "api",
+    "api.s3Api",
+    "api.costMgmtApi",
+    "api.costMgmtS3Api",
+    "costExport",
+)
+
+# sys.modules snapshot for the names above, taken before any stub is installed, so
+# tearDownModule can put the process back exactly as it found it.
+_ORIGINAL_MODULES = {}
+
+
 def _install_stub_modules():
     """Replace costExport's import-time dependencies with lightweight stubs.
 
@@ -29,6 +46,9 @@ def _install_stub_modules():
     none of that is needed to test the orchestration logic. Individual functions are controlled
     per-test via mock.patch.object(costExport, ...).
     """
+    for _module_name in _STUBBED_MODULES:
+        _ORIGINAL_MODULES[_module_name] = sys.modules.get(_module_name)
+
     common = types.ModuleType("common")
 
     class Config:
@@ -64,9 +84,23 @@ def _install_stub_modules():
     sys.modules["api.costMgmtS3Api"] = cost_mgmt_s3_api
 
 
+def _restore_modules():
+    """Undo the stub installation (and the stub-bound costExport import) so the stubs do not
+    leak into other test modules that share this Python process."""
+    for _module_name, _module in _ORIGINAL_MODULES.items():
+        if _module is None:
+            sys.modules.pop(_module_name, None)
+        else:
+            sys.modules[_module_name] = _module
+
+
 _install_stub_modules()
 
 import costExport  # noqa: E402  (import after stubs are installed)
+
+
+def tearDownModule():
+    _restore_modules()
 
 
 # Fixed "current month" so the backfill window is deterministic regardless of the real clock.
@@ -170,16 +204,21 @@ class RunCostExportBackfillReturnValueTest(unittest.TestCase):
     """run_cost_export_backfill must report its job count instead of creating the global lock."""
 
     def setUp(self):
-        self.until_patcher = mock.patch.object(
-            costExport, "get_backfill_until_month_year", return_value=FIXED_UNTIL_MONTH_YEAR
-        )
-        self.until_patcher.start()
-        self.addCleanup(self.until_patcher.stop)
-        self.run_lock_create = mock.patch.object(costExport, "cost_export_backfill_run_lock_create").start()
-        self.addCleanup(mock.patch.stopall)
-        mock.patch.object(costExport, "cost_mgmt_export_exists", return_value=True).start()
-        mock.patch.object(costExport, "cost_mgmt_export_run", return_value=True).start()
-        self.data_exists = mock.patch.object(costExport, "cost_export_exists").start()
+        patchers = {
+            "until": mock.patch.object(
+                costExport, "get_backfill_until_month_year", return_value=FIXED_UNTIL_MONTH_YEAR
+            ),
+            "run_lock_create": mock.patch.object(costExport, "cost_export_backfill_run_lock_create"),
+            "export_exists": mock.patch.object(costExport, "cost_mgmt_export_exists", return_value=True),
+            "export_run": mock.patch.object(costExport, "cost_mgmt_export_run", return_value=True),
+            "data_exists": mock.patch.object(costExport, "cost_export_exists"),
+        }
+        self.mocks = {name: patcher.start() for name, patcher in patchers.items()}
+        for patcher in patchers.values():
+            self.addCleanup(patcher.stop)
+
+        self.run_lock_create = self.mocks["run_lock_create"]
+        self.data_exists = self.mocks["data_exists"]
         self.start_date = datetime(2024, 1, 1)
 
     def test_returns_zero_and_never_locks_when_all_data_present(self):
