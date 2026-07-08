@@ -46,7 +46,6 @@ variable "location" {
 variable "aws_s3_bucket_name" {
   description = "Name of the AWS S3 bucket to store cost data"
   type        = string
-  default     = "uk-gov-gds-cost-inbound"
 }
 
 variable "deploy_from_external_network" {
