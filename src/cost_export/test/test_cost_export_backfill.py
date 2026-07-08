@@ -84,6 +84,12 @@ def _install_stub_modules():
         setattr(cost_mgmt_s3_api, _name, mock.MagicMock(name=_name))
     sys.modules["api.costMgmtS3Api"] = cost_mgmt_s3_api
 
+    # Drop any cached costExport so the `import costExport` below re-imports it under the stubs
+    # just installed. If an earlier test module in this process already imported the real
+    # costExport, the cached copy (bound to the heavy real dependencies) would otherwise be
+    # reused. The original was snapshotted above, so tearDownModule still restores it.
+    sys.modules.pop("costExport", None)
+
 
 def _restore_modules():
     """Undo the stub installation (and the stub-bound costExport import) so the stubs do not

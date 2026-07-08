@@ -39,6 +39,7 @@ variables {
   subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
   function_app_subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
   aws_account_id                      = "123456789012"
+  aws_s3_bucket_name                  = "azure-cost-data"
   billing_account_ids                 = ["test-billing-account"]
   manage_role_assignments             = false
 }
