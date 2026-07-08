@@ -10,6 +10,7 @@ module "example" {
 
   is_enterprise_customer              = false
   aws_account_id                      = "<aws-account-id>"
+  aws_s3_bucket_name                  = "<aws-s3-bucket-name>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
   function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"

@@ -6,6 +6,7 @@ variable "subscription_id" {
 variable "aws_s3_bucket_name" {
   description = "Name of the AWS S3 bucket to store cost data"
   type        = string
+  default     = "azure-cost-data"
 }
 
 variable "aws_account_id" {

@@ -109,6 +109,6 @@ repos:
         name: Terraform test
         entry: bash -c 'terraform init -backend=false && terraform test'
         language: system
-        files: ^tests/.*\.tftest\.hcl$
+        files: \.(tf|tftest\.hcl)$
         pass_filenames: false
         verbose: true

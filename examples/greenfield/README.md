@@ -12,9 +12,9 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID (12-digit) used to construct the cross-cloud federation role ARN | `string` | n/a | yes |
-| <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | n/a | yes |
 | <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS cost exports for | `list(string)` | n/a | yes |
 | <a name="input_subscription_id"></a> [subscription\_id](#input\_subscription\_id) | Azure Subscription ID | `string` | n/a | yes |
+| <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | `"azure-cost-data"` | no |
 | <a name="input_default_subnet_name"></a> [default\_subnet\_name](#input\_default\_subnet\_name) | Name of the default subnet | `string` | `"default"` | no |
 | <a name="input_functionapp_subnet_name"></a> [functionapp\_subnet\_name](#input\_functionapp\_subnet\_name) | Name of the function app subnet | `string` | `"functionapp"` | no |
 | <a name="input_location"></a> [location](#input\_location) | Azure region for the cost forwarding resources | `string` | `"uksouth"` | no |
