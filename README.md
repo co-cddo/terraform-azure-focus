@@ -52,7 +52,7 @@ narrow as the Azure platform allows.
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
 storage **data-plane** roles it needs during apply (see (b)), so those are *not*
-prerequisites — unless `manage_role_assignments = false`, in which case they are
+prerequisites - unless `manage_role_assignments = false`, in which case they are
 (see the note in (b)).
 
 | Scope | Role | Why it is needed |
@@ -88,7 +88,7 @@ system topic and for each Cost Management export.
 > Every grant in the table below is created only when `manage_role_assignments`
 > is `true` (the default). Set it to `false` if RBAC is owned by a separate
 > team/process: the module then creates **none** of these assignments and you
-> must pre-provision every one yourself — **including the deploying principal's
+> must pre-provision every one yourself - **including the deploying principal's
 > `Storage Blob Data Contributor` and `Storage Queue Data Contributor` roles**,
 > without which `terraform apply` fails when the provider reads the cost-export
 > storage account over Entra ID. The Entra `AssumeRoleWithWebIdentity` app-role
@@ -228,24 +228,28 @@ provider "azurerm" {
   features {}
 }
 
-module "example" {
-  source                              = "git::https://github.com/co-cddo/terraform-azure-focus?ref=68901f7a0eeb6bd75d8a15d201a7ea8ef8ee99b6" # v2.0.0
+module "cost_forwarding" {
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=c93817064d43433c66d17459a5ebbbac114d9b18" # v3.1.0
 
-  aws_account_id                      = "<aws-account-id>"
+  aws_s3_bucket_name                  = "<aws s3 bucket name>"
+  aws_account_id                      = "<aws account id>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
-  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
-  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
-  virtual_network_name                = "existing-vnet"
-  virtual_network_resource_group_name = "existing-infra"
-  resource_group_name                 = "rg-cost-export"
-  # Setting to false or omitting this argument assumes that you have
-  # private GitHub runners configured in the existing virtual network.
-  # It is not recommended to set this to true in production
-  deploy_from_external_network        = false
+  subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
+  function_app_subnet_id              = "<resource id for existing subnet to be used for function app vnet integration>"
+  virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
+  virtual_network_resource_group_name = "<name of the existing resource group containing the virtual network above>"
+  resource_group_name                 = "<name for the new resource group where the function app and related resources will be created>"
 
-  # Uncomment when running in CI/CD with a service principal
-  # (e.g., GitHub Actions)
+  ## It is not recommended to set this to true in production
+  # deploy_from_external_network = true
+
+  ## Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
   # current_principal_type = "ServicePrincipal"
+
+  ## Set to true if the billing account is an Enterprise Agreement (EA)
+  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on the EA account following deployment
+  ## See: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#assign-a-role-to-the-service-principal
+  # is_enterprise_customer             = true
 }
 ```
 
