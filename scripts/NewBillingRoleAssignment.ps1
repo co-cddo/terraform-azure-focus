@@ -12,6 +12,7 @@ param(
     [switch]$IsEnterpriseAgreement
 )
 
+# https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/create-by-billing-account?view=rest-billing-2019-10-01-preview&tabs=HTTP
 $uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/createBillingRoleAssignment?api-version=2019-10-01-preview"
 $method = 'POST'
 
@@ -29,6 +30,7 @@ $body = @{
 
 if ($IsEnterpriseAgreement.IsPresent) {
     $billingRoleAssignmentID = (New-Guid).Guid
+    # https://learn.microsoft.com/en-us/rest/api/billing/role-assignments/put?view=rest-billing-2019-10-01-preview&tabs=HTTP
     $uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleAssignments/$billingRoleAssignmentID`?api-version=2019-10-01-preview"
     $body.properties.principalTenantId = (Get-AzContext).Tenant.Id
     $method = 'PUT'
