@@ -149,6 +149,39 @@ resource "azapi_resource_action" "add_role_assignment" {
   }
 }
 
+# Revokes the assignment created above: on destroy, when a billing account leaves
+# var.billing_account_ids, and when the identity is recreated (the new principal_id replaces both
+# actions, and destroying the old instance deletes the old principal's assignment). Without this,
+# every identity rebuild leaves an orphaned assignment on the billing account. If the assignment
+# was already removed out-of-band the DELETE can fail and block destroy; drop the instance with
+# `terraform state rm` in that case.
+resource "azapi_resource_action" "remove_role_assignment" {
+  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+
+  type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2019-10-01-preview"
+  resource_id = azapi_resource_action.add_role_assignment[each.key].output.id
+  method      = "DELETE"
+  when        = "destroy"
+}
+
+# add_role_assignment is fire-and-forget: azapi_resource_action has no read, so Terraform never
+# notices when an assignment disappears (removed out-of-band, or granted to a principal that has
+# since been recreated). This asserts against a fresh read of the billing accounts' assignments
+# (data.azapi_resource_list.billing_role_assignments in data.tf) and warns, without failing the
+# run, when the identity is missing its reader role.
+check "billing_reader_assignments" {
+  assert {
+    condition = alltrue([
+      for account_id, assignments in data.azapi_resource_list.billing_role_assignments :
+      anytrue([
+        for assignment in assignments.output.value :
+        assignment.properties.principalId == azurerm_user_assigned_identity.cost_export.principal_id
+      ])
+    ])
+    error_message = "The cost export identity has no billing role assignment on at least one billing account. Re-apply with the identity's current principal ID or grant it with scripts/NewBillingRoleAssignment.ps1."
+  }
+}
+
 # Function writes export output and creates export tasks that deliver to this storage account.
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
   count                = var.manage_role_assignments ? 1 : 0
@@ -213,30 +246,4 @@ resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained
 #       # principalTenantId = ????
 #     }
 #   }
-# }
-
-# resource "azapi_resource_action" "remove_role_assignment" {
-#   for_each    = toset(var.billing_account_ids)
-
-#   type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2019-10-01-preview"
-
-#   # why not just use 'resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"' as above
-#   #   fails with:
-#   #   │ Error: Invalid function argument
-#   # │
-#   # │   on ../terraform-azure-focus/rbac.tf line 99, in resource "azapi_resource_action" "remove_role_assignment":
-#   # │   99:   resource_id = jsondecode(azapi_resource_action.add_role_assignment[each.key].output).id
-#   # │     ├────────────────
-#   # │     │ while calling jsondecode(str)
-#   # │     │ azapi_resource_action.add_role_assignment is object with 1 attribute "bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"
-#   # │     │ each.key is "bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"
-#   # │
-#   # │ Invalid value for "str" parameter: string required.
-#   #
-#   # azapi_resource_action.add_role_assignment[each.key].output.id ---->
-#   #      "/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/billingRoleAssignments/50000000-aaaa-bbbb-cccc-100000000001_ccbdf98a-f95d-4c68-8fe3-0539ff4bb82d",
-
-#   resource_id = json_decode(azapi_resource_action.add_role_assignment[each.key].output).id
-#   method      = "DELETE"
-#   when        = "destroy"
 # }
