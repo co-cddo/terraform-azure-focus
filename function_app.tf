@@ -217,7 +217,7 @@ resource "null_resource" "set_function_app_public_network_access_disabled" {
   count = var.deploy_from_external_network ? 1 : 0
 
   provisioner "local-exec" {
-    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --set publicNetworkAccess=Disabled"
+    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Disabled"
   }
 
   triggers = {
