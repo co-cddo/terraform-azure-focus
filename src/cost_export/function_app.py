@@ -115,44 +115,46 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                 "SubAccountType", "Tags",
             }
 
-            stream.seek(0)
-            schema = pq.read_schema(stream)
-            all_columns = schema.names
-            columns_to_drop.update(col for col in all_columns if col.startswith("x_"))
-
-            # Extract billing account ID before excluding it from the final read
-            billing_account_id = None
-            billing_profile_from_data = None
-            if "BillingAccountId" in all_columns:
+            try:
                 stream.seek(0)
-                billing_col = pq.read_table(stream, columns=["BillingAccountId"])
-                if billing_col.num_rows > 0:
-                    full_billing_path = billing_col.column("BillingAccountId")[0].as_py()
-                    logger.info(f"Found billing account path in data: {full_billing_path}")
+                schema = pq.read_schema(stream)
+                all_columns = schema.names
+                columns_to_drop.update(col for col in all_columns if col.startswith("x_"))
 
-                    if "/providers/Microsoft.Billing/billingAccounts/" in full_billing_path:
-                        account_part = full_billing_path.split("/providers/Microsoft.Billing/billingAccounts/")[1]
+                # Extract billing account ID before excluding it from the final read
+                billing_account_id = None
+                billing_profile_from_data = None
+                if "BillingAccountId" in all_columns:
+                    stream.seek(0)
+                    billing_col = pq.read_table(stream, columns=["BillingAccountId"])
+                    if billing_col.num_rows > 0:
+                        full_billing_path = billing_col.column("BillingAccountId")[0].as_py()
+                        logger.info(f"Found billing account path in data: {full_billing_path}")
 
-                        if "/billingProfiles/" in account_part:
-                            billing_account_id = account_part.split("/billingProfiles/")[0]
-                            billing_profile_from_data = account_part.split("/billingProfiles/")[1]
+                        if "/providers/Microsoft.Billing/billingAccounts/" in full_billing_path:
+                            account_part = full_billing_path.split("/providers/Microsoft.Billing/billingAccounts/")[1]
+
+                            if "/billingProfiles/" in account_part:
+                                billing_account_id = account_part.split("/billingProfiles/")[0]
+                                billing_profile_from_data = account_part.split("/billingProfiles/")[1]
+                            else:
+                                billing_account_id = account_part
+
+                            logger.info(f"Extracted billing account ID: {billing_account_id}")
+                            if billing_profile_from_data:
+                                logger.info(f"Extracted billing profile from data: {billing_profile_from_data}")
                         else:
-                            billing_account_id = account_part
+                            billing_account_id = full_billing_path
+                            logger.warning(f"Could not parse billing account path, using full path: {billing_account_id}")
+                    del billing_col
 
-                        logger.info(f"Extracted billing account ID: {billing_account_id}")
-                        if billing_profile_from_data:
-                            logger.info(f"Extracted billing profile from data: {billing_profile_from_data}")
-                    else:
-                        billing_account_id = full_billing_path
-                        logger.warning(f"Could not parse billing account path, using full path: {billing_account_id}")
-                del billing_col
+                columns_to_drop.add("BillingAccountId")
+                columns_to_keep = [col for col in all_columns if col not in columns_to_drop]
 
-            columns_to_drop.add("BillingAccountId")
-            columns_to_keep = [col for col in all_columns if col not in columns_to_drop]
-
-            stream.seek(0)
-            table = pq.read_table(stream, columns=columns_to_keep)
-            stream.close()
+                stream.seek(0)
+                table = pq.read_table(stream, columns=columns_to_keep)
+            finally:
+                stream.close()
             ### End of deployment specific requirements ###
 
             # Transform S3 path
