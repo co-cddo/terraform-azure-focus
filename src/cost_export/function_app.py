@@ -135,7 +135,9 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                     full_billing_path = table.column("BillingAccountId")[0].as_py()
                     logger.info(f"Found billing account path in data: {full_billing_path}")
 
-                    if "/providers/Microsoft.Billing/billingAccounts/" in full_billing_path:
+                    if not isinstance(full_billing_path, str):
+                        logger.warning(f"BillingAccountId value is not a string: {type(full_billing_path)}")
+                    elif "/providers/Microsoft.Billing/billingAccounts/" in full_billing_path:
                         account_part = full_billing_path.split("/providers/Microsoft.Billing/billingAccounts/")[1]
 
                         if "/billingProfiles/" in account_part:
