@@ -103,34 +103,43 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
 
         # Process the specific blob from the message
         try:
-            # Download blob content
             blob_client = container_client.get_blob_client(blob_name)
-            blob_data = blob_client.download_blob().readall()
-            blob_to_read = io.BytesIO(blob_data)
+            stream = io.BytesIO()
+            try:
+                blob_client.download_blob().readinto(stream)
 
-            # Read parquet table
-            table = pq.read_table(blob_to_read)
+                ### Any deployment specific requirements can be implemented here ###
+                columns_to_drop = {
+                    "ResourceName", "BillingAccountName", "BillingAccountType",
+                    "ChargeDescription", "CommitmentDiscountName", "RegionId",
+                    "ResourceId", "SubAccountId", "SubAccountName",
+                    "SubAccountType", "Tags",
+                }
 
-            ### Any deployment specific requirements can be implemented here ###
-            table = table.drop_columns("ResourceName")
+                stream.seek(0)
+                schema = pq.read_schema(stream)
+                all_columns = schema.names
+                columns_to_drop.update(col for col in all_columns if col.startswith("x_"))
 
-            # Extract billing account ID before dropping it, for S3 path organization
+                columns_to_keep = [col for col in all_columns if col not in columns_to_drop]
+
+                stream.seek(0)
+                table = pq.read_table(stream, columns=columns_to_keep)
+            finally:
+                stream.close()
+
             billing_account_id = None
             billing_profile_from_data = None
             if "BillingAccountId" in table.column_names:
-                # Get the first BillingAccountId value to determine the billing account
-                billing_account_ids = table.select(["BillingAccountId"]).to_pylist()
-                if billing_account_ids:
-                    full_billing_path = billing_account_ids[0]["BillingAccountId"]
+                if table.num_rows > 0:
+                    full_billing_path = table.column("BillingAccountId")[0].as_py()
                     logger.info(f"Found billing account path in data: {full_billing_path}")
 
-                    # Extract billing account ID and profile from the full path
-                    # Example: /providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/billingProfiles/OC35-AR3W-BG7-PGB
-                    if "/providers/Microsoft.Billing/billingAccounts/" in full_billing_path:
-                        # Extract the part after billingAccounts/
+                    if not isinstance(full_billing_path, str):
+                        logger.warning(f"BillingAccountId value is not a string: {type(full_billing_path)}")
+                    elif "/providers/Microsoft.Billing/billingAccounts/" in full_billing_path:
                         account_part = full_billing_path.split("/providers/Microsoft.Billing/billingAccounts/")[1]
 
-                        # Check if there's a billingProfiles part
                         if "/billingProfiles/" in account_part:
                             billing_account_id = account_part.split("/billingProfiles/")[0]
                             billing_profile_from_data = account_part.split("/billingProfiles/")[1]
@@ -141,26 +150,10 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
                         if billing_profile_from_data:
                             logger.info(f"Extracted billing profile from data: {billing_profile_from_data}")
                     else:
-                        # Fallback: use the full path as billing account ID
                         billing_account_id = full_billing_path
                         logger.warning(f"Could not parse billing account path, using full path: {billing_account_id}")
 
-            table = table.drop_columns("BillingAccountId")
-            table = table.drop_columns("BillingAccountName")
-            table = table.drop_columns("BillingAccountType")
-            table = table.drop_columns("ChargeDescription")
-            table = table.drop_columns("CommitmentDiscountName")
-            table = table.drop_columns("RegionId")
-            table = table.drop_columns("ResourceId")
-            table = table.drop_columns("SubAccountId")
-            table = table.drop_columns("SubAccountName")
-            table = table.drop_columns("SubAccountType")
-            table = table.drop_columns("Tags")
-
-            # Drop any columns that start with "x_"
-            columns_to_drop = [col for col in table.column_names if col.startswith("x_")]
-            if columns_to_drop:
-                table = table.drop_columns(columns_to_drop)
+                table = table.drop_columns("BillingAccountId")
             ### End of deployment specific requirements ###
 
             # Transform S3 path
