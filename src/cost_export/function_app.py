@@ -105,17 +105,17 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
         try:
             blob_client = container_client.get_blob_client(blob_name)
             stream = io.BytesIO()
-            blob_client.download_blob().readinto(stream)
-
-            ### Any deployment specific requirements can be implemented here ###
-            columns_to_drop = {
-                "ResourceName", "BillingAccountName", "BillingAccountType",
-                "ChargeDescription", "CommitmentDiscountName", "RegionId",
-                "ResourceId", "SubAccountId", "SubAccountName",
-                "SubAccountType", "Tags",
-            }
-
             try:
+                blob_client.download_blob().readinto(stream)
+
+                ### Any deployment specific requirements can be implemented here ###
+                columns_to_drop = {
+                    "ResourceName", "BillingAccountName", "BillingAccountType",
+                    "ChargeDescription", "CommitmentDiscountName", "RegionId",
+                    "ResourceId", "SubAccountId", "SubAccountName",
+                    "SubAccountType", "Tags",
+                }
+
                 stream.seek(0)
                 schema = pq.read_schema(stream)
                 all_columns = schema.names
