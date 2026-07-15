@@ -52,7 +52,7 @@ foreach ($roleDefinition in Invoke-BillingGet -Path "$accountPath/billingRoleDef
 
 $assignments |
     Select-Object -Property @{
-                                Name = 'RoleID'
+                                Name = 'AssignmentID'
                                 Expression = { $_.id }
                             },
                             @{
