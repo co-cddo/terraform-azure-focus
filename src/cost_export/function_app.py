@@ -103,13 +103,12 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
 
         # Process the specific blob from the message
         try:
-            # Download blob content
             blob_client = container_client.get_blob_client(blob_name)
-            blob_data = blob_client.download_blob().readall()
-            blob_to_read = io.BytesIO(blob_data)
-
-            # Read parquet table
-            table = pq.read_table(blob_to_read)
+            stream = io.BytesIO()
+            blob_client.download_blob().readinto(stream)
+            stream.seek(0)
+            table = pq.read_table(stream)
+            stream.close()
 
             ### Any deployment specific requirements can be implemented here ###
             table = table.drop_columns("ResourceName")
