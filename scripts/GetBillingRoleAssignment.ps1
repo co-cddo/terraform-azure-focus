@@ -51,24 +51,23 @@ foreach ($roleDefinition in Invoke-BillingGet -Path "$accountPath/billingRoleDef
 }
 
 $assignments |
-    Select-Object -Property @{
-                                Name = 'AssignmentID'
-                                Expression = { $_.id }
-                            },
-                            @{
-                                Name = 'RoleName'
-                                Expression = { $roleNames[$_.properties.roleDefinitionId] }
-                            },
-
-                            @{
-                                Name = 'PrincipalID'
-                                Expression = { $_.properties.principalId }
-                            },
-                            @{
-                                Name = 'CreatedOn'
-                                Expression = { $_.properties.createdOn }
-                            },
-                            @{
-                                Name = 'ModifiedOn'
-                                Expression = { $_.properties.modifiedOn }
-                            }
+Select-Object -Property @{
+                            Name       = 'AssignmentID'
+                            Expression = { $_.id }
+                        },
+                        @{
+                            Name       = 'RoleName'
+                            Expression = { $roleNames[$_.properties.roleDefinitionId] }
+                        },
+                        @{
+                            Name       = 'PrincipalID'
+                            Expression = { $_.properties.principalId }
+                        },
+                        @{
+                            Name       = 'CreatedOn'
+                            Expression = { $_.properties.createdOn }
+                        },
+                        @{
+                            Name       = 'ModifiedOn'
+                            Expression = { $_.properties.modifiedOn }
+                        }
