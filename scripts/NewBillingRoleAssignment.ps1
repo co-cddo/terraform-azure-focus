@@ -1,10 +1,15 @@
-# Grants a billing role assignment directly against the Billing API, outside Terraform. Only use
-# this when the module does not manage the assignment itself: Enterprise Agreement billing
-# accounts (always manual, since creation requires Enterprise Administrator privileges; pass
-# -IsEnterpriseAgreement), and/or deployments with manage_role_assignments = false. For MCA
-# accounts with manage_role_assignments = true, azapi_resource_action.add_role_assignment in
-# rbac.tf grants the role and cleans it up on destroy; assignments created by this script are
-# invisible to Terraform and are never cleaned up automatically.
+#requires -Modules Az.Accounts
+
+<#
+.DESCRIPTION
+Grants a billing role assignment directly against the Billing API, outside Terraform. Only use
+this when the module does not manage the assignment itself: Enterprise Agreement billing
+accounts (always manual, since creation requires Enterprise Administrator privileges; pass
+-IsEnterpriseAgreement), and/or deployments with manage_role_assignments = false. For MCA
+accounts with manage_role_assignments = true, azapi_resource_action.add_role_assignment in
+rbac.tf grants the role and cleans it up on destroy; assignments created by this script are
+invisible to Terraform and are never cleaned up automatically.
+#>
 param(
     [Parameter(Mandatory)]
     [string]$BillingAccountID,
@@ -14,6 +19,10 @@ param(
 
     #EA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal | MCA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-mca-roles#billing-role-definitions
     [Parameter(Mandatory)]
+    [ValidateSet(
+        '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e', # EnrollmentReader
+        '50000000-aaaa-bbbb-cccc-100000000002'  # Billing account reader
+    )]
     [string]$RoleDefinitionID,
 
     [switch]$IsEnterpriseAgreement
@@ -23,15 +32,11 @@ param(
 $uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/createBillingRoleAssignment?api-version=2019-10-01-preview"
 $method = 'POST'
 
-# The API expects the fully qualified role definition ID; expand if given a bare GUID
-if ($RoleDefinitionID -notlike '/providers/*') {
-    $RoleDefinitionID = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleDefinitions/$RoleDefinitionID"
-}
-
 $body = @{
     properties = @{
         principalId      = $ServicePrincipalObjectID
-        roleDefinitionId = $RoleDefinitionID
+        # The API expects the fully qualified role definition ID; expand if given a bare GUID
+        roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleDefinitions/$RoleDefinitionID"
     }
 }
 

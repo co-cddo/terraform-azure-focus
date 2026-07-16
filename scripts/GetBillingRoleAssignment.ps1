@@ -1,11 +1,11 @@
+#requires -Modules Az.Accounts
+
 param(
     [Parameter(Mandatory)]
     [string]$BillingAccountID,
 
-    # Get a single assignment by its ID (GUID); omit to list all assignments on the account
-    [string]$BillingRoleAssignmentID,
 
-    # Filter results to assignments for this principal
+    #Filter results to assignments for this principal
     [string]$ServicePrincipalObjectID
 )
 
@@ -31,14 +31,8 @@ function Invoke-BillingGet {
 
 $accountPath = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID"
 
-if ($BillingRoleAssignmentID) {
-    # https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/get-by-billing-account?view=rest-billing-2019-10-01-preview&tabs=HTTP
-    $assignments = Invoke-BillingGet -Path "$accountPath/billingRoleAssignments/$BillingRoleAssignmentID`?api-version=2019-10-01-preview"
-}
-else {
-    # https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/list-by-billing-account?view=rest-billing-2019-10-01-preview&tabs=HTTP
-    $assignments = Invoke-BillingGet -Path "$accountPath/billingRoleAssignments?api-version=2019-10-01-preview"
-}
+# https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/list-by-billing-account?view=rest-billing-2019-10-01-preview&tabs=HTTP
+$assignments = Invoke-BillingGet -Path "$accountPath/billingRoleAssignments?api-version=2019-10-01-preview"
 
 if ($ServicePrincipalObjectID) {
     $assignments = @($assignments | Where-Object { $_.properties.principalId -eq $ServicePrincipalObjectID })
