@@ -1,3 +1,10 @@
+# Grants a billing role assignment directly against the Billing API, outside Terraform. Only use
+# this when the module does not manage the assignment itself: Enterprise Agreement billing
+# accounts (always manual, since creation requires Enterprise Administrator privileges; pass
+# -IsEnterpriseAgreement), and/or deployments with manage_role_assignments = false. For MCA
+# accounts with manage_role_assignments = true, azapi_resource_action.add_role_assignment in
+# rbac.tf grants the role and cleans it up on destroy; assignments created by this script are
+# invisible to Terraform and are never cleaned up automatically.
 param(
     [Parameter(Mandatory)]
     [string]$BillingAccountID,

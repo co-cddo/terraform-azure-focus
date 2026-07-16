@@ -39,7 +39,7 @@ data "azapi_resource_list" "billing_role_definitions" {
 data "azapi_resource_list" "billing_role_assignments" {
   for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
-  type      = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2019-10-01-preview"
+  type      = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2024-04-01"
   parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
 
   response_export_values = ["value"]

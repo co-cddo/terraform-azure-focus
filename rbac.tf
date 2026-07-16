@@ -149,26 +149,32 @@ resource "azapi_resource_action" "add_role_assignment" {
   }
 }
 
-# Revokes the assignment created above: on destroy, when a billing account leaves
-# var.billing_account_ids, and when the identity is recreated (the new principal_id replaces both
-# actions, and destroying the old instance deletes the old principal's assignment). Without this,
-# every identity rebuild leaves an orphaned assignment on the billing account. If the assignment
-# was already removed out-of-band the DELETE can fail and block destroy; drop the instance with
-# `terraform state rm` in that case.
+# The POST above is a one-shot action: Terraform records that the call happened but manages no
+# resource it could later delete, so every rebuild of the identity would strand the old principal's
+# assignment on the billing account forever (billing role assignments live in the billing account,
+# not Entra ID, and nothing cleans them up when their principal is deleted). This companion action
+# supplies the missing delete half of the lifecycle. It fires on destroy, when a billing account
+# leaves var.billing_account_ids, and on identity rebuild: a changed principal_id replaces
+# add_role_assignment and this action along with it, and destroying the old instance deletes the
+# old principal's assignment. The DELETE targets api-version 2024-04-01, where deletion is
+# documented as idempotent (204 when the assignment is already gone), so a manually removed
+# assignment cannot block destroy.
 resource "azapi_resource_action" "remove_role_assignment" {
   for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
-  type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2019-10-01-preview"
+  type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2024-04-01"
   resource_id = azapi_resource_action.add_role_assignment[each.key].output.id
   method      = "DELETE"
   when        = "destroy"
 }
 
-# add_role_assignment is fire-and-forget: azapi_resource_action has no read, so Terraform never
-# notices when an assignment disappears (removed out-of-band, or granted to a principal that has
-# since been recreated). This asserts against a fresh read of the billing accounts' assignments
-# (data.azapi_resource_list.billing_role_assignments in data.tf) and warns, without failing the
-# run, when the identity is missing its reader role.
+# The other half a one-shot action lacks is read: nothing is refreshed at plan time, so Terraform
+# cannot tell whether the assignment it once granted still exists. An out-of-band removal, or a
+# grant that never fired for a rebuilt principal, stays invisible until the function app starts
+# receiving 403s from the Cost Management APIs. This check compares a fresh read of each billing
+# account's assignments (data.azapi_resource_list.billing_role_assignments in data.tf) against the
+# identity's current principal ID, and emits a warning (it does not fail the run) when the reader
+# role is missing.
 check "billing_reader_assignments" {
   assert {
     condition = alltrue([

@@ -66,19 +66,18 @@ output "ea_billing_role_definition_ids" {
 # Enterprise Agreement billing role assignments cannot be created by Terraform or the deploying
 # service principal - they require Enterprise Administrator privileges (see the commented-out
 # azapi block in rbac.tf). This output is empty for MCA customers (where "Billing account reader"
-# is assigned automatically) and, for EA customers, prints the manual action plus the IDs needed
-# to perform it - so it stands out in terraform apply / CI output.
+# is assigned automatically) and, for EA customers, prints the manual action as a ready-to-run
+# scripts/NewBillingRoleAssignment.ps1 invocation per billing account - so it stands out in
+# terraform apply / CI output.
 output "enterprise_billing_manual_action_required" {
-  description = "Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY. Empty for Microsoft Customer Agreement customers."
+  description = "Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY, by an Enterprise Administrator running scripts/NewBillingRoleAssignment.ps1 with the -IsEnterpriseAgreement switch. Empty for Microsoft Customer Agreement customers."
   value = var.is_enterprise_customer ? join("\n", concat(
     [
       "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
       "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
-      "  Function app managed identity (principal/object) ID: ${azurerm_user_assigned_identity.cost_export.principal_id}",
-      "  Tenant ID: ${data.azurerm_client_config.current.tenant_id}",
-      "  Role definition ID(s) (one per billing account):",
+      "Have an Enterprise Administrator run scripts/NewBillingRoleAssignment.ps1 (bundled with this module), once per billing account; the -IsEnterpriseAgreement switch is required:",
     ],
-    [for v in var.billing_account_ids : "    /providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"],
+    [for v in var.billing_account_ids : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"],
     ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
   )) : ""
 }
