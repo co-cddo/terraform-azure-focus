@@ -188,7 +188,7 @@ check "billing_reader_assignments" {
     error_message = <<-EOT
       ACTION REQUIRED:
 
-      The Function App's user-assigned managed identity has no billing role assignment on at least one billing account. Add the missing role assignment for all applicable billing accounts using NewBillingRoleAssignment.ps1 e.g.
+      The Function App's user-assigned managed identity has no billing role assignment on at least one billing account. Add the missing role assignment for ALL applicable billing accounts using NewBillingRoleAssignment.ps1 e.g.
 
       # Example for Enterprise Agreement (EA) billing account
       ./scripts/NewBillingRoleAssignment.ps1 -IsEnterpriseAgreement -BillingAccountID <billing account id> -ServicePrincipalObjectID <service principal object id> -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' # EnrollmentReader
