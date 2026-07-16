@@ -184,7 +184,18 @@ check "billing_reader_assignments" {
         assignment.properties.principalId == azurerm_user_assigned_identity.cost_export.principal_id
       ])
     ])
-    error_message = "The cost export identity has no billing role assignment on at least one billing account. Re-apply with the identity's current principal ID or grant it with scripts/NewBillingRoleAssignment.ps1."
+
+    error_message = <<-EOT
+      ACTION REQUIRED:
+
+      The Function App's user-assigned managed identity has no billing role assignment on at least one billing account. Add the missing role assignment for all applicable billing accounts using NewBillingRoleAssignment.ps1 e.g.
+
+      # Example for Enterprise Agreement (EA) billing account
+      ./scripts/NewBillingRoleAssignment.ps1 -IsEnterpriseAgreement -BillingAccountID <billing account id> -ServicePrincipalObjectID <service principal object id> -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' # EnrollmentReader
+
+      # Example for Microsoft Customer Agreement (MCA) billing account
+      ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID <billing account id> -ServicePrincipalObjectID <service principal object id> -RoleDefinitionID '50000000-aaaa-bbbb-cccc-100000000002' # Billing account reader
+    EOT
   }
 }
 
