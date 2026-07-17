@@ -616,9 +616,9 @@ pre-commit hook.
 | Name | Description |
 |------|-------------|
 | <a name="output_aws_app_client_id"></a> [aws\_app\_client\_id](#output\_aws\_app\_client\_id) | The aws app client id |
+| <a name="output_azapi_resource_action_add_role_assignment_output"></a> [azapi\_resource\_action\_add\_role\_assignment\_output](#output\_azapi\_resource\_action\_add\_role\_assignment\_output) | The billing account role assignment outputs from azapi\_resource\_action, keyed by billing account ID |
 | <a name="output_billing_account_ids"></a> [billing\_account\_ids](#output\_billing\_account\_ids) | Billing account IDs configured for cost reporting |
 | <a name="output_billing_accounts_map"></a> [billing\_accounts\_map](#output\_billing\_accounts\_map) | Map of billing account indices to IDs and scopes |
-| <a name="output_billing_role_assignments"></a> [billing\_role\_assignments](#output\_billing\_role\_assignments) | The billing account role assignment outputs from azapi\_resource\_action, keyed by billing account ID |
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
 | <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
 | <a name="output_cost_export_app_principal_id"></a> [cost\_export\_app\_principal\_id](#output\_cost\_export\_app\_principal\_id) | The principal id of the cost export app - use this to assign Enrollment Reader role |
