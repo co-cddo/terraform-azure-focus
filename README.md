@@ -113,11 +113,20 @@ system topic and for each Cost Management export.
 > **Enterprise Agreement (EA) customers** must assign the function identity's
 > billing role manually after `terraform apply`. This module cannot do it - it
 > requires Enterprise Administrator privileges. The
-> `enterprise_billing_manual_action_required`
-> [output](#output_enterprise_billing_manual_action_required) prints the function
-> identity's principal ID, the tenant ID and the role-definition IDs you need.
-> Until this is done, the FOCUS cost export and backfill will not work for EA
-> billing accounts.
+> `billing_role_assignment_manual_action_required`
+> [output](#output_billing_role_assignment_manual_action_required) prints the
+> ready-to-run remediation script.
+>
+> **Microsoft Customer Agreement (MCA) customers** normally have the billing
+> role assigned automatically by the module. However, because the assignment
+> is a one-shot API call (not a managed resource), Terraform cannot detect
+> when it goes missing. The same output fires when the
+> `billing_reader_assignments` check detects a gap - for example if the
+> assignment was removed out-of-band or the managed identity was rebuilt and
+> the grant did not re-fire.
+>
+> Until the billing role is in place, the FOCUS cost export and backfill will
+> not work.
 
 #### Why these specific grants
 
@@ -620,6 +629,7 @@ pre-commit hook.
 | <a name="output_azapi_resource_action_add_role_assignment_output"></a> [azapi\_resource\_action\_add\_role\_assignment\_output](#output\_azapi\_resource\_action\_add\_role\_assignment\_output) | The billing account role assignment outputs from azapi\_resource\_action, keyed by billing account ID |
 | <a name="output_billing_account_ids"></a> [billing\_account\_ids](#output\_billing\_account\_ids) | Billing account IDs configured for cost reporting |
 | <a name="output_billing_accounts_map"></a> [billing\_accounts\_map](#output\_billing\_accounts\_map) | Map of billing account indices to IDs and scopes |
+| <a name="output_billing_role_assignment_manual_action_required"></a> [billing\_role\_assignment\_manual\_action\_required](#output\_billing\_role\_assignment\_manual\_action\_required) | Populated when the function app's managed identity is missing a billing role assignment. For EA customers this always requires manual action; for MCA customers it appears only when the billing\_reader\_assignments check detects a gap. |
 | <a name="output_carbon_container_name"></a> [carbon\_container\_name](#output\_carbon\_container\_name) | The storage container name for carbon data (not used - carbon data goes directly to S3) |
 | <a name="output_carbon_export_name"></a> [carbon\_export\_name](#output\_carbon\_export\_name) | The name of the carbon optimization export (timer-triggered function) |
 | <a name="output_cost_export_app_principal_id"></a> [cost\_export\_app\_principal\_id](#output\_cost\_export\_app\_principal\_id) | The principal id of the cost export app - use this to assign Enrollment Reader role |
@@ -630,7 +640,6 @@ pre-commit hook.
 | <a name="output_deployment_storage_account_name"></a> [deployment\_storage\_account\_name](#output\_deployment\_storage\_account\_name) | The name of the deployment storage account |
 | <a name="output_deployment_storage_private_endpoint_ip"></a> [deployment\_storage\_private\_endpoint\_ip](#output\_deployment\_storage\_private\_endpoint\_ip) | The private IP address of the deployment storage blob private endpoint |
 | <a name="output_ea_billing_role_definition_ids"></a> [ea\_billing\_role\_definition\_ids](#output\_ea\_billing\_role\_definition\_ids) | The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL |
-| <a name="output_enterprise_billing_manual_action_required"></a> [enterprise\_billing\_manual\_action\_required](#output\_enterprise\_billing\_manual\_action\_required) | Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY, by an Enterprise Administrator running scripts/NewBillingRoleAssignment.ps1 with the -IsEnterpriseAgreement switch. Empty for Microsoft Customer Agreement customers. |
 | <a name="output_entra_app_role_assignment_manual_action_required"></a> [entra\_app\_role\_assignment\_manual\_action\_required](#output\_entra\_app\_role\_assignment\_manual\_action\_required) | Populated only when bringing your own app registration (existing\_entra\_application\_client\_id) with manage\_entra\_app\_role\_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding. |
 | <a name="output_event_grid_subscription_name"></a> [event\_grid\_subscription\_name](#output\_event\_grid\_subscription\_name) | The name of the Event Grid subscription for blob created events |
 | <a name="output_event_grid_system_topic_name"></a> [event\_grid\_system\_topic\_name](#output\_event\_grid\_system\_topic\_name) | The name of the Event Grid system topic for storage events |

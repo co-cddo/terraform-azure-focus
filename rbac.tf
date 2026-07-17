@@ -177,25 +177,9 @@ resource "azapi_resource_action" "remove_role_assignment" {
 # role is missing.
 check "billing_reader_assignments" {
   assert {
-    condition = alltrue([
-      for account_id, assignments in data.azapi_resource_list.billing_role_assignments :
-      anytrue([
-        for assignment in assignments.output.value :
-        assignment.properties.principalId == azurerm_user_assigned_identity.cost_export.principal_id
-      ])
-    ])
+    condition = length(local.billing_accounts_missing_reader) == 0
 
-    error_message = <<-EOT
-      ACTION REQUIRED:
-
-      The Function App's user-assigned managed identity has no billing role assignment on at least one billing account. Add the missing role assignment for ALL applicable billing accounts using NewBillingRoleAssignment.ps1 e.g.
-
-      # Example for Enterprise Agreement (EA) billing account
-      ./scripts/NewBillingRoleAssignment.ps1 -IsEnterpriseAgreement -BillingAccountID <billing account id> -ServicePrincipalObjectID <service principal object id> -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' # EnrollmentReader
-
-      # Example for Microsoft Customer Agreement (MCA) billing account
-      ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID <billing account id> -ServicePrincipalObjectID <service principal object id> -RoleDefinitionID '50000000-aaaa-bbbb-cccc-100000000002' # Billing account reader
-    EOT
+    error_message = "The function app's managed identity is missing a billing role assignment on at least one billing account. This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire. See the billing_role_assignment_manual_action_required output for the remediation script and the module README for details."
   }
 }
 
