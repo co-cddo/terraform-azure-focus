@@ -110,6 +110,11 @@ output "entra_app_role_assignment_manual_action_required" {
   EOT
 }
 
+output "billing_role_assignments" {
+  description = "The billing account role assignment outputs from azapi_resource_action, keyed by billing account ID"
+  value       = { for k, v in azapi_resource_action.add_role_assignment : k => v.output }
+}
+
 output "random_string_suffix" {
   description = "The random suffix appended to generated resource names"
   value       = random_string.unique.result
