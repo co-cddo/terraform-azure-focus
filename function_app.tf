@@ -151,7 +151,14 @@ resource "azurerm_application_insights" "this" {
   tags                                 = var.tags
 }
 
+moved {
+  from = null_resource.publish_function_code
+  to   = null_resource.publish_function_code[0]
+}
+
 resource "null_resource" "publish_function_code" {
+  count = var.publish_function_code ? 1 : 0
+
   provisioner "local-exec" {
     interpreter = ["pwsh", "-NoProfile", "-Command"]
     command     = local.publish_code_command
