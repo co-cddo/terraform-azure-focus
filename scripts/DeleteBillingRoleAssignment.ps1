@@ -1,8 +1,9 @@
 #requires -Modules Az.Accounts
 
 <#
-Deletes a billing role assignment. Commented out pending verification against an EA billing
-account. api-version 2024-04-01 documents DELETE as supported for EA, MCA and MPA agreement
+Deletes a billing role assignment.
+
+api-version 2024-04-01 documents DELETE as supported for EA, MCA and MPA agreement
 types, returning 200 on deletion and 204 when the assignment does not exist:
 https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/delete-by-billing-account?view=rest-billing-2024-04-01&tabs=HTTP
 #>
