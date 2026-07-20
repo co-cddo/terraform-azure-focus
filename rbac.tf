@@ -149,6 +149,40 @@ resource "azapi_resource_action" "add_role_assignment" {
   }
 }
 
+# The POST above is a one-shot action: Terraform records that the call happened but manages no
+# resource it could later delete, so every rebuild of the identity would strand the old principal's
+# assignment on the billing account forever (billing role assignments live in the billing account,
+# not Entra ID, and nothing cleans them up when their principal is deleted). This companion action
+# supplies the missing delete half of the lifecycle. It fires on destroy, when a billing account
+# leaves var.billing_account_ids, and on identity rebuild: a changed principal_id replaces
+# add_role_assignment and this action along with it, and destroying the old instance deletes the
+# old principal's assignment. The DELETE targets api-version 2024-04-01, where deletion is
+# documented as idempotent (204 when the assignment is already gone), so a manually removed
+# assignment cannot block destroy.
+resource "azapi_resource_action" "remove_role_assignment" {
+  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+
+  type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2024-04-01"
+  resource_id = azapi_resource_action.add_role_assignment[each.key].output.id
+  method      = "DELETE"
+  when        = "destroy"
+}
+
+# The other half a one-shot action lacks is read: nothing is refreshed at plan time, so Terraform
+# cannot tell whether the assignment it once granted still exists. An out-of-band removal, or a
+# grant that never fired for a rebuilt principal, stays invisible until the function app starts
+# receiving 403s from the Cost Management APIs. This check compares a fresh read of each billing
+# account's assignments (data.azapi_resource_list.billing_role_assignments in data.tf) against the
+# identity's current principal ID, and emits a warning (it does not fail the run) when the reader
+# role is missing.
+check "billing_reader_assignments" {
+  assert {
+    condition = length(local.billing_accounts_missing_reader) == 0
+
+    error_message = "The function app's managed identity is missing a billing role assignment on at least one billing account. This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire. See the billing_role_assignment_manual_action_required output for the remediation script and the module README for details."
+  }
+}
+
 # Function writes export output and creates export tasks that deliver to this storage account.
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
   count                = var.manage_role_assignments ? 1 : 0
@@ -213,30 +247,4 @@ resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained
 #       # principalTenantId = ????
 #     }
 #   }
-# }
-
-# resource "azapi_resource_action" "remove_role_assignment" {
-#   for_each    = toset(var.billing_account_ids)
-
-#   type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2019-10-01-preview"
-
-#   # why not just use 'resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"' as above
-#   #   fails with:
-#   #   │ Error: Invalid function argument
-#   # │
-#   # │   on ../terraform-azure-focus/rbac.tf line 99, in resource "azapi_resource_action" "remove_role_assignment":
-#   # │   99:   resource_id = jsondecode(azapi_resource_action.add_role_assignment[each.key].output).id
-#   # │     ├────────────────
-#   # │     │ while calling jsondecode(str)
-#   # │     │ azapi_resource_action.add_role_assignment is object with 1 attribute "bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"
-#   # │     │ each.key is "bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"
-#   # │
-#   # │ Invalid value for "str" parameter: string required.
-#   #
-#   # azapi_resource_action.add_role_assignment[each.key].output.id ---->
-#   #      "/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/billingRoleAssignments/50000000-aaaa-bbbb-cccc-100000000001_ccbdf98a-f95d-4c68-8fe3-0539ff4bb82d",
-
-#   resource_id = json_decode(azapi_resource_action.add_role_assignment[each.key].output).id
-#   method      = "DELETE"
-#   when        = "destroy"
 # }

@@ -63,23 +63,26 @@ output "ea_billing_role_definition_ids" {
   value       = [for v in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"]
 }
 
-# Enterprise Agreement billing role assignments cannot be created by Terraform or the deploying
-# service principal - they require Enterprise Administrator privileges (see the commented-out
-# azapi block in rbac.tf). This output is empty for MCA customers (where "Billing account reader"
-# is assigned automatically) and, for EA customers, prints the manual action plus the IDs needed
-# to perform it - so it stands out in terraform apply / CI output.
-output "enterprise_billing_manual_action_required" {
-  description = "Enterprise Agreement customers only: the EnrollmentReader billing role must be assigned to the function app's managed identity MANUALLY. Empty for Microsoft Customer Agreement customers."
+# Surfaces the remediation script when billing role assignments are missing. For EA customers
+# this always fires (Terraform cannot create EA billing roles). For MCA customers it fires only
+# when the check block in rbac.tf detects a missing assignment.
+output "billing_role_assignment_manual_action_required" {
+  description = "Populated when the function app's managed identity is missing a billing role assignment. For EA customers this always requires manual action; for MCA customers it appears only when the billing_reader_assignments check detects a gap."
   value = var.is_enterprise_customer ? join("\n", concat(
     [
       "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
       "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
-      "  Function app managed identity (principal/object) ID: ${azurerm_user_assigned_identity.cost_export.principal_id}",
-      "  Tenant ID: ${data.azurerm_client_config.current.tenant_id}",
-      "  Role definition ID(s) (one per billing account):",
+      "Have an Enterprise Administrator run scripts/NewBillingRoleAssignment.ps1 (bundled with this module), once per billing account; the -IsEnterpriseAgreement switch is required:",
     ],
-    [for v in var.billing_account_ids : "    /providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"],
+    [for v in var.billing_account_ids : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"],
     ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
+    )) : length(local.billing_accounts_missing_reader) > 0 ? join("\n", concat(
+    [
+      "ACTION REQUIRED (Microsoft Customer Agreement customer): the function app's managed identity is missing a billing role assignment on the following billing account(s).",
+      "This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire (see the module README for details).",
+      "Run scripts/NewBillingRoleAssignment.ps1 (bundled with this module) for each:",
+    ],
+    [for v in local.billing_accounts_missing_reader : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '50000000-aaaa-bbbb-cccc-100000000002'"],
   )) : ""
 }
 
@@ -109,6 +112,11 @@ output "entra_app_role_assignment_manual_action_required" {
         \"appRoleId\": \"$APP_ROLE_ID\"
       }"
   EOT
+}
+
+output "azapi_resource_action_add_role_assignment_output" {
+  description = "The billing account role assignment outputs from azapi_resource_action, keyed by billing account ID"
+  value       = { for k, v in azapi_resource_action.add_role_assignment : k => v.output }
 }
 
 output "random_string_suffix" {

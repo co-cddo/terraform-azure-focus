@@ -1,5 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
+ARG AZ_ACCOUNTS_URL="https://www.powershellgallery.com/api/v2/package/Az.Accounts/5.5.1@sha256:4080c8eb93b1f65345a288a6d229776b4a1cff97b512144e66b6e65abcda6cc0"
 ARG AZURE_CLI_URL="https://packages.microsoft.com/repos/azure-cli/pool/main/a/azure-cli/azure-cli_2.73.0-1~noble_arm64.deb@sha256:6af9009a39895ba396e92d5138824091e95f9bd797422db2fe9564a0cf4a35f4"
 ARG CHECKOV_URL="https://github.com/bridgecrewio/checkov/releases/download/3.2.529/checkov_linux_arm64.zip@sha256:fff55b064eadfc14ce35da9b9744dedf82fb50c25447076149480ad92c06a6a9"
 ARG PRE_COMMIT_URL="https://github.com/pre-commit/pre-commit/releases/download/v3.7.1/pre-commit-3.7.1.pyz@sha256:a0349324f0f53b08d00eb473b5f6646c8a07f3253703c09b977b0b9b9476d486"
@@ -37,6 +38,22 @@ RUN URL="${POWERSHELL_URL%@sha256:*}" \
     && ln -s /opt/microsoft/powershell/7/pwsh /usr/local/bin/pwsh \
     && rm /tmp/powershell.tar.gz \
     && pwsh --version
+
+# Az.Accounts module with pinned SHA256 digest (a .nupkg is a zip, extracted
+# into the machine module path; the Az meta-module cannot be digest-pinned as
+# it resolves ~85 sub-package nupkgs at install time)
+RUN URL="${AZ_ACCOUNTS_URL%@sha256:*}" \
+    && SHA="${AZ_ACCOUNTS_URL##*@sha256:}" \
+    && VERSION="${URL##*/}" \
+    && curl -fsSL "${URL}" -o /tmp/az.accounts.nupkg \
+    && (cd /tmp && echo "${SHA}  az.accounts.nupkg" | sha256sum -c) \
+    && MODULE_DIR="/usr/local/share/powershell/Modules/Az.Accounts/${VERSION}" \
+    && mkdir -p "${MODULE_DIR}" \
+    && unzip -q /tmp/az.accounts.nupkg -d "${MODULE_DIR}" \
+    && rm -rf "${MODULE_DIR}/_rels" "${MODULE_DIR}/package" \
+       "${MODULE_DIR}/[Content_Types].xml" "${MODULE_DIR}/Az.Accounts.nuspec" \
+    && rm /tmp/az.accounts.nupkg \
+    && pwsh -NoProfile -Command "Import-Module Az.Accounts -RequiredVersion ${VERSION}; (Get-Module Az.Accounts).Version.ToString()"
 
 # terraform with pinned SHA256 digest
 RUN URL="${TERRAFORM_URL%@sha256:*}" \

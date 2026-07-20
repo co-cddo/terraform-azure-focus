@@ -1,5 +1,6 @@
 terraform {
-  required_version = ">= 1.3"
+  # 1.5 for check blocks (rbac.tf)
+  required_version = ">= 1.5"
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -10,8 +11,9 @@ terraform {
       version = "> 2.0"
     }
     azapi = {
+      # 2.x for object-typed output on resources and data sources
       source  = "azure/azapi"
-      version = ">= 1.7.0"
+      version = ">= 2.0"
     }
     time = {
       source  = "hashicorp/time"

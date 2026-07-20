@@ -54,6 +54,12 @@ variable "deploy_from_external_network" {
   default     = false
 }
 
+variable "publish_function_code" {
+  description = "Whether the module publishes the function app code via the bundled 'az functionapp deployment source config-zip' step. Set to false when the function code is deployed out-of-band (for example by a separate CI pipeline), which also avoids the Azure CLI dependency in environments where it is unavailable such as 'terraform test'."
+  type        = bool
+  default     = true
+}
+
 variable "aws_region" {
   description = "AWS region for the S3 bucket"
   type        = string

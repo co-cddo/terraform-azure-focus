@@ -32,3 +32,17 @@ data "azapi_resource_list" "billing_role_definitions" {
 
   response_export_values = ["value"]
 }
+
+# Feeds check "billing_reader_assignments" in rbac.tf. depends_on defers the read to apply time
+# on runs where add_role_assignment (re)fires, so the check sees the assignments as they are
+# after the grant rather than warning on the pre-grant snapshot.
+data "azapi_resource_list" "billing_role_assignments" {
+  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+
+  type      = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2024-04-01"
+  parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
+
+  response_export_values = ["value"]
+
+  depends_on = [azapi_resource_action.add_role_assignment]
+}

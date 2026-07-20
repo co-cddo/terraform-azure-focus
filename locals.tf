@@ -69,6 +69,14 @@ locals {
     k => one([for r in v.output.value : r.id if r.properties.roleName == "Billing account reader"])
   }
 
+  billing_accounts_missing_reader = [
+    for account_id, assignments in data.azapi_resource_list.billing_role_assignments :
+    account_id if !anytrue([
+      for assignment in assignments.output.value :
+      assignment.properties.principalId == azurerm_user_assigned_identity.cost_export.principal_id
+    ])
+  ]
+
   pe_overrides = var.custom_resource_names.private_endpoints != null ? var.custom_resource_names.private_endpoints : {
     storage_blob    = null
     storage_queue   = null
