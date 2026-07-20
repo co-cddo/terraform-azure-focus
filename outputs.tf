@@ -200,6 +200,8 @@ output "private_dns_zones" {
       managed_by_module = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones
     }
   }
+}
+
 output "log_analytics_workspace_id" {
   description = "The resource ID of the Log Analytics workspace used for diagnostic settings"
   value       = local.effective_log_analytics_workspace_id

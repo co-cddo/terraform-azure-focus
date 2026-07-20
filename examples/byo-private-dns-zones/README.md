@@ -1,4 +1,4 @@
-## BYO Private DNS Zones Example
+# BYO Private DNS Zones Example
 
 This example shows how to use existing private DNS zones instead of having the module create them.
 

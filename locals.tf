@@ -93,6 +93,8 @@ locals {
   effective_private_dns_zone_names = {
     for zone, zone_id in local.effective_private_dns_zone_ids :
     zone => split("/", zone_id)[8]
+  }
+
   # Look up billing role definition IDs by name
   billing_account_reader_role_ids = {
     for k, v in data.azapi_resource_list.billing_role_definitions :

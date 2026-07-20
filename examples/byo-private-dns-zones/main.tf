@@ -8,6 +8,7 @@ module "example" {
   source = "../../"
 
   is_enterprise_customer              = false
+  aws_s3_bucket_name                  = "<aws s3 bucket name>"
   aws_account_id                      = "<aws-account-id>"
   billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs
   subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/default"
@@ -19,7 +20,6 @@ module "example" {
 
   private_endpoints_manage_dns_zone_group = true
   use_existing_private_dns_zones          = true
-  private_dns_a_record_ttl                = 300
 
   existing_private_dns_zone_ids = {
     blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"

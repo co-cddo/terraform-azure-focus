@@ -206,14 +206,6 @@ EOT
   }
 }
 
-variable "private_dns_a_record_ttl" {
-  description = "TTL in seconds for private DNS A records managed by this module"
-  type        = number
-  default     = 300
-
-  validation {
-    condition     = !var.private_endpoints_manage_dns_zone_group || (var.private_dns_a_record_ttl >= 30 && var.private_dns_a_record_ttl <= 3600)
-    error_message = "private_dns_a_record_ttl must be between 30 and 3600 seconds."
 variable "log_analytics_workspace_id" {
   description = "Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
   type        = string
