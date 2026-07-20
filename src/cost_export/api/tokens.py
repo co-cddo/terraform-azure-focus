@@ -26,7 +26,7 @@ class TokenManager:
   _azure_token: str = None
   _azure_token_timestamp = None
   _aws_token_timestamp = None
-  
+
   def __new__(cls):
     if cls._instance is None:
         cls._instance = super().__new__(cls)
@@ -44,11 +44,11 @@ class TokenManager:
         "aws_secret_access_key": AWS_ACCESS_KEY_SECRET,
         "aws_session_token": AWS_SESSION_TOKEN,
       }
-    
+
     current_timestamp = datetime.now().timestamp()  # in epoch seconds
     if (self._aws_token_timestamp is None) or ((current_timestamp - self._aws_token_timestamp) > Config.aws_token_timeout_in_seconds):
       try:
-        default_credential = ManagedIdentityCredential()
+        default_credential = ManagedIdentityCredential(client_id=Config.managed_identity_client_id)
         token = default_credential.get_token(Config.urn)
 
         role = boto3.client('sts').assume_role_with_web_identity(
@@ -63,29 +63,29 @@ class TokenManager:
 
         self._aws_token_timestamp = current_timestamp
         logger.info(f"AWS Identity refreshed; expires in {Config.aws_token_timeout_in_seconds} seconds")
-           
+
       except Exception as e:
         logger.error(f"Failed to get S3 file system: {e}")
-    
+
     return {
       "aws_access_key_id": self._aws_access_key_id,
       "aws_secret_access_key": self._aws_access_key_secret,
       "aws_session_token": self._aws_session_token,
     }
-  
+
   @property
   def azure_token(self) -> str:
     AZURE_TOKEN = os.environ.get("AZURE_TOKEN")
     if AZURE_TOKEN:
        return AZURE_TOKEN
-    
+
     current_timestamp = datetime.now().timestamp()  # in epoch seconds
     if (self._azure_token_timestamp is None) or ((current_timestamp - self._azure_token_timestamp) > Config.azure_token_timeout_in_seconds):
       try:
-        credential = ManagedIdentityCredential()
+        credential = ManagedIdentityCredential(client_id=Config.managed_identity_client_id)
         token = credential.get_token("https://management.azure.com/.default")
         self._azure_token = token.token
-      
+
         self._azure_token_timestamp = current_timestamp
         logger.info(f"Azure API token refreshed; expires in {Config.azure_token_timeout_in_seconds} seconds")
 

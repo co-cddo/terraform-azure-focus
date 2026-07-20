@@ -22,17 +22,17 @@ logger.setLevel(os.environ.get('LOGGING_LEVEL', 'INFO'))
 def get_carbon_api_date_range():
     """
     Calculate the available date range for the Carbon Optimization API.
-    
+
     Based on Microsoft documentation:
     - Data for the previous month is available by day 19 of the current month
     - API provides access to up to 12 months of emissions data (rolling window)
     - Data is updated monthly with 12-month retention
-    
+
     Returns:
         tuple: (start_date, end_date) as datetime objects representing the available range
     """
     today = datetime.now(timezone.utc)
-    
+
     # Data for previous month is available by day 19
     # If today is before the 19th, last available data is from 2 months ago
     # If today is on/after the 19th, last available data is from last month
@@ -43,7 +43,7 @@ def get_carbon_api_date_range():
         # Latest data available is from 2 months ago
         last_month = today.replace(day=1) - timedelta(days=1)  # Last day of previous month
         latest_available_month = last_month.replace(day=1) - timedelta(days=1)  # Last day of month before that
-    
+
     # API provides 12 months of data, so earliest available is 12 months before latest
     earliest_available_month = latest_available_month.replace(day=1)  # First day of latest month
     for _ in range(11):  # Go back 11 more months (total 12 months)
@@ -51,48 +51,48 @@ def get_carbon_api_date_range():
             earliest_available_month = earliest_available_month.replace(year=earliest_available_month.year - 1, month=12)
         else:
             earliest_available_month = earliest_available_month.replace(month=earliest_available_month.month - 1)
-    
+
     # Convert to first day of earliest month and last day of latest month
     start_date = earliest_available_month
     end_date = latest_available_month
-    
+
     return start_date, end_date
 
 def is_month_within_api_range(target_month):
     """
     Check if a given month is within the Carbon API's available date range.
-    
+
     Args:
         target_month (datetime): The month to check
-        
+
     Returns:
         bool: True if the month is within the available range
     """
     start_date, end_date = get_carbon_api_date_range()
-    
+
     # Convert target_month to first day of month for comparison
     target_first_day = target_month.replace(day=1)
     start_first_day = start_date.replace(day=1)
     end_first_day = end_date.replace(day=1)
-    
+
     return start_first_day <= target_first_day <= end_first_day
 
 def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
     """
     Make a Carbon Optimization API request with proper error handling.
-    
+
     Args:
         headers (dict): Request headers including authorization
         subscription_ids (list): List of subscription IDs
         month_str (str): Month string in YYYY-MM-DD format
         timeout (int): Request timeout in seconds
-        
+
     Returns:
         tuple: (success: bool, data: dict or None, error_message: str or None)
     """
     api_url = "https://management.azure.com/providers/Microsoft.Carbon/carbonEmissionReports"
     api_version = "2025-04-01"
-    
+
     request_data = {
         "reportType": "MonthlySummaryReport",
         "subscriptionList": subscription_ids,
@@ -102,7 +102,7 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
             "end": month_str
         }
     }
-    
+
     try:
         response = requests.post(
             f"{api_url}?api-version={api_version}",
@@ -110,7 +110,7 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
             json=request_data,
             timeout=timeout
         )
-        
+
         if response.status_code == 200:
             return True, response.json(), None
         else:
@@ -122,7 +122,7 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
             elif response.status_code == 400 and "InvalidNumberOfSubscriptions" in response.text:
                 error_msg += " - Too many subscriptions in request (max 100 allowed)"
             return False, None, error_msg
-            
+
     except requests.exceptions.Timeout:
         return False, None, f"API request timed out after {timeout} seconds"
     except requests.exceptions.RequestException as e:
@@ -133,66 +133,66 @@ def make_carbon_api_request(headers, subscription_ids, month_str, timeout=300):
 def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeout=300, max_batch_size=100):
     """
     Make Carbon Optimization API requests in batches to handle subscription limits.
-    
+
     The Carbon API has a maximum of 100 subscriptions per request. This function
     automatically batches large subscription lists and merges the results.
-    
+
     Args:
         headers (dict): Request headers including authorization
         subscription_ids (list): List of subscription IDs (can be > 100)
         month_str (str): Month string in YYYY-MM-DD format
         timeout (int): Request timeout in seconds per batch
         max_batch_size (int): Maximum subscriptions per API call (default: 100)
-        
+
     Returns:
         tuple: (success: bool, merged_data: dict or None, error_message: str or None)
     """
     if not subscription_ids:
         return False, None, "No subscription IDs provided"
-    
+
     total_subscriptions = len(subscription_ids)
     logger.info(f"Carbon API request for {total_subscriptions} subscriptions (batching with max {max_batch_size} per request)")
-    
+
     # If within limit, use single request
     if total_subscriptions <= max_batch_size:
         return make_carbon_api_request(headers, subscription_ids, month_str, timeout)
-    
+
     # Batch the subscriptions
     batches = []
     for i in range(0, total_subscriptions, max_batch_size):
         batch = subscription_ids[i:i + max_batch_size]
         batches.append(batch)
-    
+
     logger.info(f"Splitting into {len(batches)} batches: {[len(batch) for batch in batches]} subscriptions each")
-    
+
     # Collect results from all batches
     merged_subscription_access_decisions = []
     merged_value_data = []
     successful_batches = 0
     failed_batches = []
-    
+
     for batch_num, batch_subscription_ids in enumerate(batches, 1):
         logger.info(f"Processing batch {batch_num}/{len(batches)} with {len(batch_subscription_ids)} subscriptions")
-        
+
         success, batch_data, error_message = make_carbon_api_request(
             headers, batch_subscription_ids, month_str, timeout
         )
-        
+
         if success and batch_data:
             # Merge subscription access decisions
             if "subscriptionAccessDecisionList" in batch_data:
                 merged_subscription_access_decisions.extend(batch_data["subscriptionAccessDecisionList"])
-            
+
             # Merge value data
             if "value" in batch_data and len(batch_data["value"]) > 0:
                 merged_value_data.extend(batch_data["value"])
-            
+
             successful_batches += 1
             logger.info(f"Batch {batch_num} completed successfully")
         else:
             failed_batches.append({"batch": batch_num, "error": error_message, "subscription_count": len(batch_subscription_ids)})
             logger.error(f"Batch {batch_num} failed: {error_message}")
-       
+
     # Log summary
     logger.info(f"Batched request summary: {successful_batches}/{len(batches)} batches successful")
     if failed_batches:
@@ -214,7 +214,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
         accummulatedBatch["monthOverMonthEmissionsChangeRatio"] = (accummulatedBatch["latestMonthEmissions"] - accummulatedBatch["previousMonthEmissions"]) / accummulatedBatch["previousMonthEmissions"]
         accummulatedBatch["carbonIntensity"] = accummulatedBatch["carbonIntensity"] / countOfBatchDataItems
 
-    
+
         # Create merged response
         merged_response = {
             "subscriptionAccessDecisionList": merged_subscription_access_decisions,
@@ -238,7 +238,7 @@ def make_carbon_api_request_batched(headers, subscription_ids, month_str, timeou
     }
 
     logger.info(f"Merged response: {merged_response}")
-    
+
     # success is True only if no failed batches - will force an error
     return merged_response["_batchingMetadata"]["failed_batches"] == 0, merged_response, None
 
@@ -247,7 +247,7 @@ def check_carbon_data_exists(file_name):
     try:
         # Get S3 filesystem
         s3 = getS3FileSystem()
-        
+
         # Create S3 path with billing period structure matching the data month
         # Extract YYYY-MM from filename like "carbon-emissions-2025-05.json"
         filename_parts = file_name.replace('.json', '').split('-')
@@ -255,16 +255,16 @@ def check_carbon_data_exists(file_name):
         data_month = datetime.strptime(year_month, '%Y-%m')
         billing_period = data_month.strftime("%Y%m01")  # First day of data month
         s3_path = f"{Config.s3_carbon_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={billing_period}/{file_name}"
-        
+
         # Check if file exists
         file_info = s3.get_file_info(s3_path)
         exists = file_info.type != fs.FileType.NotFound
-        
+
         if exists:
             logger.info(f"Carbon data file already exists: {s3_path}")
-        
+
         return exists, s3_path
-        
+
     except Exception as e:
         logger.warning(f"Could not find existing file named '{file_name}': {str(e)} assuming it doesn't exist...")
         # If we can't check, assume it doesn't exist to be safe
@@ -303,7 +303,7 @@ def carbon_export_api_latest_fetch_date() -> datetime:
 
     carbon_api_fetch_date = today.replace(year=fetch_year, month=fetch_month, day=1)
     print('API fetch date is: ', carbon_api_fetch_date.strftime('%Y-%m-%d'))
-    
+
     logger.info(f'Exporting carbon data month: {carbon_api_fetch_date.strftime("%Y-%m")}')
 
     return carbon_api_fetch_date
@@ -331,19 +331,19 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
             if exists:
                 logger.info(f"Skipping upload - carbon data already exists: {s3_path}")
                 return True  # Return success since data already exists
-        
+
         # Remove batching metadata before saving (internal use only)
         data_to_save = data.copy()
         if "_batchingMetadata" in data_to_save:
             batching_info = data_to_save.pop("_batchingMetadata")
             logger.info(f"Removed batching metadata before saving: {batching_info}")
-        
+
         # Convert to JSON string
         json_data = json.dumps(data_to_save, indent=2).encode('utf-8')
-        
+
         # Get S3 filesystem
         s3 = getS3FileSystem()
-        
+
         # Create S3 path with billing period structure matching the data month
         # Use the same month as the data we're exporting, not the current month
         # Extract YYYY-MM from filename like "carbon-emissions-2025-05.json"
@@ -352,17 +352,17 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
         data_month = datetime.strptime(year_month, '%Y-%m')
         billing_period = data_month.strftime("%Y%m01")  # First day of data month
         s3_path = f"{Config.s3_carbon_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={billing_period}/{file_name}"
-        
+
         # Upload to S3
         with s3.open_output_stream(s3_path) as f:
             f.write(json_data)
-            
+
         action = "Overwritten" if force_overwrite else "Uploaded"
         logger.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
         return True
-        
+
     except Exception as e:
-        logger.error(f"Error saving carbon data to S3: {str(e)}")
+        logger.error(f"Error saving carbon data to S3: {str(e)}", exc_info=True)
         raise
 
 def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = True, force_overwrite: bool = False, write_empty_object: bool = True) -> Dict[int, int]:
@@ -383,17 +383,17 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
 
         # Get access token using managed identity
         token = TokenManager().azure_token
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         # Extract subscription IDs from billing scope
         subscription_ids = extract_subscription_ids_from_billing_scope(Config.billing_scope)
-        
+
         logger.info(f"Starting carbon backfill for {len(subscription_ids)} subscriptions from {start_date.strftime('%Y-%m-%d')}")
-        
+
         processed_months = 0
         skipped_months = 0
 
@@ -401,13 +401,13 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
         #  which from "carbon_emissions_exporter" is the around the 19th for the last month
         carbon_api_fetch_date = carbon_export_api_latest_fetch_date()
         latest_fetch_month, latest_fetch_year = carbon_api_fetch_date.month, carbon_api_fetch_date.year
-        
+
         # Process months before API range (create empty records)
         while (current_year, current_month) <= (latest_fetch_year, latest_fetch_month):
             month_date = datetime(current_year, current_month, 1, tzinfo=timezone.utc)
             month_str = month_date.strftime("%Y-%m-01")
             file_name = f"carbon-emissions-{month_date.strftime('%Y-%m')}.json"
-            
+
             # Check if data already exists
             if skip_existing:
                 exists, existing_path = check_carbon_data_exists(file_name)
@@ -421,7 +421,7 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
                     else:
                         current_month += 1
                     continue
-            
+
             logger.info(f"Processing month: {month_str}")
 
             # attempt to fetch the Carbon Data from API. if there is no carbon data for that month, the API
@@ -434,7 +434,7 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
                 if success and len(emissions_data["value"]) == 0:
                     # Create empty carbon data for months outside API range
                     emissions_data = empty_emissions_data(month_str)
-                
+
                 save_carbon_data_to_s3(emissions_data, file_name, force_overwrite=force_overwrite)
                 processed_months += 1
             else:
@@ -447,14 +447,14 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
                 else:
                     logger.error(f"Unable to process month: {month_str}. Not writing empty results")
                     skipped_months += 1
-            
+
             # Move to next month
             if current_month == 12:
                 current_year += 1
                 current_month = 1
             else:
                 current_month += 1
-        
+
         # gets this far if having processed all carbon export backfill
         carbon_export_backfill_lock_create()
 
@@ -462,7 +462,7 @@ def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = Tr
             processed_months,
             skipped_months,
         )
-        
+
     except Exception as e:
         error_msg = f"Error in carbon emissions backfill impl: {str(e)}"
         raise Exception(error_msg)

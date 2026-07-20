@@ -18,15 +18,15 @@ def cost_export_backfill_schedule_lock_exists() -> bool:
     s3 = getS3FileSystem()
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}-{COST_EXPORT_BACKFILL_SCHEDULE_LOCK_NAME}"
     logger.debug(f"Cost Export schedule lock check: {s3_path}")
-    
+
     file_info = s3.get_file_info(s3_path)
     exists = file_info.type != fs.FileType.NotFound
-    
+
     if not exists:
       logger.info(f"Cost Export schedule lock does not exists: {s3_path}")
-    
+
     return exists
-        
+
   except Exception as e:
     # throws exception with ACCESS_DENIED if object does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
@@ -45,15 +45,15 @@ def cost_export_backfill_run_lock_exists() -> bool:
     s3 = getS3FileSystem()
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}-{COST_EXPORT_BACKFILL_RUN_LOCK_NAME}"
     logger.debug(f"Cost Export schedule lock check: {s3_path}")
-    
+
     file_info = s3.get_file_info(s3_path)
     exists = file_info.type != fs.FileType.NotFound
-    
+
     if not exists:
       logger.info(f"Cost Export run lock does not exists: {s3_path}")
-    
+
     return exists
-        
+
   except Exception as e:
     # throws exception with ACCESS_DENIED if object does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
@@ -81,9 +81,9 @@ def cost_export_backfill_schedule_lock_create() -> None:
       f.close()
 
     logger.info("cost export backfill schedule lock created")
-    
+
   except Exception as e:
-    logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    logger.error(f"Failed to create cost export backfill run lock: {str(e)}", exc_info=True)
     raise e
 
 def cost_export_backfill_run_lock_create() -> None:
@@ -99,9 +99,9 @@ def cost_export_backfill_run_lock_create() -> None:
       f.close()
 
     logger.info("cost export backfill run lock created")
-    
+
   except Exception as e:
-    logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    logger.error(f"Failed to create cost export backfill run lock: {str(e)}", exc_info=True)
     raise e
 
 def cost_export_exists(account_id:str, month: int, year:int) -> bool:
@@ -124,7 +124,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
     # that didn't work either. So creating an explicit "selector", allow not found to return empty list and recursing through folder
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/"
     logger.info(f"Cost Export data check: {s3_path}")
-    
+
     selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=True)
     objects = s3.get_file_info(selector)
 
@@ -139,23 +139,23 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
       for thisObject in objects:
         if (thisObject.type != fs.FileType.NotFound) and (object_account_id in thisObject.path):
           assume_exists = True
-    
+
       if assume_exists:
         logger.info(f"Cost Export data does exist: {s3_path}")
       else:
         logger.info(f"Cost Export data does NOT exist: {s3_path}")
-    
+
       return assume_exists
 
   except Exception as e:
-    logger.error(e)
+    logger.error(e, exc_info=True)
     # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
       logger.info(f"Cost Export data does not exists: {s3_path}")
       return False
-  
+
     logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
     # If we can't check, assume it does not exist to force generating it
     return False
@@ -170,15 +170,15 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
 #     s3 = getS3FileSystem()
 #     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period={year:04d}{month:02d}01/{account_id}.lock"
 #     logger.debug(f"Cost Export data lock check: {s3_path}")
-    
+
 #     file_info = s3.get_file_info(s3_path)
 #     exists = file_info.type != fs.FileType.NotFound
-    
+
 #     if not exists:
 #       logger.info(f"Cost Export data lock does not exists: {s3_path}")
-    
+
 #     return exists
-        
+
 #   except Exception as e:
 #     # throws exception with ACCESS_DENIED if object does not exist
 #     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
@@ -207,7 +207,7 @@ def cost_export_exists(account_id:str, month: int, year:int) -> bool:
 #       f.close()
 
 #     logger.info(f"cost export backfill data lock created for {month}/{year} on account '{account_id}'")
-    
+
 #   except Exception as e:
 #     logger.error(f"Failed to create cost export backfill data lock: {str(e)}")
 #     raise e
@@ -227,7 +227,7 @@ def cost_export_test_IAM_permissions() -> bool:
     # fetch the root path
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/"
     logger.info(f"cost_export_test_IAM_permissions root path: {s3_path}")
-    
+
     selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=False)
     objects = s3.get_file_info(selector)
 
@@ -239,11 +239,11 @@ def cost_export_test_IAM_permissions() -> bool:
       assume_exists = False
       for thisObject in objects:
         logger.info(f"cost_export_test_IAM_permissions: root path object: {thisObject}")
-    
+
     # fetch the root path
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/"
     logger.info(f"cost_export_test_IAM_permissions cost export v1 path: {s3_path}")
-    
+
     selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=False)
     objects = s3.get_file_info(selector)
 
@@ -259,7 +259,7 @@ def cost_export_test_IAM_permissions() -> bool:
     # fetch the dated path
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.s3_cost_directory_name}/billing_period=20250501/"
     logger.info(f"cost_export_test_IAM_permissions cost export specific billing date path: {s3_path}")
-    
+
     selector = fs.FileSelector(base_dir=s3_path, allow_not_found=True, recursive=False)
     objects = s3.get_file_info(selector)
 
@@ -270,18 +270,18 @@ def cost_export_test_IAM_permissions() -> bool:
       # TODO - modify the logic below to filter by account_id assuming exist starts as False and then set to True
       for thisObject in objects:
         logger.info(f"cost_export_test_IAM_permissions: cost export specific billing date path object: {thisObject}")
-    
+
     return True
 
   except Exception as e:
-    logger.error(e)
+    logger.error(e, exc_info=True)
     # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
       logger.info(f"Cost Export data does not exists: {s3_path}")
       return False
-  
+
     logger.warning(f"Failed to check for cost export data exists: {str(e)}\n\\nAssuming it exists...")
     # If we can't check, assume it does not exist to force generating it
     return False

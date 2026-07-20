@@ -3,15 +3,16 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "> 4.0"
+      version = ">= 4.79.0"
     }
     azuread = {
       source  = "hashicorp/azuread"
       version = "> 2.0"
     }
     azapi = {
+      # 2.x for object-typed output on resources and data sources
       source  = "azure/azapi"
-      version = ">= 1.7.0"
+      version = ">= 2.0"
     }
     time = {
       source  = "hashicorp/time"

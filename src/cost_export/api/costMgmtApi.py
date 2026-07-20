@@ -19,7 +19,7 @@ def get_export_task_name(account_idx: int, month: int, year: int) -> str:
     export_task_name = "%s%s-%d-%04d-%02d" % (COST_MGMT_EXPORT_BACKFILL_JOB_PREFIX, cost_mgmt_export_task_suffix, account_idx, year, month)
     return export_task_name
   except Exception as e:
-    logger.error(f"get_export_task_name: error: {e}")
+    logger.error(f"get_export_task_name: error: {e}", exc_info=True)
     return None
 
 def get_mgmt_base_url(account_id: str) -> str:
@@ -28,7 +28,7 @@ def get_mgmt_base_url(account_id: str) -> str:
 def get_mgmt_export_task_url(account_idx: int, account_id: str, month: int, year: int) -> str:
   return "%s/%s?api-version=2025-03-01" % (get_mgmt_base_url(account_id), get_export_task_name(account_idx, month, year))
 
-# slighly different URL to run a task (requires "/run" on the URL endpoint)
+# slightly different URL to run a task (requires "/run" on the URL endpoint)
 def get_mgmt_export_run_task_url(account_idx: int, account_id: str, month: int, year: int) -> str:
   return "%s/%s/run?api-version=2025-03-01" % (get_mgmt_base_url(account_id), get_export_task_name(account_idx, month, year))
 
@@ -44,7 +44,7 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
 
   try:
     token = TokenManager().azure_token
-    
+
     # Prepare the API request
     headers = {
       "Authorization": f"Bearer {token}",
@@ -54,12 +54,12 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
         headers=headers,
         timeout=timeout
     )
-    
+
     ### NOT FOUND
     if response.status_code == 404:
       return False
 
-    # FOUND    
+    # FOUND
     elif response.status_code == 200:
       return True
 
@@ -67,15 +67,15 @@ def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year:
       error_msg = f"cost_mgmt_export_exists (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
       logger.error(error_msg)
       return False
-            
-  except requests.exceptions.Timeout:
-    logger.error(f"cost_mgmt_export_exists timeout: {str(e)}")
+
+  except requests.exceptions.Timeout as e:
+    logger.error(f"cost_mgmt_export_exists timeout: {str(e)}", exc_info=True)
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_exists request: {str(e)}")
+    logger.error(f"cost_mgmt_export_exists request: {str(e)}", exc_info=True)
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_exists unexpected: {str(e)}", exc_info=True)
     return False
 
 def get_last_day_month_date(month: int, year: int) -> int:
@@ -190,7 +190,7 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
 
   try:
     token = TokenManager().azure_token
-  
+
     # Prepare the API request
     headers = {
       "Authorization": f"Bearer {token}",
@@ -211,15 +211,15 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
       error_msg = f"cost_mgmt_export_create (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
       logger.error(error_msg)
       return False
-            
-  except requests.exceptions.Timeout:
-    logger.error(f"cost_mgmt_export_create timeout: {str(e)}")
+
+  except requests.exceptions.Timeout as e:
+    logger.error(f"cost_mgmt_export_create timeout: {str(e)}", exc_info=True)
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_create request: {str(e)}")
+    logger.error(f"cost_mgmt_export_create request: {str(e)}", exc_info=True)
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_create unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_create unexpected: {str(e)}", exc_info=True)
     return False
 
 def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
@@ -237,7 +237,7 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
 
   try:
     token = TokenManager().azure_token
-    
+
     # Prepare the API request
     headers = {
       "Authorization": f"Bearer {token}",
@@ -248,12 +248,14 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
         headers=headers,
         timeout=timeout
     )
-    
-    ### NOT FOUND
+
+    ### NOT FOUND - run is only called after the schedule created the export task, so a 404
+    # here is unexpected (missing/deleted task); log it rather than swallowing silently.
     if response.status_code == 404:
+      logger.warning(f"cost_mgmt_export_run: export task '{export_task_name}' not found (404) for account idx[{account_idx}], account[{account_id}], {month:02d}/{year:04d}")
       return False
 
-    # FOUND    
+    # FOUND
     elif response.status_code == 200:
       return True
 
@@ -261,13 +263,13 @@ def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: in
       error_msg = f"cost_mgmt_export_run (account idx[{account_idx}], account[{account_id}], month[{month}], year[{year}]) API request failed with status {response.status_code}: {response.text}"
       logger.error(error_msg)
       return False
-            
-  except requests.exceptions.Timeout:
-    logger.error(f"cost_mgmt_export_run timeout: {str(e)}")
+
+  except requests.exceptions.Timeout as e:
+    logger.error(f"cost_mgmt_export_run timeout: {str(e)}", exc_info=True)
     return False
   except requests.exceptions.RequestException as e:
-    logger.error(f"cost_mgmt_export_run request: {str(e)}")
+    logger.error(f"cost_mgmt_export_run request: {str(e)}", exc_info=True)
     return False
   except Exception as e:
-    logger.error(f"cost_mgmt_export_run unexpected: {str(e)}")
+    logger.error(f"cost_mgmt_export_run unexpected: {str(e)}", exc_info=True)
     return False

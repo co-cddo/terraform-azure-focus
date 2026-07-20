@@ -1,6 +1,6 @@
 output "aws_app_client_id" {
   description = "The aws app client id"
-  value       = azuread_application.aws_app.client_id
+  value       = local.entra_app_client_id
 }
 
 output "focus_container_name" {
@@ -50,7 +50,7 @@ output "publish_code_command" {
 
 output "cost_export_app_principal_id" {
   description = "The principal id of the cost export app - use this to assign Enrollment Reader role"
-  value       = azurerm_function_app_flex_consumption.cost_export.identity[0].principal_id
+  value       = azurerm_user_assigned_identity.cost_export.principal_id
 }
 
 output "tenant_id" {
@@ -63,9 +63,70 @@ output "ea_billing_role_definition_ids" {
   value       = [for v in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${v}/billingRoleDefinitions/24f8edb6-1668-4659-b5e2-40bb5f3a7d7e"]
 }
 
+# Surfaces the remediation script when billing role assignments are missing. For EA customers
+# this always fires (Terraform cannot create EA billing roles). For MCA customers it fires only
+# when the check block in rbac.tf detects a missing assignment.
+output "billing_role_assignment_manual_action_required" {
+  description = "Populated when the function app's managed identity is missing a billing role assignment. For EA customers this always requires manual action; for MCA customers it appears only when the billing_reader_assignments check detects a gap."
+  value = var.is_enterprise_customer ? join("\n", concat(
+    [
+      "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
+      "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
+      "Have an Enterprise Administrator run scripts/NewBillingRoleAssignment.ps1 (bundled with this module), once per billing account; the -IsEnterpriseAgreement switch is required:",
+    ],
+    [for v in var.billing_account_ids : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"],
+    ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
+    )) : length(local.billing_accounts_missing_reader) > 0 ? join("\n", concat(
+    [
+      "ACTION REQUIRED (Microsoft Customer Agreement customer): the function app's managed identity is missing a billing role assignment on the following billing account(s).",
+      "This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire (see the module README for details).",
+      "Run scripts/NewBillingRoleAssignment.ps1 (bundled with this module) for each:",
+    ],
+    [for v in local.billing_accounts_missing_reader : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '50000000-aaaa-bbbb-cccc-100000000002'"],
+  )) : ""
+}
+
+# Only fires when bringing your own app registration AND manage_entra_app_role_assignment = false
+# (strict separation of duties): the module then creates no binding between the function app's
+# managed identity and the AWS-federation app role, as the deploying principal is assumed to have no
+# directory-write privileges. This output prints the details the Entra team needs to create that app
+# role assignment out-of-band. Empty otherwise, including whenever the module creates the app itself
+# (manage_entra_app_role_assignment is forced true in that case, so the module always binds).
+output "entra_app_role_assignment_manual_action_required" {
+  description = "Populated only when bringing your own app registration (existing_entra_application_client_id) with manage_entra_app_role_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
+  value       = local.manage_entra_app_role_assignment ? "" : <<-EOT
+    ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.
+    Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All.
+
+    # 1. Resolve the service principal object id and the app role id for the AWS-federation app:
+    SP_ID=$(az ad sp show --id ${local.entra_app_client_id} --query id -o tsv)
+    APP_ROLE_ID=$(az ad sp show --id ${local.entra_app_client_id} --query "appRoles[?value=='AssumeRoleWithWebIdentity'].id | [0]" -o tsv)
+
+    # 2. Assign the app role to the function app's managed identity:
+    az rest --method POST \
+      --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignedTo" \
+      --headers "Content-Type=application/json" \
+      --body "{
+        \"principalId\": \"${azurerm_user_assigned_identity.cost_export.principal_id}\",
+        \"resourceId\": \"$SP_ID\",
+        \"appRoleId\": \"$APP_ROLE_ID\"
+      }"
+  EOT
+}
+
+output "azapi_resource_action_add_role_assignment_output" {
+  description = "The billing account role assignment outputs from azapi_resource_action, keyed by billing account ID"
+  value       = { for k, v in azapi_resource_action.add_role_assignment : k => v.output }
+}
+
 output "random_string_suffix" {
   description = "The random suffix appended to generated resource names"
   value       = random_string.unique.result
+}
+
+output "resource_names" {
+  description = "The resolved resource names (defaults or custom_resource_names overrides)"
+  value       = local.names
 }
 
 output "cost_export_storage_account_name" {
@@ -139,4 +200,7 @@ output "private_dns_zones" {
       managed_by_module = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones
     }
   }
+output "log_analytics_workspace_id" {
+  description = "The resource ID of the Log Analytics workspace used for diagnostic settings"
+  value       = local.effective_log_analytics_workspace_id
 }

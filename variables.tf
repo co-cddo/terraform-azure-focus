@@ -24,7 +24,7 @@ variable "function_app_subnet_id" {
 }
 
 variable "billing_account_ids" {
-  description = "List of billing account IDs to create FOCUS cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31')"
+  description = "List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant_id)."
   type        = list(string)
   validation {
     condition     = length(var.billing_account_ids) > 0
@@ -46,13 +46,18 @@ variable "location" {
 variable "aws_s3_bucket_name" {
   description = "Name of the AWS S3 bucket to store cost data"
   type        = string
-  default     = "uk-gov-gds-cost-inbound-azure"
 }
 
 variable "deploy_from_external_network" {
   description = "If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments"
   type        = bool
   default     = false
+}
+
+variable "publish_function_code" {
+  description = "Whether the module publishes the function app code via the bundled 'az functionapp deployment source config-zip' step. Set to false when the function code is deployed out-of-band (for example by a separate CI pipeline), which also avoids the Azure CLI dependency in environments where it is unavailable such as 'terraform test'."
+  type        = bool
+  default     = true
 }
 
 variable "aws_region" {
@@ -78,7 +83,7 @@ variable "current_principal_type" {
 }
 
 variable "backfill_start_date" {
-  description = "The year and month to start backfill - nin the format 'YYYY-MM-01; defaults to 2022-01-01"
+  description = "The year and month to start backfill - in the format 'YYYY-MM-01'; defaults to 2022-01-01"
   type        = string
   default     = "2022-01-01"
   validation {
@@ -109,6 +114,29 @@ variable "is_enterprise_customer" {
   description = "Set to true if you are an Enterprise Agreement customer"
   type        = bool
   default     = false
+}
+
+variable "manage_role_assignments" {
+  description = "Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage_entra_app_role_assignment."
+  type        = bool
+  default     = true
+}
+
+variable "existing_entra_application_client_id" {
+  description = "[optional] Client (application) ID of a pre-existing Entra app registration to use for AWS OIDC federation. Set this for separation of duties: when supplied, the module does NOT create the app registration, service principal, or app role (all of which require directory-write privileges) and consumes this client ID instead. The pre-created app must expose an 'AssumeRoleWithWebIdentity' app role and the identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost_mgmt_suffix>' (the AWS OIDC token audience). Leave null to have the module create the app registration as before."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.existing_entra_application_client_id == null || can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.existing_entra_application_client_id))
+    error_message = "existing_entra_application_client_id must be null or a GUID."
+  }
+}
+
+variable "manage_entra_app_role_assignment" {
+  description = "Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Only takes effect when bringing your own app registration (existing_entra_application_client_id set); when the module creates the app registration it already holds the privileges to create the binding, so this is forced true. Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra_app_role_assignment_manual_action_required' output prints the details for your Entra team to create it out-of-band."
+  type        = bool
+  default     = true
 }
 
 variable "tags" {
@@ -186,5 +214,75 @@ variable "private_dns_a_record_ttl" {
   validation {
     condition     = !var.private_endpoints_manage_dns_zone_group || (var.private_dns_a_record_ttl >= 30 && var.private_dns_a_record_ttl <= 3600)
     error_message = "private_dns_a_record_ttl must be between 30 and 3600 seconds."
+variable "log_analytics_workspace_id" {
+  description = "Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.log_analytics_workspace_id == null || can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.OperationalInsights/workspaces/[^/]+$", var.log_analytics_workspace_id))
+    error_message = "log_analytics_workspace_id must be null or a valid Log Analytics workspace resource ID."
+  }
+}
+
+variable "custom_resource_names" {
+  description = <<-EOT
+    Override the auto-generated names for resources created by this module.
+    Every attribute is optional and defaults to null, which means the module
+    uses its built-in name (typically a prefix plus an 8-character random suffix).
+    Storage account names must be 3-24 characters, lowercase alphanumeric only.
+    WARNING: Changing a resource name after initial deployment will cause Terraform
+    to destroy and recreate that resource.
+  EOT
+  type = object({
+    storage_account_cost_export = optional(string)
+    storage_account_deployment  = optional(string)
+    service_plan                = optional(string)
+    user_assigned_identity      = optional(string)
+    function_app                = optional(string)
+    application_insights        = optional(string)
+    log_analytics_workspace     = optional(string)
+    event_grid_system_topic     = optional(string)
+    event_grid_subscription     = optional(string)
+    entra_application           = optional(string)
+    cost_export_prefix          = optional(string)
+    private_endpoints = optional(object({
+      storage_blob    = optional(string)
+      storage_queue   = optional(string)
+      deployment_blob = optional(string)
+      function_app    = optional(string)
+    }))
+    private_service_connections = optional(object({
+      storage_blob    = optional(string)
+      storage_queue   = optional(string)
+      deployment_blob = optional(string)
+      function_app    = optional(string)
+    }))
+  })
+  default = {}
+
+  validation {
+    condition = (
+      var.custom_resource_names.storage_account_cost_export == null ||
+      can(regex("^[a-z0-9]{3,24}$", var.custom_resource_names.storage_account_cost_export))
+    )
+    error_message = "storage_account_cost_export must be 3-24 characters, lowercase letters and digits only."
+  }
+
+  validation {
+    condition = (
+      var.custom_resource_names.storage_account_deployment == null ||
+      can(regex("^[a-z0-9]{3,24}$", var.custom_resource_names.storage_account_deployment))
+    )
+    error_message = "storage_account_deployment must be 3-24 characters, lowercase letters and digits only."
+  }
+
+  validation {
+    condition = (
+      var.custom_resource_names.storage_account_cost_export == null ||
+      var.custom_resource_names.storage_account_deployment == null ||
+      var.custom_resource_names.storage_account_cost_export != var.custom_resource_names.storage_account_deployment
+    )
+    error_message = "storage_account_cost_export and storage_account_deployment must be different names."
   }
 }

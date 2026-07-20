@@ -1,0 +1,114 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=800"]
+
+      - id: check-case-conflict
+
+      - id: check-json
+        # Exclude non-standard JSON
+        exclude: |
+          (?x)^(
+              .devcontainer/devcontainer.json|
+              .vscode/tasks.json
+          )$
+
+      - id: check-merge-conflict
+
+      - id: check-symlinks
+
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+
+      - id: end-of-file-fixer
+
+      - id: pretty-format-json
+        args:
+          - --autofix
+          - --indent=2
+        # Exclude non-standard JSON
+        exclude: |
+          (?x)^(
+              .devcontainer/devcontainer.json|
+              .vscode/tasks.json
+          )$
+
+      - id: trailing-whitespace
+
+      - id: check-shebang-scripts-are-executable
+
+  - repo: https://github.com/jackdewinter/pymarkdown
+    rev: c5755e272a13da06be38d74052658af46c1ee447 # frozen: v0.9.35
+    hooks:
+      - id: pymarkdown
+        args:
+          - --config=.pymarkdown.yaml
+          - scan
+
+  - repo: https://github.com/gruntwork-io/pre-commit
+    rev: 40f924cd642f5dc98d12bd97b07f3752223553da # frozen: v0.1.30
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: 2ccb47ff45ad361a21071a7eedda4c37e6ae8c5a # frozen: v2.4.2
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words=.codespell.ignore
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 8d1f98c7967eb1e79cb44ac6241a124e145d2165 # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: d0e12caebb2ab0ee8bf98181c8bfe9702bca103d # frozen: v1.105.0
+    hooks:
+      - id: terraform_fmt
+        args:
+          - --args=-recursive
+          - --args=-write=true
+
+      - id: terraform_validate
+        name: Terraform validate
+        args:
+          - --args=-json
+          - --args=-no-color
+          - --hook-config=--retry-once-with-cleanup=true
+
+      - id: terraform_docs
+        args:
+          - --hook-config=--create-file-if-not-exist=true
+          - --args=--config=.terraform-docs.yml
+
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+          - --args=--recursive
+          - --args=--color
+          - --args=--format=compact
+          - --args=--fix
+
+      - id: terraform_checkov
+        args:
+          - --env-vars=CHECKOV_EXPERIMENTAL_TERRAFORM_MANAGED_MODULES=True
+          - --args=--quiet
+          - --args=--compact
+          - --args=--framework=terraform
+
+      - id: terraform_trivy
+        args:
+          - --args=--skip-dirs="**/.terraform"
+
+  - repo: local
+    hooks:
+      - id: terraform_test
+        name: Terraform test
+        entry: bash -c 'terraform init -backend=false && terraform test'
+        language: system
+        files: \.(tf|tftest\.hcl)$
+        pass_filenames: false
+        verbose: true

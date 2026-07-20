@@ -16,18 +16,18 @@ def carbon_export_backfill_lock_exists() -> bool:
   try:
     logger.debug(f"carbon_export_backfill_lock_exists: s3_focus_path({Config.s3_focus_path}), carbon_directory_name ({Config.carbon_directory_name}), CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME({CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME})")
     s3 = getS3FileSystem()
-    
+
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.carbon_directory_name}-{CARBON_EXPORT_BACKFILL_RUN_LOCK_NAME}"
     logger.debug(f"Carbon Export lock check: {s3_path}")
-    
+
     file_info = s3.get_file_info(s3_path)
     exists = file_info.type != fs.FileType.NotFound
-    
+
     if not exists:
       logger.info(f"Carbon Export lock does not exists: {s3_path}")
-    
+
     return exists
-        
+
   except Exception as e:
     # throws exception with ACCESS_DENIED if object does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
@@ -57,9 +57,9 @@ def carbon_export_backfill_lock_create() -> None:
       f.close()
 
     logger.info("cost export backfill schedule lock created")
-    
+
   except Exception as e:
-    logger.error(f"Failed to create cost export backfill run lock: {str(e)}")
+    logger.error(f"Failed to create cost export backfill run lock: {str(e)}", exc_info=True)
     raise e
 
 def carbon_export_exists(month: int, year:int) -> bool:
@@ -75,7 +75,7 @@ def carbon_export_exists(month: int, year:int) -> bool:
 
     s3_path = f"{Config.s3_focus_path.rstrip('/')}/{Config.carbon_directory_name}/billing_period={year:04d}{month:02d}01/carbon-emissions-{year:04d}{month:02d}.json"
     logger.info(f"Carbon Export data check: {s3_path}")
-    
+
     file_info = s3.get_file_info(s3_path)
     exists = file_info.type != fs.FileType.NotFound
 
@@ -85,14 +85,14 @@ def carbon_export_exists(month: int, year:int) -> bool:
     return exists
 
   except Exception as e:
-    logger.error(e)
+    logger.error(e, exc_info=True)
     # throws exception with ACCESS_DENIED if object path does not exist
     #  and this despite the documentation!!! https://arrow.apache.org/docs/python/generated/pyarrow.fs.S3FileSystem.html#pyarrow.fs.S3FileSystem.get_file_info
     exceptionStr = str(e)
     if "ACCESS_DENIED" in exceptionStr:
       logger.info(f"Carbon Export data does not exists: {s3_path}")
       return False
-  
+
     logger.warning(f"Failed to check for carbon export data exists: {str(e)}\n\\nAssuming it exists...")
     # If we can't check, assume it does not exist to force generating it
     return False
@@ -110,7 +110,7 @@ def carbon_export_exists(month: int, year:int) -> bool:
       f.close()
 
     logger.info(f"cost export backfill data lock created for {month}/{year} on account '{account_id}'")
-    
+
   except Exception as e:
-    logger.error(f"Failed to create cost export backfill data lock: {str(e)}")
+    logger.error(f"Failed to create cost export backfill data lock: {str(e)}", exc_info=True)
     raise e
