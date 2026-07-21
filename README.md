@@ -552,7 +552,7 @@ module "example" {
 ```
 
 > [!NOTE]
-> `private_dns_a_record_ttl` controls TTL for module-managed A records and is ignored when `private_endpoints_manage_dns_zone_group = false`.
+> This module no longer manages `azurerm_private_dns_a_record` resources; when `private_endpoints_manage_dns_zone_group = true` DNS records are created automatically via the private DNS zone group on each private endpoint.
 
 ## Testing
 This module includes comprehensive tests for the carbon export functionality, including dynamic date range calculations, idempotency features, and subscription batching logic.
