@@ -269,6 +269,54 @@ module "cost_forwarding" {
 > which provisions the prerequisite baseline infrastructure before consuming
 > the module.
 
+## Private DNS Configuration
+
+This module supports three private DNS modes for private endpoints:
+
+1. Module-managed DNS (default)
+   - `private_endpoints_manage_dns_zone_group = true`
+   - `use_existing_private_dns_zones = false`
+   - Module creates and manages private DNS zones, links, and A records.
+2. Bring-your-own zones (BYOD)
+   - `private_endpoints_manage_dns_zone_group = true`
+   - `use_existing_private_dns_zones = true`
+   - Provide `existing_private_dns_zone_ids` for `blob`, `queue`, and `sites`.
+   - Best suited when DNS zones are in the same subscription context as the module provider.
+3. External DNS management (for example Azure Policy)
+   - `private_endpoints_manage_dns_zone_group = false`
+   - Module creates private endpoints but does not manage private DNS zones, links, or A records.
+   - Recommended for ALZ-style cross-subscription DNS architectures.
+
+### BYOD Example
+
+```hcl
+module "example" {
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
+
+  private_endpoints_manage_dns_zone_group = true
+  use_existing_private_dns_zones          = true
+
+  existing_private_dns_zone_ids = {
+    blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+    queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
+    sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
+  }
+}
+```
+
+### External DNS Management Example
+
+```hcl
+module "example" {
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
+
+  private_endpoints_manage_dns_zone_group = false
+}
+```
+
+> [!NOTE]
+> This module no longer manages `azurerm_private_dns_a_record` resources; when `private_endpoints_manage_dns_zone_group = true` DNS records are created automatically via the private DNS zone group on each private endpoint.
+
 ## Data Flow
 
 The module creates three distinct export pipelines for each of the data sets:
@@ -505,57 +553,6 @@ Python dependencies are managed using a two-file approach:
 |---|---|---|
 | `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** - this is the source of truth |
 | `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** - always machine-generated |
-
-## Private DNS Configuration
-
-This module supports three private DNS modes for private endpoints:
-
-1. Module-managed DNS (default)
-   - `private_endpoints_manage_dns_zone_group = true`
-   - `use_existing_private_dns_zones = false`
-   - Module creates and manages private DNS zones, links, and A records.
-2. Bring-your-own zones (BYOD)
-   - `private_endpoints_manage_dns_zone_group = true`
-   - `use_existing_private_dns_zones = true`
-   - Provide `existing_private_dns_zone_ids` for `blob`, `queue`, and `sites`.
-   - Best suited when DNS zones are in the same subscription context as the module provider.
-3. External DNS management (for example Azure Policy)
-   - `private_endpoints_manage_dns_zone_group = false`
-   - Module creates private endpoints but does not manage private DNS zones, links, or A records.
-   - Recommended for ALZ-style cross-subscription DNS architectures.
-
-### BYOD Example
-
-```hcl
-module "example" {
-  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
-
-  private_endpoints_manage_dns_zone_group = true
-  use_existing_private_dns_zones          = true
-
-  existing_private_dns_zone_ids = {
-    blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
-    queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
-    sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
-  }
-}
-```
-
-### External DNS Management Example
-
-```hcl
-module "example" {
-  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
-
-  private_endpoints_manage_dns_zone_group = false
-}
-```
-
-> [!NOTE]
-> This module no longer manages `azurerm_private_dns_a_record` resources; when `private_endpoints_manage_dns_zone_group = true` DNS records are created automatically via the private DNS zone group on each private endpoint.
-
-## Testing
-This module includes comprehensive tests for the carbon export functionality, including dynamic date range calculations, idempotency features, and subscription batching logic.
 
 ### To add, remove, or update a dependency
 
