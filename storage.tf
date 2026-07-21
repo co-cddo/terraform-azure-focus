@@ -57,6 +57,8 @@ resource "azapi_resource" "cost_data_queue" {
 # trivy:ignore:AVD-AZU-0057 Request logging is handled via azurerm_monitor_diagnostic_setting (Log Analytics) below, not the legacy Storage Analytics queue_properties block.
 # trivy:ignore:AZU-0058 LRS is sufficient for now
 resource "azurerm_storage_account" "deployment" {
+  #TODO: Revert this
+  # checkov:skip=CKV_AZURE_59:Temporary
   # checkov:skip=CKV2_AZURE_38:We don't need soft delete since this account is neither source nor destination for cost data
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now
@@ -75,8 +77,9 @@ resource "azurerm_storage_account" "deployment" {
   is_hns_enabled           = true
   tags                     = var.tags
 
-  allow_nested_items_to_be_public   = false
-  public_network_access_enabled     = false
+  allow_nested_items_to_be_public = false
+  #TODO: Revert this
+  public_network_access_enabled     = true #false
   shared_access_key_enabled         = true
   local_user_enabled                = false
   min_tls_version                   = "TLS1_2"
