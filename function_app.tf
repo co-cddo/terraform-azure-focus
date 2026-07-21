@@ -220,6 +220,21 @@ resource "null_resource" "backfill_exports_cleanup_warning" {
   }
 }
 
+resource "null_resource" "set_deployment_storage_public_network_access_disabled" {
+  count = local.deployment_storage_allow_public_access ? 1 : 0
+
+  provisioner "local-exec" {
+    interpreter = ["pwsh", "-NoProfile", "-Command"]
+    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --public-network-access Disabled"
+  }
+
+  triggers = {
+    always_run = timestamp()
+  }
+
+  depends_on = [null_resource.publish_function_code]
+}
+
 resource "null_resource" "set_function_app_public_network_access_disabled" {
   count = var.deploy_from_external_network ? 1 : 0
 
