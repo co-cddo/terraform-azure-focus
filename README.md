@@ -301,7 +301,7 @@ module "example" {
     queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
     sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
   }
-}
+...
 ```
 
 ### External DNS Management Example
@@ -311,7 +311,7 @@ module "example" {
   source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
 
   private_endpoints_manage_dns_zone_group = false
-}
+...
 ```
 
 > [!NOTE]
