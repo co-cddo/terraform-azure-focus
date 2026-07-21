@@ -79,35 +79,35 @@ override_resource {
 }
 
 override_resource {
-  target = azurerm_private_dns_zone.sites
+  target = azurerm_private_dns_zone.sites[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
   }
 }
 
 override_resource {
-  target = azurerm_private_dns_zone.blob
+  target = azurerm_private_dns_zone.blob[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
   }
 }
 
 override_resource {
-  target = azurerm_private_dns_zone.queue
+  target = azurerm_private_dns_zone.queue[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
   }
 }
 
 override_resource {
-  target = azurerm_private_dns_zone.file
+  target = azurerm_private_dns_zone.file[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
   }
 }
 
 override_resource {
-  target = azurerm_private_dns_zone.table
+  target = azurerm_private_dns_zone.table[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.table.core.windows.net"
   }
