@@ -81,6 +81,10 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     # unlike a system-assigned identity, the host cannot infer which identity to use otherwise.
     "StorageAccountManagedIdentity__credential" = "managedidentity"
     "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
+    "AzureWebJobsStorage__credential"           = "managedidentity"
+    "AzureWebJobsStorage__clientId"             = azurerm_user_assigned_identity.cost_export.client_id
+    "AzureWebJobsStorage__blobServiceUri"       = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/"
+    "AzureWebJobsStorage__queueServiceUri"      = "https://${azurerm_storage_account.deployment.name}.queue.core.windows.net/"
     # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
     "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
     "ENTRA_APP_CLIENT_ID"        = local.entra_app_client_id
