@@ -81,10 +81,21 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     # unlike a system-assigned identity, the host cannot infer which identity to use otherwise.
     "StorageAccountManagedIdentity__credential" = "managedidentity"
     "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
-    "AzureWebJobsStorage__credential"           = "managedidentity"
-    "AzureWebJobsStorage__clientId"             = azurerm_user_assigned_identity.cost_export.client_id
-    "AzureWebJobsStorage__blobServiceUri"       = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/"
-    "AzureWebJobsStorage__queueServiceUri"      = "https://${azurerm_storage_account.deployment.name}.queue.core.windows.net/"
+    # AzureWebJobsStorage - Functions host runtime storage on the deployment/host account, over the
+    # user-assigned identity (shared keys are disabled there). The four __ keys define the identity
+    # connection. The empty plain "AzureWebJobsStorage" / "DEPLOYMENT_STORAGE_CONNECTION_STRING" are a
+    # workaround for an open provider bug (hashicorp/terraform-provider-azurerm#29149, #29993): azurerm
+    # re-injects a key-based AzureWebJobsStorage on every flex-consumption update, which - with keys
+    # disabled - overrides the identity connection and fails startup with AuthenticationFailed. Deleting
+    # it out-of-band does not stick (it reappears next apply); declaring it empty makes Terraform blank
+    # it authoritatively each apply so the runtime falls through to the __ identity keys. Remove both
+    # empty settings once the provider stops injecting the key-based value.
+    "AzureWebJobsStorage"                  = ""
+    "DEPLOYMENT_STORAGE_CONNECTION_STRING" = ""
+    "AzureWebJobsStorage__credential"      = "managedidentity"
+    "AzureWebJobsStorage__clientId"        = azurerm_user_assigned_identity.cost_export.client_id
+    "AzureWebJobsStorage__blobServiceUri"  = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/"
+    "AzureWebJobsStorage__queueServiceUri" = "https://${azurerm_storage_account.deployment.name}.queue.core.windows.net/"
     # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
     "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
     "ENTRA_APP_CLIENT_ID"        = local.entra_app_client_id

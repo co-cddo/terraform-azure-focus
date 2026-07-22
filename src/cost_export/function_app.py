@@ -682,7 +682,7 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
         )
 
 @app.function_name(name="BackfillTrigger")
-@app.timer_trigger(schedule="0 0 14 * * 1-5", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 50 14 * * 1-5", arg_name="timer", run_on_startup=False)
 def backfill_trigger(timer: func.TimerRequest) -> None:
     """Timer trigger function that triggers the running of backfill for both cost export and carbon export.
 
