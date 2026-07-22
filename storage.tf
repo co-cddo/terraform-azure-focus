@@ -61,10 +61,6 @@ resource "azurerm_storage_account" "deployment" {
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
-  # checkov:skip=CKV2_AZURE_40:Shared access keys remain enabled here: the Flex Consumption function app uses this
-  # account for its deployment package via storage_access_key, which cannot use managed identity
-  # yet due to a provider bug. See function_app.tf TODO:
-  # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
 
   name                     = local.names.storage_account_deployment

@@ -27,13 +27,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   location            = azurerm_resource_group.cost_export.location
   tags                = var.tags
 
-  storage_container_type = "blobContainer"
-  # TODO: Switch to managed identity once this is fixed:
-  # https://medium.com/p/99ff43c1557f
-  # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------
-  #storage_authentication_type = "SystemAssignedIdentity"
-  # storage_authentication_type   = "StorageAccountConnectionString"
-  # storage_access_key            = azurerm_storage_account.deployment.primary_access_key
+  storage_container_type            = "blobContainer"
   storage_authentication_type       = "UserAssignedIdentity"
   storage_user_assigned_identity_id = azurerm_user_assigned_identity.cost_export.id
   storage_container_endpoint        = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
@@ -171,7 +165,7 @@ resource "null_resource" "publish_function_code" {
     publish_code_command = local.publish_code_command
   }
 
-  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_role_assignment.grant_func_deployment_blob_contributor, azurerm_role_assignment.grant_func_deployment_queue_contributor, time_sleep.wait_for_function_deployment_rbac, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
 }
 
 # Backfill runs create one-off Cost Management export jobs ("focus-backfill{suffix}-<account>-<year>-<month>")

@@ -57,7 +57,7 @@ prerequisites - unless `manage_role_assignments = false`, in which case they are
 
 | Scope | Role | Why it is needed |
 |---|---|---|
-| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. Also covers reading the deployment storage account's access keys. |
+| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
@@ -103,6 +103,8 @@ system topic and for each Cost Management export.
 | Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
 | Function identity | Storage Queue Data Contributor | cost-export storage account | Read the queue that triggers the `CostExportProcessor`. |
 | Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
+| Function identity | Storage Blob Data Contributor | deployment storage account | Flex Consumption host storage: the host mounts the deployment package and manages its own blob leases/locks with the app identity (shared keys are disabled on this account). Without it the app is unhealthy after a successful zip deploy. |
+| Function identity | Storage Queue Data Contributor | deployment storage account | Flex Consumption host storage: the host's queue singleton / timer leases. |
 | Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
 | Function identity | Advisor Recommendations Contributor | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Least-privilege built-in for this - see note below. |
 | Function identity | Billing account reader | MCA Billing account(s) (if any) | Enumerate subscriptions and create/run FOCUS cost exports. |
@@ -218,14 +220,14 @@ function managed identity, so it cannot be fully pre-created):
   AWS credentials
 - **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
 
-> [!NOTE]
+<!-- > [!NOTE]
 > There is currently an
 > [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993)
 > with publishing Function App code on the Flex Consumption Plan using a
 > managed identity. We have had to revert to using the storage account
 > connection string for now. More details can be found
 > [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f)
-> (behind a paywall, sadly).
+> (behind a paywall, sadly). -->
 
 ## Usage
 

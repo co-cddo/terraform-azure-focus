@@ -103,6 +103,31 @@ resource "azurerm_role_assignment" "grant_func_queue_contributor" {
   principal_type       = "ServicePrincipal"
 }
 
+resource "azurerm_role_assignment" "grant_func_deployment_blob_contributor" {
+  count                = var.manage_role_assignments ? 1 : 0
+  scope                = azurerm_storage_account.deployment.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "grant_func_deployment_queue_contributor" {
+  count                = var.manage_role_assignments ? 1 : 0
+  scope                = azurerm_storage_account.deployment.id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "time_sleep" "wait_for_function_deployment_rbac" {
+  create_duration = var.manage_role_assignments ? "60s" : "0s"
+
+  depends_on = [
+    azurerm_role_assignment.grant_func_deployment_blob_contributor,
+    azurerm_role_assignment.grant_func_deployment_queue_contributor,
+  ]
+}
+
 resource "azurerm_role_assignment" "event_grid_queue_sender" {
   count                = var.manage_role_assignments ? 1 : 0
   scope                = azurerm_storage_account.cost_export.id
