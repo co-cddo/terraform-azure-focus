@@ -112,6 +112,14 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "LOGGING_LEVEL"       = var.logging_level
     "COST_MGMT_SUFFIX"    = local.cost_mgmt_suffix
   }
+
+  lifecycle {
+    # public_network_access_enabled is the create-time state only (open when deploy_from_external_network
+    # so the external runner can reach the SCM endpoint). Thereafter it is toggled out-of-band around the
+    # code publish by the null_resources below - opened before publish, closed after. Ignoring it stops
+    # that toggling from showing as perpetual drift on every plan.
+    ignore_changes = [public_network_access_enabled]
+  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "function_app" {
@@ -170,7 +178,7 @@ resource "null_resource" "publish_function_code" {
     publish_code_command = local.publish_code_command
   }
 
-  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_role_assignment.grant_func_deployment_blob_contributor, azurerm_role_assignment.grant_func_deployment_queue_contributor, time_sleep.wait_for_function_deployment_rbac, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_role_assignment.grant_func_deployment_blob_contributor, azurerm_role_assignment.grant_func_deployment_queue_contributor, time_sleep.wait_for_function_deployment_rbac, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app, null_resource.set_deployment_storage_public_network_access_enabled, null_resource.set_function_app_public_network_access_enabled]
 }
 
 # Backfill runs create one-off Cost Management export jobs ("focus-backfill{suffix}-<account>-<year>-<month>")
@@ -218,6 +226,37 @@ resource "null_resource" "backfill_exports_cleanup_warning" {
     environment = {
       BACKFILL_CLEANUP_WARNING = self.triggers.warning
     }
+  }
+}
+
+# Public network access on the deployment storage account and function app is toggled around the code
+# publish rather than left open: opened before the publish (the external-network runner - and, in the
+# BYO-DNS-resolver scenario, the host - must reach the SCM/storage endpoints), then closed again after.
+# Both resources carry lifecycle { ignore_changes = [public_network_access_enabled] }, so this
+# out-of-band toggling no longer surfaces as perpetual drift. The "enabled" resources below run before
+# null_resource.publish_function_code (which depends_on them); the "disabled" resources run after it.
+resource "null_resource" "set_deployment_storage_public_network_access_enabled" {
+  count = local.deployment_storage_allow_public_access ? 1 : 0
+
+  provisioner "local-exec" {
+    interpreter = ["pwsh", "-NoProfile", "-Command"]
+    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --public-network-access Enabled"
+  }
+
+  triggers = {
+    always_run = timestamp()
+  }
+}
+
+resource "null_resource" "set_function_app_public_network_access_enabled" {
+  count = var.deploy_from_external_network ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Enabled"
+  }
+
+  triggers = {
+    always_run = timestamp()
   }
 }
 

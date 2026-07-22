@@ -87,6 +87,15 @@ resource "azurerm_storage_account" "deployment" {
     default_action = "Deny"
     bypass         = ["AzureServices"]
   }
+
+  lifecycle {
+    # public_network_access_enabled here is only the create-time state (open in the BYO-DNS-resolver
+    # scenario so the provider's create-time data-plane read can reach the account). Thereafter access
+    # is toggled out-of-band around the code publish by the null_resources in function_app.tf - opened
+    # before publish, closed after. Ignoring the attribute stops that toggling from showing as
+    # perpetual drift (a false -> true diff re-opening access on every plan).
+    ignore_changes = [public_network_access_enabled]
+  }
 }
 
 resource "azapi_resource" "deployment" {
