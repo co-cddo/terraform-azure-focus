@@ -284,7 +284,7 @@ This module supports three private DNS modes for private endpoints:
 
 ```hcl
 module "example" {
-  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<release commit SHA>" # v<release version number>
 
   private_endpoints_manage_dns_zone_group = true
   use_existing_private_dns_zones          = true
@@ -301,7 +301,7 @@ module "example" {
 
 ```hcl
 module "example" {
-  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=1833bb30497da1b2faac808c0a4ba3adde71494e"
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<release commit SHA>" # v<release version number>
 
   private_endpoints_manage_dns_zone_group = false
 ...
