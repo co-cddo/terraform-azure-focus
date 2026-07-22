@@ -71,7 +71,7 @@ locals {
 
   manage_private_endpoint_dns = var.private_endpoints_manage_dns_zone_group
 
-  deployment_storage_allow_public_access = var.use_existing_private_dns_zones && !var.link_existing_private_dns_zones_to_vnet
+  deployment_storage_allow_public_access = var.use_existing_private_dns_zones && !var.link_existing_private_dns_zones_to_vnet && var.publish_function_code
 
   managed_private_dns_zone_ids = {
     blob  = try(azurerm_private_dns_zone.blob[0].id, null)

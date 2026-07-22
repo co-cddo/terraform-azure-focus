@@ -62,6 +62,7 @@ resource "azurerm_storage_account" "deployment" {
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
+  # checkov:skip=CKV_AZURE_59:Public access is conditionally enabled only when BYO DNS zones are not linked to the VNet and function code publishing is required
 
   name                     = local.names.storage_account_deployment
   resource_group_name      = azurerm_resource_group.cost_export.name
