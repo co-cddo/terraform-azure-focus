@@ -77,7 +77,7 @@ resource "azurerm_storage_account" "deployment" {
 
   allow_nested_items_to_be_public   = false
   public_network_access_enabled     = local.deployment_storage_allow_public_access
-  shared_access_key_enabled         = true
+  shared_access_key_enabled         = false
   local_user_enabled                = false
   min_tls_version                   = "TLS1_2"
   infrastructure_encryption_enabled = true

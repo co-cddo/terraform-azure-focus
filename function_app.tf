@@ -32,17 +32,19 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   # https://medium.com/p/99ff43c1557f
   # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------
   #storage_authentication_type = "SystemAssignedIdentity"
-  storage_authentication_type   = "StorageAccountConnectionString"
-  storage_access_key            = azurerm_storage_account.deployment.primary_access_key
-  storage_container_endpoint    = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
-  service_plan_id               = azurerm_service_plan.cost_export.id
-  runtime_name                  = "python"
-  runtime_version               = "3.13"
-  maximum_instance_count        = 50
-  instance_memory_in_mb         = 4096
-  https_only                    = true
-  virtual_network_subnet_id     = var.function_app_subnet_id
-  public_network_access_enabled = var.deploy_from_external_network
+  # storage_authentication_type   = "StorageAccountConnectionString"
+  # storage_access_key            = azurerm_storage_account.deployment.primary_access_key
+  storage_authentication_type       = "UserAssignedIdentity"
+  storage_user_assigned_identity_id = azurerm_user_assigned_identity.cost_export.id
+  storage_container_endpoint        = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
+  service_plan_id                   = azurerm_service_plan.cost_export.id
+  runtime_name                      = "python"
+  runtime_version                   = "3.13"
+  maximum_instance_count            = 50
+  instance_memory_in_mb             = 4096
+  https_only                        = true
+  virtual_network_subnet_id         = var.function_app_subnet_id
+  public_network_access_enabled     = var.deploy_from_external_network
 
   identity {
     type         = "UserAssigned"
