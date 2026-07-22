@@ -244,7 +244,8 @@ resource "null_resource" "set_deployment_storage_public_network_access_enabled" 
   }
 
   triggers = {
-    always_run = timestamp()
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
   }
 }
 
@@ -256,7 +257,8 @@ resource "null_resource" "set_function_app_public_network_access_enabled" {
   }
 
   triggers = {
-    always_run = timestamp()
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
   }
 }
 
@@ -269,7 +271,8 @@ resource "null_resource" "set_deployment_storage_public_network_access_disabled"
   }
 
   triggers = {
-    always_run = timestamp()
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
   }
 
   depends_on = [null_resource.publish_function_code]
@@ -283,7 +286,8 @@ resource "null_resource" "set_function_app_public_network_access_disabled" {
   }
 
   triggers = {
-    always_run = timestamp()
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
   }
 
   depends_on = [null_resource.publish_function_code]
