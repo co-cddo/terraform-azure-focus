@@ -28,7 +28,7 @@ module "example" {
   }
 
   backfill_start_date = "2022-01-01"
-  logging_level       = "DEBUG" # INFO (default) or DEBUG
+  logging_level       = "INFO" # INFO (default) or DEBUG
   cost_mgmt_suffix    = "dev"
 
   # Uncomment the following line if running in CI/CD with a service principal

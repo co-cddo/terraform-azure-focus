@@ -9,11 +9,6 @@ resource "azurerm_service_plan" "cost_export" {
   tags                = var.tags
 }
 
-# User-assigned identity for the function app. Used in preference to a system-assigned
-# identity so the principal/object ID is stable across function-app replacement: the
-# application RBAC grants in rbac.tf (and any constrained delegation that pins this
-# principal) survive a recreate of the function app, which a system-assigned identity
-# would not - Azure mints a new object ID on every recreate.
 resource "azurerm_user_assigned_identity" "cost_export" {
   name                = local.names.user_assigned_identity
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -49,7 +44,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     application_insights_connection_string = azurerm_application_insights.this.connection_string
     application_insights_key               = azurerm_application_insights.this.instrumentation_key
 
-    # TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
+    # #TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
     # dynamic "ip_restriction" {
     #   for_each = var.deploy_from_external_network ? [1] : []
     #   content {
@@ -60,7 +55,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     #   }
     # }
 
-    # # TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
+    # #TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
     # dynamic "scm_ip_restriction" {
     #   for_each = var.deploy_from_external_network ? [1] : []
     #   content {
@@ -73,29 +68,24 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 
   app_settings = {
-    "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export.primary_blob_endpoint
-    "CONTAINER_NAME"                            = azapi_resource.cost_export.name
-    "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
-    "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
-    # The queue-trigger identity-based connection must name the user-assigned identity explicitly:
-    # unlike a system-assigned identity, the host cannot infer which identity to use otherwise.
-    "StorageAccountManagedIdentity__credential" = "managedidentity"
-    "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
-    # AzureWebJobsStorage - Functions host runtime storage on the deployment/host account, over the
-    # user-assigned identity (shared keys are disabled there). The four __ keys define the identity
-    # connection. The empty plain "AzureWebJobsStorage" / "DEPLOYMENT_STORAGE_CONNECTION_STRING" are a
-    # workaround for an open provider bug (hashicorp/terraform-provider-azurerm#29149, #29993): azurerm
-    # re-injects a key-based AzureWebJobsStorage on every flex-consumption update, which - with keys
-    # disabled - overrides the identity connection and fails startup with AuthenticationFailed. Deleting
-    # it out-of-band does not stick (it reappears next apply); declaring it empty makes Terraform blank
-    # it authoritatively each apply so the runtime falls through to the __ identity keys. Remove both
-    # empty settings once the provider stops injecting the key-based value.
+    "STORAGE_ACCOUNT_BLOB_ENDPOINT" = azurerm_storage_account.cost_export.primary_blob_endpoint
+    "CONTAINER_NAME"                = azapi_resource.cost_export.name
+    "AzureWebJobsFeatureFlags"      = "EnableWorkerIndexing"
+
+    #HACK: Fix for below issue where the azurerm provider creates and populates these settings, breaking deployment when using user-assigned identity for authentication with the deployment storage account
+    # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
     "AzureWebJobsStorage"                  = ""
     "DEPLOYMENT_STORAGE_CONNECTION_STRING" = ""
+
+    "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
+    "StorageAccountManagedIdentity__credential" = "managedidentity"
+    "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
+
     "AzureWebJobsStorage__credential"      = "managedidentity"
     "AzureWebJobsStorage__clientId"        = azurerm_user_assigned_identity.cost_export.client_id
     "AzureWebJobsStorage__blobServiceUri"  = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/"
     "AzureWebJobsStorage__queueServiceUri" = "https://${azurerm_storage_account.deployment.name}.queue.core.windows.net/"
+
     # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
     "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
     "ENTRA_APP_CLIENT_ID"        = local.entra_app_client_id

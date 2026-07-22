@@ -220,15 +220,6 @@ function managed identity, so it cannot be fully pre-created):
   AWS credentials
 - **Hash-Pinned Dependencies**: Python packages in `requirements.txt` are pinned to exact versions with SHA256 hashes, ensuring artifact integrity and protecting against supply-chain attacks
 
-<!-- > [!NOTE]
-> There is currently an
-> [issue](https://github.com/hashicorp/terraform-provider-azurerm/issues/29993)
-> with publishing Function App code on the Flex Consumption Plan using a
-> managed identity. We have had to revert to using the storage account
-> connection string for now. More details can be found
-> [here](https://medium.com/azure-terraformer/azure-functions-with-flex-consumption-and-managed-identity-is-broken-99ff43c1557f)
-> (behind a paywall, sadly). -->
-
 ## Usage
 
 ```hcl
