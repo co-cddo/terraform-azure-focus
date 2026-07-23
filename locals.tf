@@ -13,9 +13,8 @@ locals {
   # invocation to the resource group's subscription rather than relying on the CLI default.
   cost_export_subscription_id = split("/", azurerm_resource_group.cost_export.id)[2]
 
-  publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}"
-  publish_code_command        = var.deploy_from_external_network ? "Start-Sleep -Seconds 150 && ${local.publish_code_command_common}" : local.publish_code_command_common
-  identifier_uri              = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
+  publish_code_command = "Start-Sleep -Seconds 150 && az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}"
+  identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
 
   # When no existing app registration client ID is supplied, the module creates the AWS-federation
   # Entra app, service principal, and app role itself (these require directory-write privileges).
