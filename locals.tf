@@ -13,7 +13,7 @@ locals {
   # invocation to the resource group's subscription rather than relying on the CLI default.
   cost_export_subscription_id = split("/", azurerm_resource_group.cost_export.id)[2]
 
-  publish_code_command = "Start-Sleep -Seconds 150 && az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}"
+  publish_code_command = "Start-Sleep -Seconds 150; for ($i = 0; $i -lt 3; $i++) { az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}; if ($LASTEXITCODE -eq 0) { break }; if ($i -lt 2) { Start-Sleep -Seconds 30 } else { exit 1 } }"
   identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
 
   # When no existing app registration client ID is supplied, the module creates the AWS-federation
