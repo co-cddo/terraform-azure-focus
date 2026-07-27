@@ -63,13 +63,16 @@ jobs:
           INCREMENT="${{ inputs.increment }}"
 
           # Find the latest stable tag (no prerelease suffix)
-          LATEST_STABLE=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
-          LATEST_STABLE=${LATEST_STABLE:-v0.0.0}
-          echo "Latest stable tag: $LATEST_STABLE"
+          LATEST_STABLE=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          echo "Latest stable tag: ${LATEST_STABLE:-none}"
+
+          # Release notes are generated against this tag, so leave it empty on the
+          # first ever release rather than referencing a tag that does not exist
+          echo "PREVIOUS_TAG=$LATEST_STABLE" >> $GITHUB_ENV
 
           # Parse the stable version
-          VERSION=${LATEST_STABLE#v}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          VERSION=${LATEST_STABLE:-v0.0.0}
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION#v}"
           MAJOR=${MAJOR:-0}
           MINOR=${MINOR:-0}
           PATCH=${PATCH:-0}
@@ -89,17 +92,16 @@ jobs:
           TARGET_BASE="v${MAJOR}.${MINOR}.${PATCH}"
 
           if [ "$PRERELEASE" = "true" ]; then
-            # Find the latest RC tag for this target base version
-            LATEST_RC=$(git tag --list "${TARGET_BASE}-rc.*" --sort=-v:refname | head -n 1)
+            # Highest RC number already used for this target base version. Only
+            # well formed RC tags are matched, so a stray tag such as
+            # v1.1.0-rc.beta cannot reach the arithmetic below
+            LATEST_RC_NUM=$(git tag --list "${TARGET_BASE}-rc.*" \
+              | grep -E "^v${MAJOR}\.${MINOR}\.${PATCH}-rc\.[0-9]+$" \
+              | sed 's/.*-rc\.//' \
+              | sort -n \
+              | tail -n 1 || true)
 
-            if [ -n "$LATEST_RC" ]; then
-              RC_NUM=${LATEST_RC##*-rc.}
-              RC_NUM=$((RC_NUM + 1))
-            else
-              RC_NUM=1
-            fi
-
-            NEW_TAG="${TARGET_BASE}-rc.${RC_NUM}"
+            NEW_TAG="${TARGET_BASE}-rc.$(( ${LATEST_RC_NUM:-0} + 1 ))"
           else
             NEW_TAG="$TARGET_BASE"
           fi
@@ -111,14 +113,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          if [ -n "$PREVIOUS_TAG" ]; then
-            RANGE="${PREVIOUS_TAG}..HEAD"
-          else
-            RANGE="HEAD"
-          fi
-
           GENERATED_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
             -f tag_name=${{ env.NEW_TAG }} \
             ${PREVIOUS_TAG:+-f previous_tag_name=$PREVIOUS_TAG} \
