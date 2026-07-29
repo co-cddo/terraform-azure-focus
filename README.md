@@ -111,9 +111,11 @@ system topic and for each Cost Management export.
 
 <a id="ea-billing-role-script"></a>
 > [!IMPORTANT]
-> **Enterprise Agreement (EA) customers** must assign the function app identity's billing role manually after `terraform apply`. This module cannot do it - it
-> requires Enterprise Administrator privileges. Until the billing role is in place, the function will be unable to create the backfill exports in Cost Management + Billing.
-> You can use [NewBillingRoleAssignment.ps1](https://github.com/co-cddo/terraform-azure-focus/blob/main/scripts/NewBillingRoleAssignment.ps1) to add the role assignment for each billing account (usually just one). Note that billing account role assignments for service principals do not appear in the portal.
+> **Enterprise Agreement (EA) customers** must manually add `EnrollmentReader` role assignment(s) after `terraform apply`.
+> It requires Enterprise Administrator privileges so the module cannot do it.
+> Until this step is completed, the function will be unable to create backfill exports in Cost Management + Billing.
+> Run [NewBillingRoleAssignment.ps1](https://github.com/co-cddo/terraform-azure-focus/blob/main/scripts/NewBillingRoleAssignment.ps1) to complete this task for each EA billing account (often just one).
+> Note that billing account role assignments for service principals do not appear in the portal.
 
 ```pwsh
 # NewBillingRoleAssignment.ps1 usage example
