@@ -111,7 +111,7 @@ system topic and for each Cost Management export.
 
 <a id="ea-billing-role-script"></a>
 > [!IMPORTANT]
-> **Enterprise Agreement (EA) customers** must manually add `EnrollmentReader` role assignment(s) after `terraform apply`.
+> **Enterprise Agreement (EA) customers** must manually add [EnrollmentReader](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal) role assignment(s) after `terraform apply`.
 > It requires Enterprise Administrator privileges so the module cannot do it.
 > Until this step is completed, the function will be unable to create backfill exports in Cost Management + Billing.
 > Run [NewBillingRoleAssignment.ps1](https://github.com/co-cddo/terraform-azure-focus/blob/main/scripts/NewBillingRoleAssignment.ps1) to complete this task for each EA billing account (often just one).
