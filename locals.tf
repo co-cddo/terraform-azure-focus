@@ -13,9 +13,8 @@ locals {
   # invocation to the resource group's subscription rather than relying on the CLI default.
   cost_export_subscription_id = split("/", azurerm_resource_group.cost_export.id)[2]
 
-  publish_code_command_common = "az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}"
-  publish_code_command        = var.deploy_from_external_network ? "Start-Sleep -Seconds 150 && ${local.publish_code_command_common}" : local.publish_code_command_common
-  identifier_uri              = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
+  publish_code_command = "Start-Sleep -Seconds 150; for ($i = 0; $i -lt 3; $i++) { az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}; if ($LASTEXITCODE -eq 0) { break }; if ($i -lt 2) { Start-Sleep -Seconds 30 } else { exit 1 } }"
+  identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
 
   # When no existing app registration client ID is supplied, the module creates the AWS-federation
   # Entra app, service principal, and app role itself (these require directory-write privileges).
@@ -62,6 +61,40 @@ locals {
   report_scopes = [
     for account_id in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${account_id}"
   ]
+
+  private_dns_zone_names = {
+    blob  = "privatelink.blob.core.windows.net"
+    queue = "privatelink.queue.core.windows.net"
+    sites = "privatelink.azurewebsites.net"
+  }
+
+  manage_private_endpoint_dns = var.private_endpoints_manage_dns_zone_group
+
+  deployment_storage_allow_public_access = var.use_existing_private_dns_zones && !var.link_existing_private_dns_zones_to_vnet && var.publish_function_code
+
+  managed_private_dns_zone_ids = {
+    blob  = try(azurerm_private_dns_zone.blob[0].id, null)
+    queue = try(azurerm_private_dns_zone.queue[0].id, null)
+    sites = try(azurerm_private_dns_zone.sites[0].id, null)
+  }
+
+  effective_private_dns_zone_ids = !local.manage_private_endpoint_dns ? {} : var.use_existing_private_dns_zones ? {
+    for zone, _ in local.private_dns_zone_names :
+    zone => var.existing_private_dns_zone_ids[zone]
+    } : {
+    for zone, _ in local.private_dns_zone_names :
+    zone => local.managed_private_dns_zone_ids[zone]
+  }
+
+  effective_private_dns_zone_resource_group_names = {
+    for zone, zone_id in local.effective_private_dns_zone_ids :
+    zone => split("/", zone_id)[4]
+  }
+
+  effective_private_dns_zone_names = {
+    for zone, zone_id in local.effective_private_dns_zone_ids :
+    zone => split("/", zone_id)[8]
+  }
 
   # Look up billing role definition IDs by name
   billing_account_reader_role_ids = {

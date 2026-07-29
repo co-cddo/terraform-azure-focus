@@ -61,11 +61,8 @@ resource "azurerm_storage_account" "deployment" {
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
-  # checkov:skip=CKV2_AZURE_40:Shared access keys remain enabled here: the Flex Consumption function app uses this
-  # account for its deployment package via storage_access_key, which cannot use managed identity
-  # yet due to a provider bug. See function_app.tf TODO:
-  # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
+  # checkov:skip=CKV_AZURE_59:Public access is conditionally enabled only when BYO DNS zones are not linked to the VNet and function code publishing is required
 
   name                     = local.names.storage_account_deployment
   resource_group_name      = azurerm_resource_group.cost_export.name
@@ -76,8 +73,8 @@ resource "azurerm_storage_account" "deployment" {
   tags                     = var.tags
 
   allow_nested_items_to_be_public   = false
-  public_network_access_enabled     = false
-  shared_access_key_enabled         = true
+  public_network_access_enabled     = local.deployment_storage_allow_public_access
+  shared_access_key_enabled         = false
   local_user_enabled                = false
   min_tls_version                   = "TLS1_2"
   infrastructure_encryption_enabled = true
@@ -89,6 +86,15 @@ resource "azurerm_storage_account" "deployment" {
   network_rules {
     default_action = "Deny"
     bypass         = ["AzureServices"]
+  }
+
+  lifecycle {
+    # public_network_access_enabled here is only the create-time state (open in the BYO-DNS-resolver
+    # scenario so the provider's create-time data-plane read can reach the account). Thereafter access
+    # is toggled out-of-band around the code publish by the null_resources in function_app.tf - opened
+    # before publish, closed after. Ignoring the attribute stops that toggling from showing as
+    # perpetual drift (a false -> true diff re-opening access on every plan).
+    ignore_changes = [public_network_access_enabled]
   }
 }
 

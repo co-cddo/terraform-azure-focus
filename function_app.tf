@@ -9,11 +9,6 @@ resource "azurerm_service_plan" "cost_export" {
   tags                = var.tags
 }
 
-# User-assigned identity for the function app. Used in preference to a system-assigned
-# identity so the principal/object ID is stable across function-app replacement: the
-# application RBAC grants in rbac.tf (and any constrained delegation that pins this
-# principal) survive a recreate of the function app, which a system-assigned identity
-# would not - Azure mints a new object ID on every recreate.
 resource "azurerm_user_assigned_identity" "cost_export" {
   name                = local.names.user_assigned_identity
   resource_group_name = azurerm_resource_group.cost_export.name
@@ -27,22 +22,18 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   location            = azurerm_resource_group.cost_export.location
   tags                = var.tags
 
-  storage_container_type = "blobContainer"
-  # TODO: Switch to managed identity once this is fixed:
-  # https://medium.com/p/99ff43c1557f
-  # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993?source=post_page-----99ff43c1557f---------------------------------------
-  #storage_authentication_type = "SystemAssignedIdentity"
-  storage_authentication_type   = "StorageAccountConnectionString"
-  storage_access_key            = azurerm_storage_account.deployment.primary_access_key
-  storage_container_endpoint    = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
-  service_plan_id               = azurerm_service_plan.cost_export.id
-  runtime_name                  = "python"
-  runtime_version               = "3.13"
-  maximum_instance_count        = 50
-  instance_memory_in_mb         = 4096
-  https_only                    = true
-  virtual_network_subnet_id     = var.function_app_subnet_id
-  public_network_access_enabled = var.deploy_from_external_network
+  storage_container_type            = "blobContainer"
+  storage_authentication_type       = "UserAssignedIdentity"
+  storage_user_assigned_identity_id = azurerm_user_assigned_identity.cost_export.id
+  storage_container_endpoint        = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/${azapi_resource.deployment.name}"
+  service_plan_id                   = azurerm_service_plan.cost_export.id
+  runtime_name                      = "python"
+  runtime_version                   = "3.13"
+  maximum_instance_count            = 50
+  instance_memory_in_mb             = 4096
+  https_only                        = true
+  virtual_network_subnet_id         = var.function_app_subnet_id
+  public_network_access_enabled     = var.deploy_from_external_network
 
   identity {
     type         = "UserAssigned"
@@ -53,7 +44,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     application_insights_connection_string = azurerm_application_insights.this.connection_string
     application_insights_key               = azurerm_application_insights.this.instrumentation_key
 
-    # TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
+    # #TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
     # dynamic "ip_restriction" {
     #   for_each = var.deploy_from_external_network ? [1] : []
     #   content {
@@ -64,7 +55,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     #   }
     # }
 
-    # # TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
+    # #TODO: default action needs to be set to deny but it's problematic in Terraform: https://github.com/hashicorp/terraform-provider-azurerm/issues/22593
     # dynamic "scm_ip_restriction" {
     #   for_each = var.deploy_from_external_network ? [1] : []
     #   content {
@@ -77,14 +68,24 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
   }
 
   app_settings = {
-    "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export.primary_blob_endpoint
-    "CONTAINER_NAME"                            = azapi_resource.cost_export.name
-    "AzureWebJobsFeatureFlags"                  = "EnableWorkerIndexing"
+    "STORAGE_ACCOUNT_BLOB_ENDPOINT" = azurerm_storage_account.cost_export.primary_blob_endpoint
+    "CONTAINER_NAME"                = azapi_resource.cost_export.name
+    "AzureWebJobsFeatureFlags"      = "EnableWorkerIndexing"
+
+    #HACK: Fix for below issue where the azurerm provider creates and populates these settings, breaking deployment when using user-assigned identity for authentication with the deployment storage account
+    # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
+    "AzureWebJobsStorage"                  = ""
+    "DEPLOYMENT_STORAGE_CONNECTION_STRING" = ""
+
     "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
-    # The queue-trigger identity-based connection must name the user-assigned identity explicitly:
-    # unlike a system-assigned identity, the host cannot infer which identity to use otherwise.
     "StorageAccountManagedIdentity__credential" = "managedidentity"
     "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
+
+    "AzureWebJobsStorage__credential"      = "managedidentity"
+    "AzureWebJobsStorage__clientId"        = azurerm_user_assigned_identity.cost_export.client_id
+    "AzureWebJobsStorage__blobServiceUri"  = "https://${azurerm_storage_account.deployment.name}.blob.core.windows.net/"
+    "AzureWebJobsStorage__queueServiceUri" = "https://${azurerm_storage_account.deployment.name}.queue.core.windows.net/"
+
     # Consumed by the function app code (common.py) so ManagedIdentityCredential targets this identity.
     "MANAGED_IDENTITY_CLIENT_ID" = azurerm_user_assigned_identity.cost_export.client_id
     "ENTRA_APP_CLIENT_ID"        = local.entra_app_client_id
@@ -110,6 +111,14 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "ROOT_FOLDER_PATH"    = local.focus_directory_name
     "LOGGING_LEVEL"       = var.logging_level
     "COST_MGMT_SUFFIX"    = local.cost_mgmt_suffix
+  }
+
+  lifecycle {
+    # public_network_access_enabled is the create-time state only (open when deploy_from_external_network
+    # so the external runner can reach the SCM endpoint). Thereafter it is toggled out-of-band around the
+    # code publish by the null_resources below - opened before publish, closed after. Ignoring it stops
+    # that toggling from showing as perpetual drift on every plan.
+    ignore_changes = [public_network_access_enabled]
   }
 }
 
@@ -169,7 +178,7 @@ resource "null_resource" "publish_function_code" {
     publish_code_command = local.publish_code_command
   }
 
-  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app]
+  depends_on = [azurerm_function_app_flex_consumption.cost_export, azurerm_role_assignment.grant_deployer_cost_export_blob, azurerm_role_assignment.grant_func_deployment_blob_contributor, azurerm_role_assignment.grant_func_deployment_queue_contributor, time_sleep.wait_for_function_deployment_rbac, azurerm_private_endpoint.deployment, azurerm_private_endpoint.function_app, null_resource.set_deployment_storage_public_network_access_enabled, null_resource.set_function_app_public_network_access_enabled]
 }
 
 # Backfill runs create one-off Cost Management export jobs ("focus-backfill{suffix}-<account>-<year>-<month>")
@@ -220,6 +229,55 @@ resource "null_resource" "backfill_exports_cleanup_warning" {
   }
 }
 
+# Public network access on the deployment storage account and function app is toggled around the code
+# publish rather than left open: opened before the publish (the external-network runner - and, in the
+# BYO-DNS-resolver scenario, the host - must reach the SCM/storage endpoints), then closed again after.
+# Both resources carry lifecycle { ignore_changes = [public_network_access_enabled] }, so this
+# out-of-band toggling no longer surfaces as perpetual drift. The "enabled" resources below run before
+# null_resource.publish_function_code (which depends_on them); the "disabled" resources run after it.
+resource "null_resource" "set_deployment_storage_public_network_access_enabled" {
+  count = local.deployment_storage_allow_public_access ? 1 : 0
+
+  provisioner "local-exec" {
+    interpreter = ["pwsh", "-NoProfile", "-Command"]
+    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --public-network-access Enabled"
+  }
+
+  triggers = {
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
+  }
+}
+
+resource "null_resource" "set_function_app_public_network_access_enabled" {
+  count = var.deploy_from_external_network ? 1 : 0
+
+  provisioner "local-exec" {
+    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Enabled"
+  }
+
+  triggers = {
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
+  }
+}
+
+resource "null_resource" "set_deployment_storage_public_network_access_disabled" {
+  count = local.deployment_storage_allow_public_access ? 1 : 0
+
+  provisioner "local-exec" {
+    interpreter = ["pwsh", "-NoProfile", "-Command"]
+    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --public-network-access Disabled"
+  }
+
+  triggers = {
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
+  }
+
+  depends_on = [null_resource.publish_function_code]
+}
+
 resource "null_resource" "set_function_app_public_network_access_disabled" {
   count = var.deploy_from_external_network ? 1 : 0
 
@@ -228,7 +286,8 @@ resource "null_resource" "set_function_app_public_network_access_disabled" {
   }
 
   triggers = {
-    always_run = timestamp()
+    src_md5              = data.archive_file.function.output_md5
+    publish_code_command = local.publish_code_command
   }
 
   depends_on = [null_resource.publish_function_code]

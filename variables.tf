@@ -145,6 +145,67 @@ variable "tags" {
   default     = {}
 }
 
+variable "private_endpoints_manage_dns_zone_group" {
+  description = "Whether to manage private DNS integration for private endpoints with this module. If set to false, private DNS zone groups and records must be managed externally, for example by Azure Policy."
+  type        = bool
+  default     = true
+}
+
+variable "use_existing_private_dns_zones" {
+  description = "If true, use existing private DNS zones provided via existing_private_dns_zone_ids instead of creating them in this module when private_endpoints_manage_dns_zone_group is enabled"
+  type        = bool
+  default     = false
+}
+
+variable "link_existing_private_dns_zones_to_vnet" {
+  description = "When use_existing_private_dns_zones is true, whether to create virtual network links from the existing private DNS zones to the module virtual network. Leave as false when your DNS zones are centrally managed (e.g. via a Private DNS Resolver hub) and already linked to the VNet."
+  type        = bool
+  default     = false
+}
+
+variable "existing_private_dns_zone_ids" {
+  description = <<-EOT
+Map of existing private DNS zone IDs keyed by blob, queue, and sites.
+
+Example:
+{
+  blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+  queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
+  sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
+}
+EOT
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = !var.private_endpoints_manage_dns_zone_group || !var.use_existing_private_dns_zones || alltrue([
+      for zone in ["blob", "queue", "sites"] :
+      contains(keys(var.existing_private_dns_zone_ids), zone)
+    ])
+    error_message = "When private_endpoints_manage_dns_zone_group and use_existing_private_dns_zones are both true, existing_private_dns_zone_ids must include keys: blob, queue, and sites."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, zone_id in var.existing_private_dns_zone_ids :
+      can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.Network/privateDnsZones/[^/]+$", zone_id))
+    ])
+    error_message = "Each existing_private_dns_zone_ids value must be a valid private DNS zone resource ID."
+  }
+
+  validation {
+    condition = !var.private_endpoints_manage_dns_zone_group || !var.use_existing_private_dns_zones || alltrue([
+      for zone, expected_name in {
+        blob  = "privatelink.blob.core.windows.net"
+        queue = "privatelink.queue.core.windows.net"
+        sites = "privatelink.azurewebsites.net"
+      } :
+      try(lower(split("/", var.existing_private_dns_zone_ids[zone])[8]) == lower(expected_name), false)
+    ])
+    error_message = "existing_private_dns_zone_ids must use Azure privatelink zone names matching each key (blob, queue, sites)."
+  }
+}
+
 variable "log_analytics_workspace_id" {
   description = "Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created."
   type        = string

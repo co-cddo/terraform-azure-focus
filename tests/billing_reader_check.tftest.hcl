@@ -2,26 +2,12 @@ mock_provider "azurerm" {}
 mock_provider "azuread" {}
 mock_provider "azapi" {}
 
+#region override resource
 override_resource {
   target = random_string.unique
   values = {
     result = "test1234"
     id     = "test1234"
-  }
-}
-
-override_data {
-  target = data.azurerm_virtual_network.existing
-  values = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
-  }
-}
-
-override_data {
-  target = data.azurerm_client_config.current
-  values = {
-    tenant_id = "00000000-0000-0000-0000-000000000001"
-    object_id = "00000000-0000-0000-0000-000000000002"
   }
 }
 
@@ -82,6 +68,53 @@ override_resource {
   }
 }
 
+override_resource {
+  target = azapi_resource_action.add_role_assignment["test-billing-account"]
+  values = {
+    id = "/providers/Microsoft.Billing/billingAccounts/test-billing-account/billingRoleAssignments/00000000-0000-0000-0000-000000000000"
+    output = {
+      id = "/providers/Microsoft.Billing/billingAccounts/test-billing-account/billingRoleAssignments/00000000-0000-0000-0000-000000000000"
+    }
+  }
+}
+
+override_resource {
+  target = azurerm_private_dns_zone.sites[0]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
+  }
+}
+
+override_resource {
+  target = azurerm_private_dns_zone.blob[0]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+  }
+}
+
+override_resource {
+  target = azurerm_private_dns_zone.queue[0]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
+  }
+}
+
+override_resource {
+  target = azurerm_private_dns_zone.file[0]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+  }
+}
+
+override_resource {
+  target = azurerm_private_dns_zone.table[0]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.Network/privateDnsZones/privatelink.table.core.windows.net"
+  }
+}
+#endregion
+
+#region override data
 override_data {
   target = data.azapi_resource_list.billing_role_definitions["test-billing-account"]
   values = {
@@ -96,15 +129,21 @@ override_data {
   }
 }
 
-override_resource {
-  target = azapi_resource_action.add_role_assignment["test-billing-account"]
+override_data {
+  target = data.azurerm_virtual_network.existing
   values = {
-    id = "/providers/Microsoft.Billing/billingAccounts/test-billing-account/billingRoleAssignments/00000000-0000-0000-0000-000000000000"
-    output = {
-      id = "/providers/Microsoft.Billing/billingAccounts/test-billing-account/billingRoleAssignments/00000000-0000-0000-0000-000000000000"
-    }
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
   }
 }
+
+override_data {
+  target = data.azurerm_client_config.current
+  values = {
+    tenant_id = "00000000-0000-0000-0000-000000000001"
+    object_id = "00000000-0000-0000-0000-000000000002"
+  }
+}
+#endregion
 
 variables {
   resource_group_name                 = "rg-focus-test"
