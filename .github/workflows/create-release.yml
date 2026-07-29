@@ -4,35 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       increment:
-        description: 'Version bump type'
-        required: true
-        default: 'minor'
+        description: "Version bump type (ignored when base_version is set)"
+        default: patch
         type: choice
         options:
           - major
           - minor
           - patch
-      prerelease:
-        description: 'Create a release candidate (vx.x.x-rc.x)'
+      pre_release:
+        description: "Create a release candidate (vx.x.x-rc.x)"
         required: false
         default: false
         type: boolean
-  workflow_call:
-    inputs:
-      increment:
-        description: 'Version bump type'
-        required: true
-        default: 'minor'
+      base_version:
+        description: "Force a base version, e.g. v3.2.0. Overrides increment and useful if you want to create/bump a pre-release version number with an older base than the latest release candidate"
+        required: false
+        default: ""
         type: string
-      prerelease:
-        description: 'Create a release candidate (vx.x.x-rc.x)'
-        required: false
-        default: false
-        type: boolean
-    outputs:
-      tag:
-        description: 'The new release tag'
-        value: ${{ jobs.release.outputs.new_tag }}
 
 permissions:
   contents: write
@@ -40,14 +28,19 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    outputs:
-      new_tag: ${{ steps.set_output.outputs.new_tag }}
-
     steps:
-      - name: Validate increment input
+      - name: Validate inputs
+        env:
+          INCREMENT: ${{ inputs.increment }}
+          BASE_VERSION: ${{ inputs.base_version }}
         run: |
-          if [[ "${{ inputs.increment }}" != "major" && "${{ inputs.increment }}" != "minor" && "${{ inputs.increment }}" != "patch" ]]; then
-            echo "Error: 'increment' must be 'major', 'minor', or 'patch', got '${{ inputs.increment }}'."
+          if [[ "$INCREMENT" != "major" && "$INCREMENT" != "minor" && "$INCREMENT" != "patch" ]]; then
+            echo "Error: 'increment' must be 'major', 'minor', or 'patch', got '$INCREMENT'."
+            exit 1
+          fi
+
+          if [[ -n "$BASE_VERSION" && ! "$BASE_VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: 'base_version' must look like 'v1.2.3', got '$BASE_VERSION'."
             exit 1
           fi
 
@@ -58,45 +51,75 @@ jobs:
 
       - name: Calculate Next Version
         id: version
+        env:
+          PRE_RELEASE: ${{ inputs.pre_release }}
+          INCREMENT: ${{ inputs.increment }}
+          BASE_VERSION: ${{ inputs.base_version }}
         run: |
-          PRERELEASE="${{ inputs.prerelease }}"
-          INCREMENT="${{ inputs.increment }}"
+          # True when $1 is a higher version than $2, comparing the x.y.z core only
+          version_gt() {
+            local a="${1#v}" b="${2#v}"
+            [ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n 1)" = "$a" ]
+          }
 
-          # Find the latest stable tag (no prerelease suffix)
+          # Find the latest stable tag (no pre-release suffix)
           LATEST_STABLE=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
           echo "Latest stable tag: ${LATEST_STABLE:-none}"
 
           # Release notes are generated against this tag, so leave it empty on the
           # first ever release rather than referencing a tag that does not exist
-          echo "PREVIOUS_TAG=$LATEST_STABLE" >> $GITHUB_ENV
+          echo "PREVIOUS_TAG=$LATEST_STABLE" >> "$GITHUB_ENV"
 
-          # Parse the stable version
-          VERSION=${LATEST_STABLE:-v0.0.0}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION#v}"
-          MAJOR=${MAJOR:-0}
-          MINOR=${MINOR:-0}
-          PATCH=${PATCH:-0}
+          if [ -n "$BASE_VERSION" ]; then
+            TARGET_BASE="v${BASE_VERSION#v}"
+            echo "Base version forced by input: $TARGET_BASE"
+          else
+            # Parse the stable version
+            VERSION=${LATEST_STABLE:-v0.0.0}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION#v}"
+            MAJOR=${MAJOR:-0}
+            MINOR=${MINOR:-0}
+            PATCH=${PATCH:-0}
 
-          # Apply the increment to get the target base version
-          if [ "$INCREMENT" = "major" ]; then
-            MAJOR=$((MAJOR + 1))
-            MINOR=0
-            PATCH=0
-          elif [ "$INCREMENT" = "minor" ]; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
-          elif [ "$INCREMENT" = "patch" ]; then
-            PATCH=$((PATCH + 1))
+            # Apply the increment to get the target base version
+            if [ "$INCREMENT" = "major" ]; then
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+            elif [ "$INCREMENT" = "minor" ]; then
+              MINOR=$((MINOR + 1))
+              PATCH=0
+            elif [ "$INCREMENT" = "patch" ]; then
+              PATCH=$((PATCH + 1))
+            fi
+
+            TARGET_BASE="v${MAJOR}.${MINOR}.${PATCH}"
+
+            # An open release candidate line above the incremented stable version
+            # wins, so a follow up RC continues v4.0.0-rc.x rather than silently
+            # opening a new v3.2.0-rc.1 line. Set base_version to start a lower
+            # line on purpose
+            if [ "$PRE_RELEASE" = "true" ]; then
+              HIGHEST_RC_BASE=$(git tag --list 'v*-rc.*' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$' \
+                | sed 's/-rc\..*//' \
+                | sort -V -u \
+                | tail -n 1 || true)
+
+              if [ -n "$HIGHEST_RC_BASE" ] && version_gt "$HIGHEST_RC_BASE" "$TARGET_BASE"; then
+                echo "Continuing open release candidate line $HIGHEST_RC_BASE (increment '$INCREMENT' would have started $TARGET_BASE)"
+                TARGET_BASE="$HIGHEST_RC_BASE"
+              fi
+            fi
           fi
 
-          TARGET_BASE="v${MAJOR}.${MINOR}.${PATCH}"
-
-          if [ "$PRERELEASE" = "true" ]; then
+          if [ "$PRE_RELEASE" = "true" ]; then
             # Highest RC number already used for this target base version. Only
             # well formed RC tags are matched, so a stray tag such as
             # v1.1.0-rc.beta cannot reach the arithmetic below
+            ESCAPED_BASE=$(printf '%s' "$TARGET_BASE" | sed 's/\./\\./g')
             LATEST_RC_NUM=$(git tag --list "${TARGET_BASE}-rc.*" \
-              | grep -E "^v${MAJOR}\.${MINOR}\.${PATCH}-rc\.[0-9]+$" \
+              | grep -E "^${ESCAPED_BASE}-rc\.[0-9]+$" \
               | sed 's/.*-rc\.//' \
               | sort -n \
               | tail -n 1 || true)
@@ -106,8 +129,13 @@ jobs:
             NEW_TAG="$TARGET_BASE"
           fi
 
+          if git rev-parse -q --verify "refs/tags/$NEW_TAG" >/dev/null; then
+            echo "Error: tag $NEW_TAG already exists."
+            exit 1
+          fi
+
           echo "Next tag: $NEW_TAG"
-          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          echo "NEW_TAG=$NEW_TAG" >> "$GITHUB_ENV"
 
       - name: Create Release with GitHub CLI
         env:
@@ -124,7 +152,7 @@ jobs:
           ${GENERATED_NOTES}
           EOF
 
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
+          if [ "${{ inputs.pre_release }}" = "true" ]; then
             gh release create ${{ env.NEW_TAG }} \
               --title "${{ env.NEW_TAG }}" \
               --notes-file release_notes.md \
@@ -135,7 +163,3 @@ jobs:
               --notes-file release_notes.md \
               --latest
           fi
-
-      - name: Set output
-        id: set_output
-        run: echo "new_tag=${{ env.NEW_TAG }}" >> $GITHUB_OUTPUT
