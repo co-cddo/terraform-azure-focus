@@ -61,7 +61,7 @@ prerequisites - unless `manage_role_assignments = false`, in which case they are
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
-| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the important note below. |
+| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
@@ -109,24 +109,18 @@ system topic and for each Cost Management export.
 | Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
 | Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
 
+<a id="ea-billing-role-script"></a>
 > [!IMPORTANT]
-> **Enterprise Agreement (EA) customers** must assign the function identity's
-> billing role manually after `terraform apply`. This module cannot do it - it
-> requires Enterprise Administrator privileges. The
-> `billing_role_assignment_manual_action_required`
-> [output](#output_billing_role_assignment_manual_action_required) prints the
-> ready-to-run remediation script.
->
-> **Microsoft Customer Agreement (MCA) customers** normally have the billing
-> role assigned automatically by the module. However, because the assignment
-> is a one-shot API call (not a managed resource), Terraform cannot detect
-> when it goes missing. The same output fires when the
-> `billing_reader_assignments` check detects a gap - for example if the
-> assignment was removed out-of-band or the managed identity was rebuilt and
-> the grant did not re-fire.
->
-> Until the billing role is in place, the FOCUS cost export and backfill will
-> not work.
+> **Enterprise Agreement (EA) customers** must manually add [EnrollmentReader](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal) role assignment(s) after `terraform apply`.
+> It requires Enterprise Administrator privileges so the module cannot do it.
+> Until this step is completed, the function will be unable to create backfill exports in Cost Management + Billing.
+> Run [NewBillingRoleAssignment.ps1](https://github.com/co-cddo/terraform-azure-focus/blob/main/scripts/NewBillingRoleAssignment.ps1) to complete this task for each EA billing account (often just one).
+> Note that billing account role assignments for service principals do not appear in the portal.
+
+```pwsh
+# NewBillingRoleAssignment.ps1 usage example
+./NewBillingRoleAssignment.ps1 -BillingAccountID <billing account id> -ServicePrincipalObjectID <object id of function app managed identity> -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement
+```
 
 #### Why these specific grants
 
