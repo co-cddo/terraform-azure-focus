@@ -117,13 +117,13 @@ variable "is_enterprise_customer" {
 }
 
 variable "management_group_id" {
-  description = "[optional] Name of the management group that scopes the carbon emissions and Azure Advisor feeds: both the two role assignments created for the function identity and the set of subscriptions those exporters enumerate. Defaults to null, meaning the Tenant Root management group. Set this to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover. Supply the management group name only (e.g. 'mg-platform'), not its full resource ID. FOCUS cost exports are scoped by billing account and are not affected."
+  description = "[optional] ID of the management group that scopes the carbon emissions and Azure Advisor feeds: both the two role assignments created for the function identity and the set of subscriptions those exporters enumerate. This is the value in the portal's 'ID' column (e.g. 'alz'), NOT the display name in its 'Name' column, and not the full '/providers/Microsoft.Management/managementGroups/...' resource ID. Defaults to null, meaning the Tenant Root management group, whose ID is the tenant ID. Set this to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover. FOCUS cost exports are scoped by billing account and are not affected."
   type        = string
   default     = null
 
   validation {
     condition     = var.management_group_id == null || can(regex("^[-_().a-zA-Z0-9]{1,90}$", var.management_group_id))
-    error_message = "management_group_id must be null or a management group name (1-90 characters, letters, digits, hyphens, underscores, periods or parentheses) - not a full resource ID."
+    error_message = "management_group_id must be null or a management group ID (1-90 characters, letters, digits, hyphens, underscores, periods or parentheses) - the portal's 'ID' column, not its display name and not a full resource ID."
   }
 }
 
