@@ -116,6 +116,17 @@ variable "is_enterprise_customer" {
   default     = false
 }
 
+variable "management_group_id" {
+  description = "[optional] Name of the management group that scopes the carbon emissions and Azure Advisor feeds: both the two role assignments created for the function identity and the set of subscriptions those exporters enumerate. Defaults to null, meaning the Tenant Root management group. Set this to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover. Supply the management group name only (e.g. 'mg-platform'), not its full resource ID. FOCUS cost exports are scoped by billing account and are not affected."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.management_group_id == null || can(regex("^[-_().a-zA-Z0-9]{1,90}$", var.management_group_id))
+    error_message = "management_group_id must be null or a management group name (1-90 characters, letters, digits, hyphens, underscores, periods or parentheses) - not a full resource ID."
+  }
+}
+
 variable "manage_role_assignments" {
   description = "Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage_entra_app_role_assignment."
   type        = bool

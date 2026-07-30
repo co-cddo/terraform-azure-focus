@@ -59,7 +59,7 @@ prerequisites - unless `manage_role_assignments = false`, in which case they are
 |---|---|---|
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
-| Tenant Root management group | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
+| Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
 
@@ -80,6 +80,14 @@ prerequisites - unless `manage_role_assignments = false`, in which case they are
 > - `Advisor Recommendations Contributor`
 
 ### b) Privileges assigned by the module
+
+> [!NOTE]
+> These two grants, and the set of subscriptions the carbon and Advisor exporters
+> enumerate, are both scoped by `management_group_id`. It defaults to the Tenant Root
+> management group. Set it to a child management group when tenant-root role assignments
+> are not permitted, or to limit the estate these two feeds cover. FOCUS cost exports are
+> scoped by billing account and are unaffected, so narrowing it makes carbon and Advisor
+> data cover a subset of the subscriptions the cost data covers.
 
 The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
 system topic and for each Cost Management export.
@@ -105,8 +113,8 @@ system topic and for each Cost Management export.
 | Function identity | `Owner` (ABAC-constrained) | cost-export storage account | Allows Cost Management to assign `Storage Blob Data Contributor` to each export's own identity. The condition restricts the function to assigning/removing **only** that role - no privilege escalation. For more information, see [Cost Management export prerequisites](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-improved-exports#prerequisites) (the proposed custom role is not in fact sufficient and includes `Microsoft.Authorization/roleAssignments/write` anyway). |
 | Function identity | Storage Blob Data Contributor | deployment storage account | Flex Consumption host storage: the host mounts the deployment package and manages its own blob leases/locks with the app identity (shared keys are disabled on this account). Without it the app is unhealthy after a successful zip deploy. |
 | Function identity | Storage Queue Data Contributor | deployment storage account | Flex Consumption host storage: the host's queue singleton / timer leases. |
-| Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group | `CarbonEmissionsExporter` reads carbon data across all subscriptions. |
-| Function identity | Advisor Recommendations Contributor | Tenant Root management group | `AdvisorRecommendationsExporter` reads Advisor recommendations across all subscriptions. Least-privilege built-in for this - see note below. |
+| Function identity | Carbon Optimization Reader (built-in) | Tenant Root management group, or `management_group_id` | `CarbonEmissionsExporter` reads carbon data across the subscriptions in scope. |
+| Function identity | Advisor Recommendations Contributor | Tenant Root management group, or `management_group_id` | `AdvisorRecommendationsExporter` reads Advisor recommendations across the subscriptions in scope. Least-privilege built-in for this - see note below. |
 | Function identity | Billing account reader | MCA Billing account(s) (if any) | Enumerate subscriptions and create/run FOCUS cost exports. |
 | Event Grid system topic identity | Storage Queue Data Message Sender | cost-export storage account | Deliver blob-created events into the storage queue. |
 | Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
@@ -653,6 +661,7 @@ pre-commit hook.
 | <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
 | <a name="input_manage_entra_app_role_assignment"></a> [manage\_entra\_app\_role\_assignment](#input\_manage\_entra\_app\_role\_assignment) | Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Only takes effect when bringing your own app registration (existing\_entra\_application\_client\_id set); when the module creates the app registration it already holds the privileges to create the binding, so this is forced true. Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra\_app\_role\_assignment\_manual\_action\_required' output prints the details for your Entra team to create it out-of-band. | `bool` | `true` | no |
 | <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage\_entra\_app\_role\_assignment. | `bool` | `true` | no |
+| <a name="input_management_group_id"></a> [management\_group\_id](#input\_management\_group\_id) | [optional] Name of the management group that scopes the carbon emissions and Azure Advisor feeds: both the two role assignments created for the function identity and the set of subscriptions those exporters enumerate. Defaults to null, meaning the Tenant Root management group. Set this to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover. Supply the management group name only (e.g. 'mg-platform'), not its full resource ID. FOCUS cost exports are scoped by billing account and are not affected. | `string` | `null` | no |
 | <a name="input_private_endpoints_manage_dns_zone_group"></a> [private\_endpoints\_manage\_dns\_zone\_group](#input\_private\_endpoints\_manage\_dns\_zone\_group) | Whether to manage private DNS integration for private endpoints with this module. If set to false, private DNS zone groups and records must be managed externally, for example by Azure Policy. | `bool` | `true` | no |
 | <a name="input_publish_function_code"></a> [publish\_function\_code](#input\_publish\_function\_code) | Whether the module publishes the function app code via the bundled 'az functionapp deployment source config-zip' step. Set to false when the function code is deployed out-of-band (for example by a separate CI pipeline), which also avoids the Azure CLI dependency in environments where it is unavailable such as 'terraform test'. | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
