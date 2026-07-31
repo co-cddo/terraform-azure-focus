@@ -81,18 +81,6 @@ prerequisites - unless `manage_role_assignments = false`, in which case they are
 
 ### b) Privileges assigned by the module
 
-> [!NOTE]
-> These two grants, and the set of subscriptions the carbon and Advisor exporters
-> enumerate, are both scoped by `management_group_id`. It defaults to the Tenant Root
-> management group. Set it to a child management group when tenant-root role assignments
-> are not permitted, or to limit the estate these two feeds cover. FOCUS cost exports are
-> scoped by billing account and are unaffected, so narrowing it makes carbon and Advisor
-> data cover a subset of the subscriptions the cost data covers.
->
-> Supply the management group's **ID**, which is the `ID` column in the portal's
-> Management groups blade (for example `alz`), not the display name shown in its `Name`
-> column. Note that the `azurerm_management_group` data source calls this field `name`.
-
 The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
 system topic and for each Cost Management export.
 
