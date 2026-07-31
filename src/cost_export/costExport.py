@@ -121,7 +121,14 @@ def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx:
         else:
           logger.info(f"....{account_idx}: {current_month}/{current_year} skip existing is false but force overwrite is also false")
       else:
-        logger.warning(f"....{account_idx}: {current_month}/{current_year} export task does not yet exist; release the backfill schedule lock")
+        # The month has no data and no export task. This is where a deployment lands when export
+        # creation failed (typically an EA billing account whose manual role assignment was never
+        # made): every create is refused, the schedule lock is stamped anyway, and from then on
+        # create_cost_export_backfill_tasks is skipped. Recreate here so the run phase retries each
+        # weekday and recovers on its own once the role assignment is in place; without it the
+        # month is stuck with nothing able to produce it again.
+        logger.warning(f"....{account_idx}: {current_month}/{current_year} export task does not exist and data is missing; recreating")
+        cost_mgmt_export_create(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
     else:
       logger.info(f"....{account_idx}: {current_month}/{current_year} export already exists and skipping is enabled...")
 

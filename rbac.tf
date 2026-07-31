@@ -65,6 +65,14 @@ resource "azuread_app_role_assignment" "aws_app" {
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
+check "entra_app_role_assignment" {
+  assert {
+    condition = local.manage_entra_app_role_assignment
+
+    error_message = "manage_entra_app_role_assignment is false, so the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity out-of-band by your Entra team. Until then the function app cannot authenticate to AWS and no data reaches S3. See the entra_app_role_assignment_manual_action_required output for the commands to run."
+  }
+}
+
 # Apply-time data-plane access for the deployer: the cost_export storage account disables shared
 # keys, so the provider reads blob + queue properties over Entra ID during create/refresh and needs
 # both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to

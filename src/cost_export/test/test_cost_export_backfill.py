@@ -265,5 +265,57 @@ class RunCostExportBackfillReturnValueTest(unittest.TestCase):
         self.run_lock_create.assert_not_called()
 
 
+class MissingExportTaskRecreationTest(unittest.TestCase):
+    """A month with no data and no export task must have the task recreated.
+
+    This is where a deployment lands when export creation was refused, typically an EA billing
+    account whose manual role assignment was never made: the schedule lock is stamped regardless,
+    so create_cost_export_backfill_tasks never runs again and only the run phase can rebuild the
+    task. Without that the deployment is permanently stalled.
+    """
+
+    def setUp(self):
+        patchers = {
+            "until": mock.patch.object(
+                costExport, "get_backfill_until_month_year", return_value=FIXED_UNTIL_MONTH_YEAR
+            ),
+            "task_exists": mock.patch.object(costExport, "cost_mgmt_export_exists"),
+            "run": mock.patch.object(costExport, "cost_mgmt_export_run", return_value=True),
+            "create": mock.patch.object(costExport, "cost_mgmt_export_create"),
+            "data_exists": mock.patch.object(costExport, "cost_export_exists"),
+        }
+        self.mocks = {name: patcher.start() for name, patcher in patchers.items()}
+        for patcher in patchers.values():
+            self.addCleanup(patcher.stop)
+        self.start_date = datetime(2024, 1, 1)
+
+    def _run(self):
+        return costExport.run_cost_export_backfill(
+            start_date=self.start_date, account_id="acct", account_idx=0
+        )
+
+    def test_missing_task_with_missing_data_is_recreated(self):
+        self.mocks["data_exists"].return_value = False
+        self.mocks["task_exists"].return_value = False
+        self._run()
+        self.assertTrue(self.mocks["create"].called)
+        self.mocks["run"].assert_not_called()
+
+    def test_existing_task_is_not_recreated(self):
+        self.mocks["data_exists"].return_value = False
+        self.mocks["task_exists"].return_value = True
+        self._run()
+        self.mocks["create"].assert_not_called()
+        self.assertTrue(self.mocks["run"].called)
+
+    def test_completed_month_is_left_alone(self):
+        # Data present and skipping enabled: nothing to create and nothing to run.
+        self.mocks["data_exists"].return_value = True
+        self.mocks["task_exists"].return_value = True
+        self.assertEqual(self._run(), 0)
+        self.mocks["create"].assert_not_called()
+        self.mocks["run"].assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
