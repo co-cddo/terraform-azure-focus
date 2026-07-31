@@ -168,12 +168,12 @@ def extract_billing_account_from_blob_path(blob_name):
                     if len(parts) >= 5:
                         return int(parts[-3])
                 except (ValueError, IndexError) as e:
-                    logging.debug(f"Failed to parse blob path part '{part}': {str(e)}")
+                    logger.debug(f"Failed to parse blob path part '{part}': {str(e)}")
                     continue
 
         logger.warning(f"Could not extract billing account index from blob path: {blob_name}")
         return None
 
     except Exception as e:
-        logging.exception(f"Error extracting billing account from blob path: {str(e)}")
+        logger.exception(f"Error extracting billing account from blob path: {str(e)}")
         return None
