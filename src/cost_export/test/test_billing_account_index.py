@@ -17,7 +17,8 @@ from unittest import mock
 # billing uses flat imports (`from api.tokens import ...`), so the package directory has to be
 # importable directly.
 COST_EXPORT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if COST_EXPORT_DIR not in sys.path:
+_COST_EXPORT_DIR_ALREADY_ON_PATH = COST_EXPORT_DIR in sys.path
+if not _COST_EXPORT_DIR_ALREADY_ON_PATH:
     sys.path.insert(0, COST_EXPORT_DIR)
 
 # billing imports requests and api.tokens at module scope, but the parser under test touches
@@ -46,6 +47,13 @@ def tearDownModule():
     for name in _REPLACED_MODULES:
         sys.modules.pop(name, None)
     sys.modules.update(_MODULES_BEFORE)
+    # Undo the sys.path.insert done at import time so we don't change import resolution for
+    # other test modules; only remove it if we were the ones who added it.
+    if not _COST_EXPORT_DIR_ALREADY_ON_PATH:
+        try:
+            sys.path.remove(COST_EXPORT_DIR)
+        except ValueError:
+            pass
 
 
 class ExtractBillingAccountIndexTests(unittest.TestCase):
