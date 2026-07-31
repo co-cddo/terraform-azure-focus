@@ -59,7 +59,13 @@ def decrement_month_year(month: int, year: int) -> Tuple[int, int]:
 
   return month, year
 
-def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, account_idx: int) -> None:
+def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, account_idx: int) -> bool:
+  """Create the export task for every month in the range. Returns True only if all now exist.
+
+  cost_mgmt_export_create reports failure by returning False rather than raising, so the caller
+  needs this to tell a fully scheduled account from one where every create was refused (typically
+  an EA billing account whose manual role assignment was never made).
+  """
   logger.info(f"create_cost_export_backfill_tasks ({account_idx}) for billing account: {account_id}")
 
   # iterate over month/year from backfill start date
@@ -69,16 +75,20 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
   until_month, until_year = get_backfill_until_month_year()
   logger.info(f"From {current_month}/{current_year} to {until_month}/{until_year}...")
 
+  all_created: bool = True
   while (current_year, current_month) <= (until_year, until_month):
     logger.info(f"....{account_idx}: {current_month}/{current_year}")
 
     # check if the cost export task already exists; only create if not exists
     if not cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
-      cost_mgmt_export_create(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
+      if not cost_mgmt_export_create(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
+        all_created = False
     else:
       logger.debug("....{account_idx}: {current_month}/{current_year} export task already exists")
 
     current_month, current_year = increment_month_year(current_month, current_year)
+
+  return all_created
 
 def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx: int, skip_existing: bool = True, force_overwrite: bool = False) -> int:
   MAX_NUMBER_OF_EXPORT_JOBS_RUNNING: int = 6
@@ -121,14 +131,7 @@ def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx:
         else:
           logger.info(f"....{account_idx}: {current_month}/{current_year} skip existing is false but force overwrite is also false")
       else:
-        # The month has no data and no export task. This is where a deployment lands when export
-        # creation failed (typically an EA billing account whose manual role assignment was never
-        # made): every create is refused, the schedule lock is stamped anyway, and from then on
-        # create_cost_export_backfill_tasks is skipped. Recreate here so the run phase retries each
-        # weekday and recovers on its own once the role assignment is in place; without it the
-        # month is stuck with nothing able to produce it again.
-        logger.warning(f"....{account_idx}: {current_month}/{current_year} export task does not exist and data is missing; recreating")
-        cost_mgmt_export_create(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year)
+        logger.warning(f"....{account_idx}: {current_month}/{current_year} export task does not yet exist; release the backfill schedule lock")
     else:
       logger.info(f"....{account_idx}: {current_month}/{current_year} export already exists and skipping is enabled...")
 
@@ -151,17 +154,22 @@ def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = Fals
 
   # first check if the cost export backill schedule lock exists
   if not cost_export_backfill_schedule_lock_exists():
+    all_accounts_scheduled: bool = True
     for idx, account_id in Config.billing_account_mapping.items():
       logger.info(f"Schedule for Billing Account ({idx}): {account_id}")
 
-      create_cost_export_backfill_tasks(start_date=start_date, account_idx=int(idx), account_id=account_id)
+      if not create_cost_export_backfill_tasks(start_date=start_date, account_idx=int(idx), account_id=account_id):
+        logger.warning(f"Billing Account ({idx}): {account_id} did not fully schedule; leaving the schedule lock unstamped so the next run retries")
+        all_accounts_scheduled = False
 
     # only lock the schedule once every billing account has had its full set of export tasks
-    #  created; if any account above raised, we skip this and retry the whole schedule next run
-    #  (task creation is idempotent). Skip locking entirely when no billing accounts are
-    #  configured (e.g. missing/invalid BILLING_ACCOUNT_MAPPING) so a misconfiguration doesn't
-    #  stamp a global lock that blocks scheduling once accounts are added.
-    if Config.billing_account_mapping:
+    #  created; if any account above raised, or reported a task it could not create, we skip this
+    #  and retry the whole schedule next run (task creation is idempotent). That retry is what
+    #  recovers a billing account whose role assignment was missing at first run. Skip locking
+    #  entirely when no billing accounts are configured (e.g. missing/invalid
+    #  BILLING_ACCOUNT_MAPPING) so a misconfiguration doesn't stamp a global lock that blocks
+    #  scheduling once accounts are added.
+    if Config.billing_account_mapping and all_accounts_scheduled:
       cost_export_backfill_schedule_lock_create()
 
   else:
