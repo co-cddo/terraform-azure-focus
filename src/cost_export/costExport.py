@@ -60,7 +60,7 @@ def decrement_month_year(month: int, year: int) -> Tuple[int, int]:
   return month, year
 
 def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, account_idx: int) -> bool:
-  """Create the export task for every month in the range. Returns True only if all now exist.
+  """Create or update the export task for every month in the range. True only if all succeeded.
 
   cost_mgmt_export_create reports failure by returning False rather than raising, so the caller
   needs this to tell a fully scheduled account from one where every create was refused (typically
@@ -79,12 +79,12 @@ def create_cost_export_backfill_tasks(start_date: datetime, account_id: str, acc
   while (current_year, current_month) <= (until_year, until_month):
     logger.info(f"....{account_idx}: {current_month}/{current_year}")
 
-    # check if the cost export task already exists; only create if not exists
-    if not cost_mgmt_export_exists(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
-      if not cost_mgmt_export_create(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
-        all_created = False
-    else:
-      logger.debug("....{account_idx}: {current_month}/{current_year} export task already exists")
+    # PUT unconditionally rather than skipping months whose task already exists. The payload carries
+    # this deployment's storage account, so an export left behind by a previous deployment of the
+    # module is repointed at the current one instead of being left delivering to a storage account
+    # that no longer exists. The API is an upsert: 201 on create, 200 on update.
+    if not cost_mgmt_export_create(account_idx=account_idx, account_id=account_id, month=current_month, year=current_year):
+      all_created = False
 
     current_month, current_year = increment_month_year(current_month, current_year)
 
@@ -102,9 +102,12 @@ def run_cost_export_backfill(start_date: datetime, account_id: str, account_idx:
   until_year, until_month = start_date.year, start_date.month
   logger.info(f"From {current_month}/{current_year} to {until_month}/{until_year}...")
 
-  # there could be 100+ export jobs for a 10 year backfill; it is not practical (and subject to quotas)
-  #  to initiate backfill on all jobs. So only initiate 10 at a time. The backfill job will
-  #  keep running every day until all export jobs have executed.
+  # cost_export_backfill_impl caps the range at 7 years, matching the Cost Management REST API's
+  # retention limit for cost and usage datasets, so this is up to 84 months per billing account.
+  # Each export run completes asynchronously in Cost Management (up to a few hours), so running
+  # them all at once would make failures hard to isolate and retry. Only
+  # MAX_NUMBER_OF_EXPORT_JOBS_RUNNING run per call instead; the backfill trigger calls this again
+  # until every month has executed.
   # We know an export has executed if there exists at least one of more objects in the target
   #  S3 bucket directory, so check for export data existing before attempting to run the job
   number_of_jobs_running: int = 0

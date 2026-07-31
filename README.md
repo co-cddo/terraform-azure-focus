@@ -530,8 +530,9 @@ be explicitly set.
 Backfill runs create one-off Cost Management export jobs (named
 `focus-backfill-<int>-<YYYY>-<MM>`) per billing-account scope at
 runtime. These are created by the function app, **not** by Terraform, so they are
-**not** removed when the module is destroyed. Left behind, they count against the
-per-scope Cost Management export quota.
+**not** removed when the module is destroyed. Left behind, they still point at the
+storage account this destroy just removed, so they are broken rather than merely
+unused.
 
 Terraform cannot delete them for you, but `terraform destroy` prints a reminder
 (via the `null_resource.backfill_exports_cleanup_warning` resource). When running
@@ -543,6 +544,26 @@ To clean them up after a destroy:
 - Select the `Exports` tab on the `Cost Management + Billing` blade in the Azure portal
 - Search `focus-backfill-`
 - Multi-select exports and delete in small batches
+
+#### Redeploying into a tenant that has been deployed before
+
+Leftover exports no longer block a redeployment: the function app PUTs every month's
+export task on each scheduling run, which is an upsert, so a task left behind by a
+previous deployment is repointed at the new storage account rather than left delivering
+to the deleted one.
+
+The backfill locks are a different matter. They live in the **S3 bucket**, not in Azure,
+at `<bucket>/<tenant-id>/<root-folder>-cost-backfill-schedule.lock` and
+`-cost-backfill-run.lock`, and they are keyed by tenant rather than by deployment. A
+destroy does not remove them, so a fresh deployment into the same tenant and bucket sees
+the previous deployment's locks and **skips backfill entirely** - both the scheduling and
+the running phase, before any export is even looked at.
+
+> [!IMPORTANT]
+> If you need a redeployment to backfill again, delete those two `.lock` objects from the
+> S3 bucket first. The HTTP `cost-export-backfill` endpoint will not override them: it
+> goes through the same lock check. Leave the exported cost data itself in place unless
+> you want it re-exported, since each month is skipped when its data is already present.
 
 ### Updating Python Dependencies
 

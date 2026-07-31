@@ -307,26 +307,38 @@ class CreateCostExportBackfillTasksResultTest(unittest.TestCase):
         )
 
     def test_returns_true_when_every_create_succeeds(self):
-        self.mocks["task_exists"].return_value = False
         self.mocks["create"].return_value = True
         self.assertTrue(self._create())
 
     def test_returns_false_when_any_create_is_refused(self):
         # Jan to Jun 2025 = 6 months; refuse the third.
-        self.mocks["task_exists"].return_value = False
         self.mocks["create"].side_effect = [True, True, False, True, True, True]
         self.assertFalse(self._create())
 
     def test_returns_false_when_every_create_is_refused(self):
         # The EA shape: no permission, so nothing is ever scheduled.
-        self.mocks["task_exists"].return_value = False
         self.mocks["create"].return_value = False
         self.assertFalse(self._create())
 
-    def test_returns_true_when_all_tasks_already_exist(self):
+    def test_existing_tasks_are_still_put(self):
+        """Months whose task already exists are PUT again rather than skipped.
+
+        A task left behind by a previous deployment still points at that deployment's storage
+        account, which no longer exists. Skipping it leaves the destination stale, the export run
+        fails, and backfill stalls permanently. The PUT is an upsert, so it repoints the task at
+        this deployment's storage account.
+        """
         self.mocks["task_exists"].return_value = True
         self.assertTrue(self._create())
-        self.mocks["create"].assert_not_called()
+        # Jan to Jun 2025 inclusive.
+        self.assertEqual(self.mocks["create"].call_count, 6)
+
+    def test_existence_is_not_consulted(self):
+        # The GET is gone: the upsert makes it redundant and it was the source of the stale
+        # destination bug.
+        self.mocks["create"].return_value = True
+        self._create()
+        self.mocks["task_exists"].assert_not_called()
 
 
 if __name__ == "__main__":
