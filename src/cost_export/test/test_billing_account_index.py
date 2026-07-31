@@ -8,44 +8,38 @@ setting a suffix shifted the index along and the parse silently returned None.
 Run with:  python -m unittest discover -s src/cost_export/test
 """
 
-import os
 import sys
+import os
+import types
 import unittest
 from unittest import mock
 
+# billing uses flat imports (`from api.tokens import ...`), so the package directory has to be
+# importable directly.
 COST_EXPORT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if COST_EXPORT_DIR not in sys.path:
     sys.path.insert(0, COST_EXPORT_DIR)
 
-# common.Config reads these at import time.
-_REQUIRED_ENV = {
-    "ENTRA_APP_CLIENT_ID": "00000000-0000-0000-0000-000000000000",
-    "ENTRA_APP_URN": "api://test",
-    "AWS_ROLE_ARN": "arn:aws:iam::000000000000:role/test",
-    "S3_FOCUS_PATH": "bucket/tenant",
-    "AWS_REGION": "eu-west-2",
-    "STORAGE_ACCOUNT_BLOB_ENDPOINT": "https://test.blob.core.windows.net/",
-    "CONTAINER_NAME": "cost-exports",
-    "ROOT_FOLDER_PATH": "gds-focus-v1",
-    "S3_UTILIZATION_PATH": "bucket/tenant",
-    "S3_RECOMMENDATIONS_PATH": "bucket/tenant",
-    "S3_CARBON_PATH": "bucket/tenant",
-    "CARBON_DIRECTORY_NAME": "gds-carbon-v1",
-    "BACKFILL_START_DATE": "2022-01-01",
-    "STORAGE_CONTAINER": "cost-exports",
-    "STORAGE_RESOURCE_ID": "/subscriptions/x/resourceGroups/y/providers/Microsoft.Storage/storageAccounts/z",
-    "COST_MGMT_SUFFIX": "",
-}
-
-# test_cost_export_backfill stubs these at import time and discovery imports it first
-# (alphabetical), so drop the stubs to get the real modules, then restore sys.modules as found.
-_REPLACED_MODULES = ("common", "api", "api.tokens", "billing")
+# billing imports requests and api.tokens at module scope, but the parser under test touches
+# neither. Stub them so this suite runs against a bare Python: CI installs no runtime
+# dependencies, it just runs unittest. test_cost_export_backfill stubs api/* for its own purposes,
+# so snapshot whatever is in sys.modules and put it back in tearDownModule.
+_REPLACED_MODULES = ("requests", "api", "api.tokens", "billing")
 _MODULES_BEFORE = {name: sys.modules[name] for name in _REPLACED_MODULES if name in sys.modules}
 for _name in _REPLACED_MODULES:
     sys.modules.pop(_name, None)
 
-with mock.patch.dict(os.environ, _REQUIRED_ENV, clear=False):
-    from billing import extract_billing_account_from_blob_path
+sys.modules["requests"] = types.ModuleType("requests")
+
+_api_stub = types.ModuleType("api")
+_api_stub.__path__ = []  # mark as a package so `api.tokens` resolves
+sys.modules["api"] = _api_stub
+
+_tokens_stub = types.ModuleType("api.tokens")
+_tokens_stub.TokenManager = mock.MagicMock(name="TokenManager")
+sys.modules["api.tokens"] = _tokens_stub
+
+from billing import extract_billing_account_from_blob_path  # noqa: E402  (import after stubs)
 
 
 def tearDownModule():
