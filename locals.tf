@@ -13,12 +13,17 @@ locals {
   # exporters enumerate cannot drift apart. The Tenant Root management group ID is the tenant ID.
   management_group_scope = "/providers/Microsoft.Management/managementGroups/${coalesce(var.management_group_id, data.azurerm_client_config.current.tenant_id)}"
 
+  create_resource_group   = var.existing_resource_group_name == null
+  resource_group_name     = local.create_resource_group ? azurerm_resource_group.cost_export[0].name : data.azurerm_resource_group.existing[0].name
+  resource_group_location = local.create_resource_group ? azurerm_resource_group.cost_export[0].location : data.azurerm_resource_group.existing[0].location
+  resource_group_id       = local.create_resource_group ? azurerm_resource_group.cost_export[0].id : data.azurerm_resource_group.existing[0].id
+
   # The az CLI in local-exec authenticates separately from the azurerm provider, so its active
   # subscription can differ from the module's target (e.g. with aliased providers). Pin every az
   # invocation to the resource group's subscription rather than relying on the CLI default.
-  cost_export_subscription_id = split("/", azurerm_resource_group.cost_export.id)[2]
+  cost_export_subscription_id = split("/", local.resource_group_id)[2]
 
-  publish_code_command = "Start-Sleep -Seconds 150; for ($i = 0; $i -lt 3; $i++) { az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id}; if ($LASTEXITCODE -eq 0) { break }; if ($i -lt 2) { Start-Sleep -Seconds 30 } else { exit 1 } }"
+  publish_code_command = "Start-Sleep -Seconds 150; for ($i = 0; $i -lt 3; $i++) { az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${local.resource_group_name} --subscription ${local.cost_export_subscription_id}; if ($LASTEXITCODE -eq 0) { break }; if ($i -lt 2) { Start-Sleep -Seconds 30 } else { exit 1 } }"
   identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
 
   # When no existing app registration client ID is supplied, the module creates the AWS-federation
@@ -129,6 +134,7 @@ locals {
   }
 
   names = {
+    resource_group              = coalesce(var.custom_resource_names.resource_group, "rg-cost-export-${random_string.unique.result}")
     storage_account_cost_export = coalesce(var.custom_resource_names.storage_account_cost_export, "stcostexport${random_string.unique.result}")
     storage_account_deployment  = coalesce(var.custom_resource_names.storage_account_deployment, "stcostexdply${random_string.unique.result}")
     service_plan                = coalesce(var.custom_resource_names.service_plan, "asp-cost-export")

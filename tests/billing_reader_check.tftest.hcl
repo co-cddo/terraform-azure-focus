@@ -27,7 +27,7 @@ override_resource {
 # override_during here). The log_analytics_workspace_id and existing_entra_application_client_id variables
 # prune the workspace and Entra app subtrees so their IDs need no overrides.
 override_resource {
-  target = azurerm_resource_group.cost_export
+  target = azurerm_resource_group.cost_export[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test"
   }
@@ -154,7 +154,6 @@ override_data {
 #endregion
 
 variables {
-  resource_group_name                 = "rg-focus-test"
   virtual_network_name                = "vnet-test"
   virtual_network_resource_group_name = "rg-network-test"
   subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"

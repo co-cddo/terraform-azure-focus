@@ -1,7 +1,7 @@
 resource "azurerm_eventgrid_system_topic" "storage_events" {
   name                = local.names.event_grid_system_topic
-  resource_group_name = azurerm_resource_group.cost_export.name
-  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = local.resource_group_name
+  location            = local.resource_group_location
   source_resource_id  = azurerm_storage_account.cost_export.id
   topic_type          = "Microsoft.Storage.StorageAccounts"
 

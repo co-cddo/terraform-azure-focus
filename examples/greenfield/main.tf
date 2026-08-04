@@ -91,7 +91,6 @@ module "cost_forwarding" {
   virtual_network_name                = azurerm_virtual_network.this.name
   virtual_network_resource_group_name = azurerm_resource_group.networking.name
   location                            = var.location
-  resource_group_name                 = var.resource_group_name
   deploy_from_external_network        = local.deploy_from_external_network
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]

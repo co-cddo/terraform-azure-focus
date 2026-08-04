@@ -12,6 +12,13 @@ ARG TFLINT_URL="https://github.com/terraform-linters/tflint/releases/download/v0
 ARG TRIVY_URL="https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz@sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
 ARG UV_URL="https://github.com/astral-sh/uv/releases/download/0.11.18/uv-aarch64-unknown-linux-gnu.tar.gz@sha256:0f03c6648df1c159557f4222c0f37250f84733fb88d6fc3c16770e17c177a8c9"
 
+# Install the ca-certificate package
+RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates
+# Copy the CA certificate from the context to the build container
+COPY zscaler-root-ca.crt /usr/local/share/ca-certificates/
+# Update the CA certificates in the container
+RUN update-ca-certificates
+
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl unzip xz-utils python3 \

@@ -19,7 +19,6 @@
 | <a name="input_functionapp_subnet_name"></a> [functionapp\_subnet\_name](#input\_functionapp\_subnet\_name) | Name of the function app subnet | `string` | `"functionapp"` | no |
 | <a name="input_location"></a> [location](#input\_location) | Azure region for the cost forwarding resources | `string` | `"uksouth"` | no |
 | <a name="input_network_resource_group_name"></a> [network\_resource\_group\_name](#input\_network\_resource\_group\_name) | Name of the resource group for networking resources | `string` | `"rg-networking"` | no |
-| <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the resource group to create for cost forwarding resources | `string` | `"rg-cost-export"` | no |
 | <a name="input_vnet_name"></a> [vnet\_name](#input\_vnet\_name) | Name of the virtual network | `string` | `"vnet-focus"` | no |
 
 ## Outputs

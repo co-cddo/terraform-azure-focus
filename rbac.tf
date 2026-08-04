@@ -79,7 +79,7 @@ check "entra_app_role_assignment" {
 # propagate before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
   count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_resource_group.cost_export.id
+  scope                = local.resource_group_id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = var.current_principal_type
@@ -87,7 +87,7 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
 
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
   count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_resource_group.cost_export.id
+  scope                = local.resource_group_id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = var.current_principal_type

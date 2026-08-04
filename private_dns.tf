@@ -1,7 +1,7 @@
 resource "azurerm_private_dns_zone" "blob" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "privatelink.blob.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
+  resource_group_name = local.resource_group_name
   tags                = var.tags
 }
 
@@ -9,7 +9,7 @@ resource "azurerm_private_dns_zone" "blob" {
 resource "azurerm_private_dns_zone" "file" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "privatelink.file.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
+  resource_group_name = local.resource_group_name
   tags                = var.tags
 }
 
@@ -17,21 +17,21 @@ resource "azurerm_private_dns_zone" "file" {
 resource "azurerm_private_dns_zone" "table" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "privatelink.table.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
+  resource_group_name = local.resource_group_name
   tags                = var.tags
 }
 
 resource "azurerm_private_dns_zone" "queue" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "privatelink.queue.core.windows.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
+  resource_group_name = local.resource_group_name
   tags                = var.tags
 }
 
 resource "azurerm_private_dns_zone" "sites" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "privatelink.azurewebsites.net"
-  resource_group_name = azurerm_resource_group.cost_export.name
+  resource_group_name = local.resource_group_name
   tags                = var.tags
 }
 
@@ -48,7 +48,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
 resource "azurerm_private_dns_zone_virtual_network_link" "file" {
   count                 = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                  = "file-dns-link"
-  resource_group_name   = azurerm_resource_group.cost_export.name
+  resource_group_name   = local.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.file[0].name
   virtual_network_id    = data.azurerm_virtual_network.existing.id
   tags                  = var.tags
@@ -58,7 +58,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "file" {
 resource "azurerm_private_dns_zone_virtual_network_link" "table" {
   count                 = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                  = "table-dns-link"
-  resource_group_name   = azurerm_resource_group.cost_export.name
+  resource_group_name   = local.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.table[0].name
   virtual_network_id    = data.azurerm_virtual_network.existing.id
   tags                  = var.tags

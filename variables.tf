@@ -1,6 +1,7 @@
-variable "resource_group_name" {
-  description = "Name of the new resource group"
+variable "existing_resource_group_name" {
+  description = "[optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Use when manage_role_assignments is false and the resource group (with its role assignments) must exist before the first apply. Leave null to have the module create the resource group."
   type        = string
+  default     = null
 }
 
 variable "virtual_network_name" {
@@ -238,6 +239,7 @@ variable "custom_resource_names" {
     to destroy and recreate that resource.
   EOT
   type = object({
+    resource_group              = optional(string)
     storage_account_cost_export = optional(string)
     storage_account_deployment  = optional(string)
     service_plan                = optional(string)
