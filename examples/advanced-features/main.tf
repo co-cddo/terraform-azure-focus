@@ -29,6 +29,7 @@ module "example" {
   # The app must expose an 'AssumeRoleWithWebIdentity' app role and the
   # identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding'.
   existing_entra_application_client_id = "00000000-0000-0000-0000-0000000000aa" # Substitute for your client ID here
+  manage_entra_app_role_assignment     = false
 
   # Optional: bring your own private DNS zones instead of module-managed ones.
   use_existing_private_dns_zones = true
