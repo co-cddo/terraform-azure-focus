@@ -8,6 +8,11 @@ locals {
 
   effective_log_analytics_workspace_id = var.log_analytics_workspace_id != null ? var.log_analytics_workspace_id : azurerm_log_analytics_workspace.this[0].id
 
+  # Scope of the carbon and Advisor feeds. The role assignments in rbac.tf and the BILLING_SCOPE app
+  # setting in function_app.tf both derive from this so the grant and the subscriptions the
+  # exporters enumerate cannot drift apart. The Tenant Root management group ID is the tenant ID.
+  management_group_scope = "/providers/Microsoft.Management/managementGroups/${coalesce(var.management_group_id, data.azurerm_client_config.current.tenant_id)}"
+
   # The az CLI in local-exec authenticates separately from the azurerm provider, so its active
   # subscription can differ from the module's target (e.g. with aliased providers). Pin every az
   # invocation to the resource group's subscription rather than relying on the CLI default.

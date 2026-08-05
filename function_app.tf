@@ -98,8 +98,8 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "S3_CARBON_PATH"             = local.aws_target_file_path
     "CARBON_DIRECTORY_NAME"      = local.carbon_directory_name
     "CARBON_API_TENANT_ID"       = data.azurerm_client_config.current.tenant_id
-    # We use the tenant root management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
-    "BILLING_SCOPE" = "/providers/Microsoft.Management/managementGroups/${data.azurerm_client_config.current.tenant_id}"
+    # Management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
+    "BILLING_SCOPE" = local.management_group_scope
     # Mapping of billing account index to billing account ID for S3 path organization
     "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
     "BILLING_AZURE_LOCATION"  = var.location
