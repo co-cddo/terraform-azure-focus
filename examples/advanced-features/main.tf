@@ -18,8 +18,6 @@ module "example" {
   virtual_network_name                = "<existing vnet name>"
   virtual_network_resource_group_name = "<existing vnet resource group name>"
 
-  resource_group_name = "rg-cost-export"
-
   # Comment out the following line if running in the security context of a user principal.
   current_principal_type = "ServicePrincipal"
 
