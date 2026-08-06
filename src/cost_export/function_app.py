@@ -353,8 +353,9 @@ def save_recommendations_to_s3(data, file_name):
         logger.error(f"Error saving recommendations data to S3: {str(e)}", exc_info=True)
         raise
 
+#TODO: revert to 2AM UTC
 @app.function_name(name="AdvisorRecommendationsExporter")
-@app.timer_trigger(schedule="0 0 2 * * *", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 0 13 * * *", arg_name="timer", run_on_startup=False)
 def advisor_recommendations_exporter(timer: func.TimerRequest) -> None:
     """Timer trigger function that exports Azure Advisor cost recommendations daily at 2 AM"""
     utc_timestamp = datetime.now(timezone.utc).isoformat()
@@ -681,8 +682,9 @@ def carbon_emissions_backfill(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500
         )
 
+#TODO: revert to 6AM UTC
 @app.function_name(name="BackfillTrigger")
-@app.timer_trigger(schedule="0 0 6 * * 1-5", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 30 11 * * *", arg_name="timer", run_on_startup=False)
 def backfill_trigger(timer: func.TimerRequest) -> None:
     """Timer trigger function that triggers the running of backfill for both cost export and carbon export.
 
