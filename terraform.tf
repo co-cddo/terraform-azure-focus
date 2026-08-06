@@ -3,32 +3,32 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 4.79.0"
+      version = "~> 4.79"
     }
     azuread = {
       source  = "hashicorp/azuread"
-      version = "> 2.0"
+      version = "~> 3.9"
     }
     azapi = {
       # 2.x for object-typed output on resources and data sources
       source  = "azure/azapi"
-      version = ">= 2.0"
+      version = "~> 2.0"
     }
     time = {
       source  = "hashicorp/time"
-      version = ">= 0.7.0"
+      version = "= 0.14.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = ">= 3.0"
+      version = "~> 3.0"
     }
     archive = {
       source  = "hashicorp/archive"
-      version = ">= 2.0"
+      version = "~> 2.0"
     }
     null = {
       source  = "hashicorp/null"
-      version = ">= 3.0"
+      version = "~> 3.0"
     }
   }
 }

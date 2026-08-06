@@ -637,13 +637,13 @@ pre-commit hook.
 
 | Name | Version |
 |------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.0 |
-| <a name="provider_azapi"></a> [azapi](#provider\_azapi) | >= 2.0 |
-| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | > 2.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.79.0 |
-| <a name="provider_null"></a> [null](#provider\_null) | >= 3.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | >= 3.0 |
-| <a name="provider_time"></a> [time](#provider\_time) | >= 0.7.0 |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | ~> 2.0 |
+| <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~> 2.0 |
+| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.9 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 4.79 |
+| <a name="provider_null"></a> [null](#provider\_null) | ~> 3.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
+| <a name="provider_time"></a> [time](#provider\_time) | = 0.14.0 |
 
 ## Inputs
 
