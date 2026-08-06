@@ -141,7 +141,7 @@ locals {
   }
 
   names = {
-    resource_group              = coalesce(var.custom_resource_names.resource_group, "rg-cost-export-${random_string.unique.result}")
+    resource_group              = coalesce(var.custom_resource_names.resource_group, "rg-cost-export")
     storage_account_cost_export = coalesce(var.custom_resource_names.storage_account_cost_export, "stcostexport${random_string.unique.result}")
     storage_account_deployment  = coalesce(var.custom_resource_names.storage_account_deployment, "stcostexdply${random_string.unique.result}")
     service_plan                = coalesce(var.custom_resource_names.service_plan, "asp-cost-export")
