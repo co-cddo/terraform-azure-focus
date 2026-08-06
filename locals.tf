@@ -132,6 +132,13 @@ locals {
     deployment_blob = null
     function_app    = null
   }
+  diag_overrides = var.custom_resource_names.diagnostic_settings != null ? var.custom_resource_names.diagnostic_settings : {
+    cost_export_blob  = null
+    cost_export_queue = null
+    deployment_blob   = null
+    deployment_queue  = null
+    event_grid        = null
+  }
 
   names = {
     resource_group              = coalesce(var.custom_resource_names.resource_group, "rg-cost-export-${random_string.unique.result}")
@@ -156,5 +163,11 @@ locals {
     psc_storage_queue   = coalesce(local.psc_overrides.storage_queue, "psc-storage-queue-cost-export")
     psc_deployment_blob = coalesce(local.psc_overrides.deployment_blob, "psc-storage-cost-export-deployment")
     psc_function_app    = coalesce(local.psc_overrides.function_app, "psc-func-cost-export")
+
+    diag_cost_export_blob  = coalesce(local.diag_overrides.cost_export_blob, "diag-blob")
+    diag_cost_export_queue = coalesce(local.diag_overrides.cost_export_queue, "diag-queue")
+    diag_deployment_blob   = coalesce(local.diag_overrides.deployment_blob, "diag-blob")
+    diag_deployment_queue  = coalesce(local.diag_overrides.deployment_queue, "diag-queue")
+    diag_event_grid        = coalesce(local.diag_overrides.event_grid, "diag-eventgrid")
   }
 }

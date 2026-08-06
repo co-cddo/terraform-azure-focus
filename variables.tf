@@ -263,6 +263,13 @@ variable "custom_resource_names" {
       deployment_blob = optional(string)
       function_app    = optional(string)
     }))
+    diagnostic_settings = optional(object({
+      cost_export_blob  = optional(string)
+      cost_export_queue = optional(string)
+      deployment_blob   = optional(string)
+      deployment_queue  = optional(string)
+      event_grid        = optional(string)
+    }))
   })
   default = {}
 

@@ -111,7 +111,7 @@ resource "azapi_resource" "deployment" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "cost_export_blob" {
-  name                       = "diag-blob"
+  name                       = local.names.diag_cost_export_blob
   target_resource_id         = "${azurerm_storage_account.cost_export.id}/blobServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
@@ -127,7 +127,7 @@ resource "azurerm_monitor_diagnostic_setting" "cost_export_blob" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "cost_export_queue" {
-  name                       = "diag-queue"
+  name                       = local.names.diag_cost_export_queue
   target_resource_id         = "${azurerm_storage_account.cost_export.id}/queueServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
@@ -143,7 +143,7 @@ resource "azurerm_monitor_diagnostic_setting" "cost_export_queue" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "deployment_blob" {
-  name                       = "diag-blob"
+  name                       = local.names.diag_deployment_blob
   target_resource_id         = "${azurerm_storage_account.deployment.id}/blobServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
@@ -163,7 +163,7 @@ resource "azurerm_monitor_diagnostic_setting" "deployment_blob" {
 # issues (e.g. why a timer didn't fire). Blob (host singleton leases/locks) is already
 # covered by deployment_blob above; table and file services are not in use on this account.
 resource "azurerm_monitor_diagnostic_setting" "deployment_queue" {
-  name                       = "diag-queue"
+  name                       = local.names.diag_deployment_queue
   target_resource_id         = "${azurerm_storage_account.deployment.id}/queueServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 

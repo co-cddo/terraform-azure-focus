@@ -13,7 +13,7 @@ resource "azurerm_eventgrid_system_topic" "storage_events" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "storage_events" {
-  name                       = "diag-eventgrid"
+  name                       = local.names.diag_event_grid
   target_resource_id         = azurerm_eventgrid_system_topic.storage_events.id
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
