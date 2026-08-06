@@ -166,9 +166,6 @@ run "byo_app_strict_separation" {
     error_message = "The manual-action output should be populated in strict separation mode."
   }
 
-  # The binding is the customer's to create and the module cannot detect that they have, so the
-  # check warns for as long as this mode is set.
-  expect_failures = [check.entra_app_role_assignment]
 }
 
 # 4. Module creates the app but manage_entra_app_role_assignment = false: the flag is nonsensical
