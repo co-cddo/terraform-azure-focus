@@ -33,7 +33,7 @@ resource "azuread_application" "aws_app" {
   app_role {
     id                   = random_uuid.app_uuid[0].id
     allowed_member_types = ["User", "Application"]
-    description          = "My role description"
+    description          = "Allows the cost-export managed identity to assume an AWS role via OIDC federation."
     display_name         = "AssumeRole"
     value                = "AssumeRoleWithWebIdentity"
   }

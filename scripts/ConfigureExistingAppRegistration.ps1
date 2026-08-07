@@ -51,7 +51,7 @@ if (-not $appRole) {
 	$guid = New-Guid | Select-Object -ExpandProperty Guid
 	Update-MgApplication -ApplicationId $appRegistration.Id -AppRoles @{
 		AllowedMemberTypes = @('User', 'Application')
-		Description        = 'My role description'
+		Description        = 'Allows the cost-export managed identity to assume an AWS role via OIDC federation.'
 		DisplayName        = 'AssumeRole'
 		Id                 = $guid
 		IsEnabled          = $true
