@@ -7,13 +7,10 @@
 
 param(
 	[Parameter(Mandatory)]
-	[string]$managedIdentityObjectID,
+	[string]$ManagedIdentityClientID,
 
 	[Parameter(Mandatory)]
-	[string]$servicePrincipalObjectID,
-
-	[Parameter(Mandatory)]
-	[string]$appRoleID
+	[string]$AppRegistrationClientID
 )
 
 Import-Module Microsoft.Graph.Applications
@@ -35,10 +32,25 @@ if (-not ($currentScopesContainsRequiredScopes)) {
 	Connect-MgGraph -Scopes $requiredScopes
 }
 
+$managedIdentityServicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$managedIdentityClientID'"
+
+$appRegistration = Get-MgApplication -Filter "AppId eq '$AppRegistrationClientID'"
+
+$servicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$AppRegistrationClientID'"
+$appRole = $appRegistration |
+Select-Object -ExpandProperty AppRoles |
+Where-Object -FilterScript { $_.DisplayName -eq 'AssumeRole' -and $_.Value -eq 'AssumeRoleWithWebIdentity' }
+
+
 $params = @{
-	principalId = $managedIdentityObjectID
-	resourceId  = $servicePrincipalObjectID
-	appRoleId   = $appRoleId
+	principalId = $managedIdentityServicePrincipal.Id
+	resourceId  = $servicePrincipal.Id
+	appRoleId   = $appRole.Id
 }
 
-New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityObjectID -BodyParameter $params
+$appRoleAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -ErrorAction SilentlyContinue |
+Where-Object -FilterScript { $_.AppRoleId -eq $appRole.Id }
+
+if (-not ($appRoleAssignment)) {
+	New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -BodyParameter $params
+}
