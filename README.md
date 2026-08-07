@@ -170,14 +170,17 @@ administration, your Entra team can pre-create the app registration out-of-band
 and you point the module at it - the deploying principal then needs no
 directory-write privilege.
 
-**What the Entra team pre-creates:**
+**Configuring the existing app registration:**
 
-- An app registration exposing an app role with value `AssumeRoleWithWebIdentity`
-  (member types `User` and `Application`).
-- The identifier URI `api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost_mgmt_suffix>`.
-  The module derives `ENTRA_APP_URN` (the AWS OIDC token audience) from this same
-  convention, and the AWS side relies on it too, so the pre-created app must use it
-  exactly.
+In both modes below, your Entra team must run
+`scripts/ConfigureExistingAppRegistration.ps1` (bundled with this module) to
+ensure the app role, identifier URI, and app role assignment are configured. The
+script is idempotent — safe to re-run at any time. If you set `cost_mgmt_suffix`
+in your module configuration, pass `-CostManagementSuffix` to the script as well.
+
+The `entra_app_role_assignment_manual_action_required`
+[output](#output_entra_app_role_assignment_manual_action_required) prints the
+exact command after apply.
 
 **Module inputs:**
 
@@ -194,14 +197,12 @@ function managed identity, so it cannot be fully pre-created):
   binding. With a bring-your-own app it resolves the app's service principal via a
   directory **read** (`data.azuread_service_principal`), so the deploying principal
   needs `AppRoleAssignment.ReadWrite.All` or ownership of that one service principal -
-  a far narrower grant than tenant-wide app management.
+  a far narrower grant than tenant-wide app management. The script must still be run
+  beforehand to ensure the app role and identifier URI exist.
 - `manage_entra_app_role_assignment = false` (strict separation): the module performs
-  **no** Entra writes or reads at all. After apply, the
-  `entra_app_role_assignment_manual_action_required`
-  [output](#output_entra_app_role_assignment_manual_action_required) prints the
-  function identity's principal ID and the app role to assign, for your Entra team to
-  create the binding out-of-band. The function cannot authenticate to AWS until this
-  is done.
+  **no** Entra writes or reads at all. The script handles everything — app role,
+  identifier URI, and the app role assignment. The function cannot authenticate to
+  AWS until this is done.
 
 ## Security Features
 
@@ -699,7 +700,7 @@ pre-commit hook.
 | <a name="output_deployment_storage_account_name"></a> [deployment\_storage\_account\_name](#output\_deployment\_storage\_account\_name) | The name of the deployment storage account |
 | <a name="output_deployment_storage_private_endpoint_ip"></a> [deployment\_storage\_private\_endpoint\_ip](#output\_deployment\_storage\_private\_endpoint\_ip) | The private IP address of the deployment storage blob private endpoint |
 | <a name="output_ea_billing_role_definition_ids"></a> [ea\_billing\_role\_definition\_ids](#output\_ea\_billing\_role\_definition\_ids) | The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL |
-| <a name="output_entra_app_role_assignment_manual_action_required"></a> [entra\_app\_role\_assignment\_manual\_action\_required](#output\_entra\_app\_role\_assignment\_manual\_action\_required) | Populated only when bringing your own app registration (existing\_entra\_application\_client\_id) with manage\_entra\_app\_role\_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding. |
+| <a name="output_entra_app_role_assignment_manual_action_required"></a> [entra\_app\_role\_assignment\_manual\_action\_required](#output\_entra\_app\_role\_assignment\_manual\_action\_required) | Populated when bringing your own app registration (existing\_entra\_application\_client\_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. The script is idempotent. Empty when the module creates the app registration itself. |
 | <a name="output_event_grid_subscription_name"></a> [event\_grid\_subscription\_name](#output\_event\_grid\_subscription\_name) | The name of the Event Grid subscription for blob created events |
 | <a name="output_event_grid_system_topic_name"></a> [event\_grid\_system\_topic\_name](#output\_event\_grid\_system\_topic\_name) | The name of the Event Grid system topic for storage events |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |

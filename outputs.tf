@@ -86,32 +86,25 @@ output "billing_role_assignment_manual_action_required" {
   )) : ""
 }
 
-# Only fires when bringing your own app registration AND manage_entra_app_role_assignment = false
-# (strict separation of duties): the module then creates no binding between the function app's
-# managed identity and the AWS-federation app role, as the deploying principal is assumed to have no
-# directory-write privileges. This output prints the details the Entra team needs to create that app
-# role assignment out-of-band. Empty otherwise, including whenever the module creates the app itself
-# (manage_entra_app_role_assignment is forced true in that case, so the module always binds).
+# Fires whenever bringing your own app registration (existing_entra_application_client_id is set).
+# The idempotent ConfigureExistingAppRegistration.ps1 script ensures the app role, identifier URI,
+# and app role assignment are all correctly configured. Empty when the module creates the app itself.
 output "entra_app_role_assignment_manual_action_required" {
-  description = "Populated only when bringing your own app registration (existing_entra_application_client_id) with manage_entra_app_role_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
-  value       = local.manage_entra_app_role_assignment ? "" : <<-EOT
-    ACTION REQUIRED: assign the 'AssumeRoleWithWebIdentity' app role to the function app's managed identity.
-    Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All.
-
-    # 1. Resolve the service principal object id and the app role id for the AWS-federation app:
-    SP_ID=$(az ad sp show --id ${local.entra_app_client_id} --query id -o tsv)
-    APP_ROLE_ID=$(az ad sp show --id ${local.entra_app_client_id} --query "appRoles[?value=='AssumeRoleWithWebIdentity'].id | [0]" -o tsv)
-
-    # 2. Assign the app role to the function app's managed identity:
-    az rest --method POST \
-      --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$SP_ID/appRoleAssignedTo" \
-      --headers "Content-Type=application/json" \
-      --body "{
-        \"principalId\": \"${azurerm_user_assigned_identity.cost_export.principal_id}\",
-        \"resourceId\": \"$SP_ID\",
-        \"appRoleId\": \"$APP_ROLE_ID\"
-      }"
-  EOT
+  description = "Populated when bringing your own app registration (existing_entra_application_client_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. The script is idempotent. Empty when the module creates the app registration itself."
+  value = local.create_entra_app ? "" : join("\n", [
+    "ACTION REQUIRED: configure the existing Entra app registration for AWS OIDC federation.",
+    "Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All + Application.Read.All.",
+    "",
+    "Run scripts/ConfigureExistingAppRegistration.ps1 (bundled with this module) — it is idempotent and ensures:",
+    "  - The 'AssumeRoleWithWebIdentity' app role exists on the app registration",
+    "  - The app role is assigned to the function app's managed identity",
+    "  - The identifier URI is set correctly",
+    "",
+    "  ./scripts/ConfigureExistingAppRegistration.ps1 -ManagedIdentityClientID '${azurerm_user_assigned_identity.cost_export.client_id}' -AppRegistrationClientID '${local.entra_app_client_id}'",
+    "",
+    "If you set the cost_mgmt_suffix variable in your module configuration, pass it here too:",
+    "  -CostManagementSuffix '<your-suffix>'",
+  ])
 }
 
 output "azapi_resource_action_add_role_assignment_output" {

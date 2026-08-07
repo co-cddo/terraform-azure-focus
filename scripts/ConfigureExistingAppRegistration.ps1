@@ -1,9 +1,5 @@
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications
 
-# TODO: Update ACTION REQUIRED comment in the check block to just say 'look at respective output for details of how to run ConfigureExistingAppRegistration.ps1': https://github.com/appvia-lz-azure/test-consume-terraform-azure-focus/actions/runs/31128400368/job/92708960926
-# TODO: Replace az rest command in Output with instructions to use this script
-# TODO: Ask Lewis where to add the suffix on the end of the application URI
-
 param(
 	[Parameter(Mandatory)]
 	[string]$ManagedIdentityClientID,
