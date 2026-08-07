@@ -36,7 +36,10 @@ try {
 		$mgContext = Get-MgContext
 	}
 
-	$managedIdentityServicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$managedIdentityClientID'"
+	$managedIdentityServicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$ManagedIdentityClientID'"
+	if (-not $managedIdentityServicePrincipal) {
+		throw "Could not find managed identity with client id: $ManagedIdentityClientID"
+	}
 
 	$appRegistration = Get-MgApplication -Filter "AppId eq '$AppRegistrationClientID'"
 
@@ -49,15 +52,21 @@ try {
 	if (-not $appRole) {
 		$guid = New-Guid | Select-Object -ExpandProperty Guid
 
-		Write-Verbose -Message "Creating app role for app registration with object id: $($appRegistration.Id)..." -Verbose
-		Update-MgApplication -ApplicationId $appRegistration.Id -AppRoles @{
-			AllowedMemberTypes = @('User', 'Application')
-			Description        = 'Allows the cost-export managed identity to assume an AWS role via OIDC federation.'
-			DisplayName        = 'AssumeRole'
-			Id                 = $guid
-			IsEnabled          = $true
-			Value              = 'AssumeRoleWithWebIdentity'
+		$roleList = [System.Collections.Generic.List[Microsoft.Graph.PowerShell.Models.IMicrosoftGraphAppRole]]::new()
+		$roleList.Add(@{
+				AllowedMemberTypes = @('User', 'Application')
+				Description        = 'Allows the cost-export managed identity to assume an AWS role via OIDC federation.'
+				DisplayName        = 'AssumeRole'
+				Id                 = $guid
+				IsEnabled          = $true
+				Value              = 'AssumeRoleWithWebIdentity'
+			})
+
+		if ($appRegistration.AppRoles) {
+			$roleList.AddRange($appRegistration.AppRoles)
 		}
+		Write-Verbose -Message "Upserting app role(s) for app registration with object id: $($appRegistration.Id)..." -Verbose
+		Update-MgApplication -ApplicationId $appRegistration.Id -AppRoles $roleList
 
 		$appRegistration = Get-MgApplication -Filter "AppId eq '$AppRegistrationClientID'"
 		$appRole = $appRegistration |
