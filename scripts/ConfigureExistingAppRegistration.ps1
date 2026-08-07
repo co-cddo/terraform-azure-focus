@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 try {
 	Import-Module Microsoft.Graph.Applications
 
-	$requiredScopes = @('Directory.Read.All', 'AppRoleAssignment.ReadWrite.All', 'Application.Read.All')
+	$requiredScopes = @('Directory.Read.All', 'AppRoleAssignment.ReadWrite.All', 'Application.ReadWrite.All')
 
 	$mgContext = Get-MgContext -ErrorAction SilentlyContinue
 	$currentScopes = $mgContext |
@@ -47,9 +47,9 @@ try {
 	Where-Object -FilterScript { $_.DisplayName -eq 'AssumeRole' -and $_.Value -eq 'AssumeRoleWithWebIdentity' }
 
 	if (-not $appRole) {
-		Write-Verbose -Message "Creating app role for app registration with object id: $($appRegistration.Id)..." -Verbose
-
 		$guid = New-Guid | Select-Object -ExpandProperty Guid
+
+		Write-Verbose -Message "Creating app role for app registration with object id: $($appRegistration.Id)..." -Verbose
 		Update-MgApplication -ApplicationId $appRegistration.Id -AppRoles @{
 			AllowedMemberTypes = @('User', 'Application')
 			Description        = 'Allows the cost-export managed identity to assume an AWS role via OIDC federation.'
