@@ -92,8 +92,7 @@ output "billing_role_assignment_manual_action_required" {
 output "entra_app_role_assignment_manual_action_required" {
   description = "Populated when bringing your own app registration (existing_entra_application_client_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. The script is idempotent. Empty when the module creates the app registration itself."
   value = local.create_entra_app ? "" : join("\n", [
-    "ACTION REQUIRED: configure the existing Entra app registration for AWS OIDC federation.",
-    "Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All + Application.Read.All.",
+    "Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All + Application.ReadWrite.All.",
     "",
     "Run scripts/ConfigureExistingAppRegistration.ps1 (bundled with this module) — it is idempotent and ensures:",
     "  - The 'AssumeRoleWithWebIdentity' app role exists on the app registration",
