@@ -52,7 +52,6 @@ module "example" {
     event_grid_system_topic     = "evgt-focus-storage-mjw"
     event_grid_subscription     = "evgs-focus-blob-mjw"
     entra_application           = "app-focus-cost-mjw"
-    cost_export_prefix          = "focus-daily-export-mjw"
 
     private_endpoints = {
       storage_blob    = "pe-focus-st-blob"

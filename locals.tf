@@ -1,5 +1,6 @@
 locals {
-  cost_mgmt_suffix = length(var.cost_mgmt_suffix) > 0 ? "-${var.cost_mgmt_suffix}" : ""
+  cost_mgmt_suffix   = length(var.cost_mgmt_suffix) > 0 ? "-${var.cost_mgmt_suffix}" : ""
+  cost_export_prefix = "focus-daily-cost-export"
 
   # The data source's id is the full role definition resource path
   # (/providers/Microsoft.Authorization/roleDefinitions/<guid>); the ABAC GuidEquals operator in
@@ -152,7 +153,6 @@ locals {
     event_grid_system_topic     = coalesce(var.custom_resource_names.event_grid_system_topic, "evgt-storage-${random_string.unique.result}")
     event_grid_subscription     = coalesce(var.custom_resource_names.event_grid_subscription, "evgs-blob-created-${random_string.unique.result}")
     entra_application           = coalesce(var.custom_resource_names.entra_application, "cost-export-${random_string.unique.result}")
-    cost_export_prefix          = coalesce(var.custom_resource_names.cost_export_prefix, "focus-daily-cost-export")
 
     pe_storage_blob    = coalesce(local.pe_overrides.storage_blob, "pe-storage-cost-export-${random_string.unique.result}")
     pe_storage_queue   = coalesce(local.pe_overrides.storage_queue, "pe-storage-queue-cost-export-${random_string.unique.result}")

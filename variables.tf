@@ -250,7 +250,7 @@ variable "custom_resource_names" {
     event_grid_system_topic     = optional(string)
     event_grid_subscription     = optional(string)
     entra_application           = optional(string)
-    cost_export_prefix          = optional(string)
+
     private_endpoints = optional(object({
       storage_blob    = optional(string)
       storage_queue   = optional(string)
