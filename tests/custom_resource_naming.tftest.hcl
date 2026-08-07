@@ -67,7 +67,7 @@ run "with_custom_names" {
       event_grid_system_topic     = "evgt-storage-${run.without_custom_names.random_string_suffix}"
       event_grid_subscription     = "evgs-blob-created-${run.without_custom_names.random_string_suffix}"
       entra_application           = "cost-export-${run.without_custom_names.random_string_suffix}"
-      cost_export_prefix          = "focus-daily-cost-export-${run.without_custom_names.random_string_suffix}"
+      cost_export_prefix          = "focus-daily-cost-export"
       private_endpoints = {
         storage_blob    = "pe-storage-cost-export-${run.without_custom_names.random_string_suffix}"
         storage_queue   = "pe-storage-queue-cost-export-${run.without_custom_names.random_string_suffix}"

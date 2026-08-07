@@ -9,7 +9,11 @@ param(
 	[string]$ManagedIdentityClientID,
 
 	[Parameter(Mandatory)]
-	[string]$AppRegistrationClientID
+	[string]$AppRegistrationClientID,
+
+	#If you set the cost_mgmt_suffix variable in your module configuration, set it here too https://github.com/co-cddo/terraform-azure-focus#input_cost_mgmt_suffix
+	[Parameter()]
+	[string]$CostManagementSuffix = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,8 +82,11 @@ if (-not ($appRoleAssignment)) {
 	New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -BodyParameter $params
 }
 
-$costManagementSuffix = '-' + $($managedIdentityServicePrincipal.DisplayName -split '-')[3]
-$identifierUris = "api://$($mgContext.TenantId)/GDS-AWS-Cost-Forwarding$costManagementSuffix"
+$identifierUriSuffix = ''
+if ($CostManagementSuffix) {
+	$identifierUriSuffix = "-$CostManagementSuffix"
+}
+$identifierUris = "api://$($mgContext.TenantId)/GDS-AWS-Cost-Forwarding$identifierUriSuffix"
 
 if ($identifierUris -ne $appRegistration.IdentifierUris) {
 	Write-Verbose -Message "Setting identifier uris for app registration with object id: $($appRegistration.Id)..." -Verbose
