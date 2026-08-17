@@ -76,7 +76,7 @@ run "default_creates_private_dns_zones" {
   }
   # Every private endpoint should carry a private_dns_zone_group when the module manages DNS.
   assert {
-    condition     = length(azurerm_private_endpoint.storage.private_dns_zone_group) == 1 && length(azurerm_private_endpoint.storage_queue.private_dns_zone_group) == 1 && length(azurerm_private_endpoint.deployment.private_dns_zone_group) == 1 && length(azurerm_private_endpoint.function_app.private_dns_zone_group) == 1
+    condition     = length(azurerm_private_endpoint.storage[0].private_dns_zone_group) == 1 && length(azurerm_private_endpoint.storage_queue[0].private_dns_zone_group) == 1 && length(azurerm_private_endpoint.deployment.private_dns_zone_group) == 1 && length(azurerm_private_endpoint.function_app.private_dns_zone_group) == 1
     error_message = "each private endpoint should have a private_dns_zone_group when private_endpoints_manage_dns_zone_group is true"
   }
   # use_existing=false => deployment storage stays private (no need to relax public access).
@@ -126,7 +126,7 @@ run "byo_resolver_creates_no_zones_or_links" {
   }
   # The private endpoints still get a zone group - it just points at the caller's existing zones.
   assert {
-    condition     = contains(one(azurerm_private_endpoint.storage.private_dns_zone_group).private_dns_zone_ids, var.existing_private_dns_zone_ids["blob"])
+    condition     = contains(one(azurerm_private_endpoint.storage[0].private_dns_zone_group).private_dns_zone_ids, var.existing_private_dns_zone_ids["blob"])
     error_message = "blob private endpoint DNS zone group should reference the caller-supplied blob zone"
   }
   assert {
@@ -193,7 +193,7 @@ run "dns_management_disabled" {
   # With DNS management off, the private endpoints must be created WITHOUT a zone group (records
   # are expected to be handled externally, e.g. by Azure Policy).
   assert {
-    condition     = length(azurerm_private_endpoint.storage.private_dns_zone_group) == 0 && length(azurerm_private_endpoint.storage_queue.private_dns_zone_group) == 0 && length(azurerm_private_endpoint.deployment.private_dns_zone_group) == 0 && length(azurerm_private_endpoint.function_app.private_dns_zone_group) == 0
+    condition     = length(azurerm_private_endpoint.storage[0].private_dns_zone_group) == 0 && length(azurerm_private_endpoint.storage_queue[0].private_dns_zone_group) == 0 && length(azurerm_private_endpoint.deployment.private_dns_zone_group) == 0 && length(azurerm_private_endpoint.function_app.private_dns_zone_group) == 0
     error_message = "no private endpoint should have a private_dns_zone_group when private_endpoints_manage_dns_zone_group is false"
   }
 }

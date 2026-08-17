@@ -54,18 +54,18 @@ locals {
 
   # Create billing account mapping from the provided list
   # Construct full resource manager paths from just the billing account IDs
-  billing_accounts_map = {
+  billing_accounts_map = var.enable_focus_exports ? {
     for idx, account_id in var.billing_account_ids :
     tostring(idx) => {
       id    = account_id
       scope = "/providers/Microsoft.Billing/billingAccounts/${account_id}"
     }
-  }
+  } : {}
 
   # Create report scopes for the provided billing accounts
-  report_scopes = [
+  report_scopes = var.enable_focus_exports ? [
     for account_id in var.billing_account_ids : "/providers/Microsoft.Billing/billingAccounts/${account_id}"
-  ]
+  ] : []
 
   private_dns_zone_names = {
     blob  = "privatelink.blob.core.windows.net"

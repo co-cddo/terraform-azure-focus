@@ -67,19 +67,13 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     # }
   }
 
-  app_settings = {
-    "STORAGE_ACCOUNT_BLOB_ENDPOINT" = azurerm_storage_account.cost_export.primary_blob_endpoint
-    "CONTAINER_NAME"                = azapi_resource.cost_export.name
-    "AzureWebJobsFeatureFlags"      = "EnableWorkerIndexing"
+  app_settings = merge({
+    "AzureWebJobsFeatureFlags" = "EnableWorkerIndexing"
 
     #HACK: Fix for below issue where the azurerm provider creates and populates these settings, breaking deployment when using user-assigned identity for authentication with the deployment storage account
     # https://github.com/hashicorp/terraform-provider-azurerm/issues/29993
     "AzureWebJobsStorage"                  = ""
     "DEPLOYMENT_STORAGE_CONNECTION_STRING" = ""
-
-    "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export.name}.queue.core.windows.net/"
-    "StorageAccountManagedIdentity__credential" = "managedidentity"
-    "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
 
     "AzureWebJobsStorage__credential"      = "managedidentity"
     "AzureWebJobsStorage__clientId"        = azurerm_user_assigned_identity.cost_export.client_id
@@ -98,20 +92,22 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "S3_CARBON_PATH"             = local.aws_target_file_path
     "CARBON_DIRECTORY_NAME"      = local.carbon_directory_name
     "CARBON_API_TENANT_ID"       = data.azurerm_client_config.current.tenant_id
-    # Management group scope for carbon emissions and recommendations only - we have to use the billing account scope(s) for FOCUS cost exports
-    "BILLING_SCOPE" = local.management_group_scope
-    # Mapping of billing account index to billing account ID for S3 path organization
-    "BILLING_ACCOUNT_MAPPING" = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
-    "BILLING_AZURE_LOCATION"  = var.location
-
-    "BACKFILL_START_DATE" = var.backfill_start_date
-
-    "STORAGE_RESOURCE_ID" = azurerm_storage_account.cost_export.id
-    "STORAGE_CONTAINER"   = azapi_resource.cost_export.name
-    "ROOT_FOLDER_PATH"    = local.focus_directory_name
-    "LOGGING_LEVEL"       = var.logging_level
-    "COST_MGMT_SUFFIX"    = local.cost_mgmt_suffix
-  }
+    "BILLING_SCOPE"              = local.management_group_scope
+    "BILLING_AZURE_LOCATION"     = var.location
+    "LOGGING_LEVEL"              = var.logging_level
+    }, var.enable_focus_exports ? {
+    "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export[0].primary_blob_endpoint
+    "CONTAINER_NAME"                            = azapi_resource.cost_export[0].name
+    "StorageAccountManagedIdentity__serviceUri" = "https://${azurerm_storage_account.cost_export[0].name}.queue.core.windows.net/"
+    "StorageAccountManagedIdentity__credential" = "managedidentity"
+    "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
+    "BILLING_ACCOUNT_MAPPING"                   = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
+    "BACKFILL_START_DATE"                       = var.backfill_start_date
+    "STORAGE_RESOURCE_ID"                       = azurerm_storage_account.cost_export[0].id
+    "STORAGE_CONTAINER"                         = azapi_resource.cost_export[0].name
+    "ROOT_FOLDER_PATH"                          = local.focus_directory_name
+    "COST_MGMT_SUFFIX"                          = local.cost_mgmt_suffix
+  } : {})
 
   lifecycle {
     # public_network_access_enabled is the create-time state only (open when deploy_from_external_network
@@ -189,6 +185,8 @@ resource "null_resource" "publish_function_code" {
 # Destroy-time provisioners may only reference `self`, so the message - including the suffix - is baked into
 # `triggers` at create time and read back from state on destroy.
 resource "null_resource" "backfill_exports_cleanup_warning" {
+  count = var.enable_focus_exports ? 1 : 0
+
   triggers = {
     warning = join("\n", [
       "",

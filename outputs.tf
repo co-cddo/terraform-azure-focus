@@ -5,7 +5,7 @@ output "aws_app_client_id" {
 
 output "focus_container_name" {
   description = "The storage container name for FOCUS cost data"
-  value       = azapi_resource.cost_export.name
+  value       = var.enable_focus_exports ? azapi_resource.cost_export[0].name : null
 }
 
 output "recommendations_export_name" {
@@ -68,7 +68,7 @@ output "ea_billing_role_definition_ids" {
 # when the check block in rbac.tf detects a missing assignment.
 output "billing_role_assignment_manual_action_required" {
   description = "Populated when the function app's managed identity is missing a billing role assignment. For EA customers this always requires manual action; for MCA customers it appears only when the billing_reader_assignments check detects a gap."
-  value = var.is_enterprise_customer ? join("\n", concat(
+  value = !var.enable_focus_exports ? "" : var.is_enterprise_customer ? join("\n", concat(
     [
       "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
       "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
@@ -131,7 +131,7 @@ output "resource_names" {
 
 output "cost_export_storage_account_name" {
   description = "The name of the cost export storage account"
-  value       = azurerm_storage_account.cost_export.name
+  value       = var.enable_focus_exports ? azurerm_storage_account.cost_export[0].name : null
 }
 
 output "deployment_storage_account_name" {
@@ -146,17 +146,17 @@ output "function_app_name" {
 
 output "event_grid_system_topic_name" {
   description = "The name of the Event Grid system topic for storage events"
-  value       = azurerm_eventgrid_system_topic.storage_events.name
+  value       = var.enable_focus_exports ? azurerm_eventgrid_system_topic.storage_events[0].name : null
 }
 
 output "event_grid_subscription_name" {
   description = "The name of the Event Grid subscription for blob created events"
-  value       = azurerm_eventgrid_event_subscription.focus_blob_created.name
+  value       = var.enable_focus_exports ? azurerm_eventgrid_event_subscription.focus_blob_created[0].name : null
 }
 
 output "cost_export_storage_account_id" {
   description = "The resource id of the cost export storage account"
-  value       = azurerm_storage_account.cost_export.id
+  value       = var.enable_focus_exports ? azurerm_storage_account.cost_export[0].id : null
 }
 
 output "deployment_storage_account_id" {
@@ -171,12 +171,12 @@ output "function_app_id" {
 
 output "storage_private_endpoint_ip" {
   description = "The private IP address of the cost export storage blob private endpoint"
-  value       = azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address
+  value       = var.enable_focus_exports ? azurerm_private_endpoint.storage[0].private_service_connection[0].private_ip_address : null
 }
 
 output "storage_queue_private_endpoint_ip" {
   description = "The private IP address of the cost export storage queue private endpoint"
-  value       = azurerm_private_endpoint.storage_queue.private_service_connection[0].private_ip_address
+  value       = var.enable_focus_exports ? azurerm_private_endpoint.storage_queue[0].private_service_connection[0].private_ip_address : null
 }
 
 output "deployment_storage_private_endpoint_ip" {

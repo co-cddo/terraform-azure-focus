@@ -23,12 +23,18 @@ variable "function_app_subnet_id" {
   type        = string
 }
 
+variable "enable_focus_exports" {
+  description = "Whether to create the FOCUS cost export infrastructure (storage account, Event Grid, daily export schedule, billing role assignments). Set to false for secondary tenant deployments that share a billing account with a primary deployment — FOCUS exports are scoped at the billing account level, so only one deployment per billing account should create them."
+  type        = bool
+  default     = true
+}
+
 variable "billing_account_ids" {
-  description = "List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant_id)."
+  description = "List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant_id). Can be empty when enable_focus_exports is false."
   type        = list(string)
   validation {
-    condition     = length(var.billing_account_ids) > 0
-    error_message = "At least one billing account ID must be provided."
+    condition     = !var.enable_focus_exports || length(var.billing_account_ids) > 0
+    error_message = "At least one billing account ID must be provided when enable_focus_exports is true."
   }
 }
 

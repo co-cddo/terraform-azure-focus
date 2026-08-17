@@ -25,7 +25,7 @@ data "azurerm_role_definition" "storage_blob_data_contributor" {
 }
 
 data "azapi_resource_list" "billing_role_definitions" {
-  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+  for_each = var.manage_role_assignments && var.enable_focus_exports && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
   type      = "Microsoft.Billing/billingAccounts/billingRoleDefinitions@2024-04-01"
   parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
@@ -37,7 +37,7 @@ data "azapi_resource_list" "billing_role_definitions" {
 # on runs where add_role_assignment (re)fires, so the check sees the assignments as they are
 # after the grant rather than warning on the pre-grant snapshot.
 data "azapi_resource_list" "billing_role_assignments" {
-  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+  for_each = var.manage_role_assignments && var.enable_focus_exports && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
   type      = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2024-04-01"
   parent_id = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
