@@ -139,7 +139,7 @@ class CostExportBackfillRunLockTest(unittest.TestCase):
             "export_task_exists": mock.patch.object(costExport, "cost_mgmt_export_exists", return_value=True),
             "export_run": mock.patch.object(costExport, "cost_mgmt_export_run", return_value=True),
             "data_exists": mock.patch.object(costExport, "cost_export_exists"),
-            "create_tasks": mock.patch.object(costExport, "create_cost_export_backfill_tasks"),
+            "create_tasks": mock.patch.object(costExport, "create_cost_export_backfill_tasks", return_value=True),
         }
         self.mocks = {name: patcher.start() for name, patcher in patchers.items()}
         for patcher in patchers.values():
@@ -226,6 +226,21 @@ class CostExportBackfillRunLockTest(unittest.TestCase):
 
         self.mocks["schedule_lock_create"].assert_not_called()
 
+    def test_schedule_lock_not_created_if_a_task_could_not_be_created(self):
+        """cost_mgmt_export_create reports failure by returning False rather than raising, so a
+        billing account whose every create was refused (typically an EA account missing its manual
+        role assignment) would otherwise stamp the lock over an empty schedule and stall the
+        deployment permanently: nothing recreates the tasks once the lock is in place."""
+        self.mocks["schedule_lock_exists"].return_value = False
+        self.mocks["run_lock_exists"].return_value = True
+
+        self.mocks["create_tasks"].side_effect = [True, False]
+
+        costExport.cost_export_backfill_impl(start_date=self.start_date)
+
+        self.assertEqual(self.mocks["create_tasks"].call_count, 2)
+        self.mocks["schedule_lock_create"].assert_not_called()
+
 
 class RunCostExportBackfillReturnValueTest(unittest.TestCase):
     """run_cost_export_backfill must report its job count instead of creating the global lock."""
@@ -263,6 +278,67 @@ class RunCostExportBackfillReturnValueTest(unittest.TestCase):
         )
         self.assertEqual(result, 6)  # MAX_NUMBER_OF_EXPORT_JOBS_RUNNING
         self.run_lock_create.assert_not_called()
+
+
+class CreateCostExportBackfillTasksResultTest(unittest.TestCase):
+    """create_cost_export_backfill_tasks must report whether every month's task now exists.
+
+    This is the value cost_export_backfill_impl gates the schedule lock on, and the place the
+    failure was previously swallowed: cost_mgmt_export_create returns False on a refused create
+    rather than raising, and the result was discarded.
+    """
+
+    def setUp(self):
+        patchers = {
+            "until": mock.patch.object(
+                costExport, "get_backfill_until_month_year", return_value=FIXED_UNTIL_MONTH_YEAR
+            ),
+            "task_exists": mock.patch.object(costExport, "cost_mgmt_export_exists"),
+            "create": mock.patch.object(costExport, "cost_mgmt_export_create"),
+        }
+        self.mocks = {name: patcher.start() for name, patcher in patchers.items()}
+        for patcher in patchers.values():
+            self.addCleanup(patcher.stop)
+        self.start_date = datetime(2025, 1, 1)
+
+    def _create(self):
+        return costExport.create_cost_export_backfill_tasks(
+            start_date=self.start_date, account_id="acct", account_idx=0
+        )
+
+    def test_returns_true_when_every_create_succeeds(self):
+        self.mocks["create"].return_value = True
+        self.assertTrue(self._create())
+
+    def test_returns_false_when_any_create_is_refused(self):
+        # Jan to Jun 2025 = 6 months; refuse the third.
+        self.mocks["create"].side_effect = [True, True, False, True, True, True]
+        self.assertFalse(self._create())
+
+    def test_returns_false_when_every_create_is_refused(self):
+        # The EA shape: no permission, so nothing is ever scheduled.
+        self.mocks["create"].return_value = False
+        self.assertFalse(self._create())
+
+    def test_existing_tasks_are_still_put(self):
+        """Months whose task already exists are PUT again rather than skipped.
+
+        A task left behind by a previous deployment still points at that deployment's storage
+        account, which no longer exists. Skipping it leaves the destination stale, the export run
+        fails, and backfill stalls permanently. The PUT is an upsert, so it repoints the task at
+        this deployment's storage account.
+        """
+        self.mocks["task_exists"].return_value = True
+        self.assertTrue(self._create())
+        # Jan to Jun 2025 inclusive.
+        self.assertEqual(self.mocks["create"].call_count, 6)
+
+    def test_existence_is_not_consulted(self):
+        # The GET is gone: the upsert makes it redundant and it was the source of the stale
+        # destination bug.
+        self.mocks["create"].return_value = True
+        self._create()
+        self.mocks["task_exists"].assert_not_called()
 
 
 if __name__ == "__main__":

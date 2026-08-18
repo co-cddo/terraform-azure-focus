@@ -15,7 +15,6 @@ module "example" {
   function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/functionapp"
   virtual_network_name                = "existing-vnet"
   virtual_network_resource_group_name = "existing-infra"
-  resource_group_name                 = "rg-cost-export"
   deploy_from_external_network        = false
 
   private_endpoints_manage_dns_zone_group = true

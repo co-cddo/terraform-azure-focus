@@ -3,7 +3,7 @@ resource "azapi_resource" "daily_cost_export" {
   for_each = local.billing_accounts_map
 
   type      = "Microsoft.CostManagement/exports@2025-03-01"
-  name      = "${local.names.cost_export_prefix}${local.cost_mgmt_suffix}-${each.key}"
+  name      = "${local.cost_export_prefix}${local.cost_mgmt_suffix}-${each.key}"
   parent_id = each.value.scope
   location  = var.location
   identity {

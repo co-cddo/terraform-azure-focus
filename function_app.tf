@@ -2,8 +2,8 @@ resource "azurerm_service_plan" "cost_export" {
   # checkov:skip=CKV_AZURE_225:Zone redundancy not required at present
   # checkov:skip=CKV_AZURE_212:Failover not required at present
   name                = local.names.service_plan
-  resource_group_name = azurerm_resource_group.cost_export.name
-  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = local.resource_group_name
+  location            = local.resource_group_location
   os_type             = "Linux"
   sku_name            = "FC1"
   tags                = var.tags
@@ -11,15 +11,15 @@ resource "azurerm_service_plan" "cost_export" {
 
 resource "azurerm_user_assigned_identity" "cost_export" {
   name                = local.names.user_assigned_identity
-  resource_group_name = azurerm_resource_group.cost_export.name
-  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = local.resource_group_name
+  location            = local.resource_group_location
   tags                = var.tags
 }
 
 resource "azurerm_function_app_flex_consumption" "cost_export" {
   name                = local.names.function_app
-  resource_group_name = azurerm_resource_group.cost_export.name
-  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = local.resource_group_name
+  location            = local.resource_group_location
   tags                = var.tags
 
   storage_container_type            = "blobContainer"
@@ -141,8 +141,8 @@ resource "azurerm_monitor_diagnostic_setting" "function_app" {
 
 resource "azurerm_application_insights" "this" {
   name                = local.names.application_insights
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
   application_type    = "web"
   # Point the component at the module's own workspace so telemetry lands there instead of an
   # Azure auto-provisioned "managed" workspace (classic App Insights is retired, so without this
@@ -183,8 +183,9 @@ resource "null_resource" "publish_function_code" {
 
 # Backfill runs create one-off Cost Management export jobs ("focus-backfill{suffix}-<account>-<year>-<month>")
 # per billing-account scope at runtime. These are NOT managed by Terraform, so destroying this module leaves
-# them behind in Azure Cost Management (where they count against the per-scope export quota). This resource
-# prints a reminder, during `terraform destroy`, to delete them from the portal.
+# them behind in Azure Cost Management, still configured to deliver to the storage account this destroy just
+# removed - they are broken, not merely untidy. This resource prints a reminder, during `terraform destroy`,
+# to delete them from the portal.
 #
 # Destroy-time provisioners may only reference `self`, so the message - including the suffix - is baked into
 # `triggers` at create time and read back from state on destroy.
@@ -193,8 +194,8 @@ resource "null_resource" "backfill_exports_cleanup_warning" {
     warning = join("\n", [
       "",
       "WARNING: one-off 'focus-backfill${local.cost_mgmt_suffix}-*' Cost Management export jobs may have been left behind by backfill runs.",
-      "They are created at runtime by the function app (not by Terraform) and are not removed by this destroy.",
-      "Delete them so they do not count against the per-scope Cost Management export quota.",
+      "They are created at runtime by the function app (not by Terraform) and are NOT removed by this destroy.",
+      "They now point at a storage account that no longer exists, so they are broken, not just unused - leaving them will not silently keep working.",
       "In the Azure portal, open 'Cost Management + Billing' > 'Exports' for each billing-account scope,",
       "find the exports named 'focus-backfill${local.cost_mgmt_suffix}-*', and delete them.",
       "",
@@ -240,7 +241,7 @@ resource "null_resource" "set_deployment_storage_public_network_access_enabled" 
 
   provisioner "local-exec" {
     interpreter = ["pwsh", "-NoProfile", "-Command"]
-    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --public-network-access Enabled"
+    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${local.resource_group_name} --subscription ${local.cost_export_subscription_id} --public-network-access Enabled"
   }
 
   triggers = {
@@ -253,7 +254,7 @@ resource "null_resource" "set_function_app_public_network_access_enabled" {
   count = var.deploy_from_external_network ? 1 : 0
 
   provisioner "local-exec" {
-    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Enabled"
+    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${local.resource_group_name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Enabled"
   }
 
   triggers = {
@@ -267,7 +268,7 @@ resource "null_resource" "set_deployment_storage_public_network_access_disabled"
 
   provisioner "local-exec" {
     interpreter = ["pwsh", "-NoProfile", "-Command"]
-    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --public-network-access Disabled"
+    command     = "az storage account update --name ${azurerm_storage_account.deployment.name} --resource-group ${local.resource_group_name} --subscription ${local.cost_export_subscription_id} --public-network-access Disabled"
   }
 
   triggers = {
@@ -282,7 +283,7 @@ resource "null_resource" "set_function_app_public_network_access_disabled" {
   count = var.deploy_from_external_network ? 1 : 0
 
   provisioner "local-exec" {
-    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${azurerm_resource_group.cost_export.name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Disabled"
+    command = "az functionapp update --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${local.resource_group_name} --subscription ${local.cost_export_subscription_id} --set publicNetworkAccess=Disabled"
   }
 
   triggers = {

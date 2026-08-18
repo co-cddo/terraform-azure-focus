@@ -1,6 +1,7 @@
-variable "resource_group_name" {
-  description = "Name of the new resource group"
+variable "existing_resource_group_name" {
+  description = "[optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Use when manage_role_assignments is false and the resource group (with its role assignments) must exist before the first apply. Leave null to have the module create the resource group."
   type        = string
+  default     = null
 }
 
 variable "virtual_network_name" {
@@ -117,7 +118,7 @@ variable "is_enterprise_customer" {
 }
 
 variable "management_group_id" {
-  description = "[optional] ID of the management group that scopes the carbon emissions and Azure Advisor feeds: both the two role assignments created for the function identity and the set of subscriptions those exporters enumerate. This is the value in the portal's 'ID' column (e.g. 'alz'), NOT the display name in its 'Name' column, and not the full '/providers/Microsoft.Management/managementGroups/...' resource ID. Defaults to null, meaning the Tenant Root management group, whose ID is the tenant ID. Set this to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover. FOCUS cost exports are scoped by billing account and are not affected."
+  description = "[optional] ID of the management group scoping the carbon emissions and Azure Advisor feeds. It sets the scope of the function identity's 'Carbon Optimization Reader' and 'Advisor Recommendations Contributor' role assignments, and the set of subscriptions the CarbonEmissionsExporter and AdvisorRecommendationsExporter enumerate. Defaults to null, meaning the Tenant Root management group, whose ID is the tenant ID. Set it to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover; FOCUS cost exports are scoped by billing account and are unaffected, so narrowing this makes carbon and Advisor data cover a subset of the subscriptions the cost data covers. Supply the ID shown in the portal's 'ID' column (e.g. 'alz'), not the display name in its 'Name' column and not a full resource ID - note that the azurerm_management_group data source confusingly calls this field 'name'."
   type        = string
   default     = null
 
@@ -238,6 +239,7 @@ variable "custom_resource_names" {
     to destroy and recreate that resource.
   EOT
   type = object({
+    resource_group              = optional(string)
     storage_account_cost_export = optional(string)
     storage_account_deployment  = optional(string)
     service_plan                = optional(string)
@@ -248,7 +250,7 @@ variable "custom_resource_names" {
     event_grid_system_topic     = optional(string)
     event_grid_subscription     = optional(string)
     entra_application           = optional(string)
-    cost_export_prefix          = optional(string)
+
     private_endpoints = optional(object({
       storage_blob    = optional(string)
       storage_queue   = optional(string)
@@ -260,6 +262,13 @@ variable "custom_resource_names" {
       storage_queue   = optional(string)
       deployment_blob = optional(string)
       function_app    = optional(string)
+    }))
+    diagnostic_settings = optional(object({
+      cost_export_blob  = optional(string)
+      cost_export_queue = optional(string)
+      deployment_blob   = optional(string)
+      deployment_queue  = optional(string)
+      event_grid        = optional(string)
     }))
   })
   default = {}

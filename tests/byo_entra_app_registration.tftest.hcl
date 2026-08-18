@@ -53,7 +53,6 @@ override_data {
 }
 
 variables {
-  resource_group_name                 = "rg-focus-test"
   virtual_network_name                = "vnet-test"
   virtual_network_resource_group_name = "rg-network-test"
   subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
@@ -166,6 +165,7 @@ run "byo_app_strict_separation" {
     condition     = output.entra_app_role_assignment_manual_action_required != ""
     error_message = "The manual-action output should be populated in strict separation mode."
   }
+
 }
 
 # 4. Module creates the app but manage_entra_app_role_assignment = false: the flag is nonsensical

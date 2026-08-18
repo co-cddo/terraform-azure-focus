@@ -179,3 +179,4 @@ plan.ps1
 .devcontainer/.git-env
 .github/**/*.md
 .claude/**/*.md
+.terraform.lock.hcl

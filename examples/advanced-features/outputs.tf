@@ -4,6 +4,6 @@ output "billing_role_assignment_manual_action_required" {
 }
 
 output "entra_app_role_assignment_manual_action_required" {
-  description = "Populated only when bringing your own app registration (existing_entra_application_client_id) with manage_entra_app_role_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding."
+  description = "Populated when bringing your own app registration (existing_entra_application_client_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. Empty when the module creates the app registration itself."
   value       = module.example.entra_app_role_assignment_manual_action_required
 }

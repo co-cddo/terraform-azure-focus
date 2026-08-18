@@ -48,9 +48,3 @@ variable "location" {
   type        = string
   default     = "uksouth"
 }
-
-variable "resource_group_name" {
-  description = "Name of the resource group to create for cost forwarding resources"
-  type        = string
-  default     = "rg-cost-export"
-}

@@ -33,7 +33,6 @@ override_data {
 }
 
 variables {
-  resource_group_name                 = "rg-focus-test"
   virtual_network_name                = "vnet-test"
   virtual_network_resource_group_name = "rg-network-test"
   subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
@@ -60,7 +59,7 @@ run "with_custom_names" {
     custom_resource_names = {
       storage_account_cost_export = "stcostexport${run.without_custom_names.random_string_suffix}"
       storage_account_deployment  = "stcostexdply${run.without_custom_names.random_string_suffix}"
-      service_plan                = "asp-cost-export"
+      service_plan                = "asp-cost-export-${run.without_custom_names.random_string_suffix}"
       user_assigned_identity      = "id-cost-export-${run.without_custom_names.random_string_suffix}"
       function_app                = "func-cost-export-${run.without_custom_names.random_string_suffix}"
       application_insights        = "ai-func-cost-export-${run.without_custom_names.random_string_suffix}"
@@ -68,18 +67,18 @@ run "with_custom_names" {
       event_grid_system_topic     = "evgt-storage-${run.without_custom_names.random_string_suffix}"
       event_grid_subscription     = "evgs-blob-created-${run.without_custom_names.random_string_suffix}"
       entra_application           = "cost-export-${run.without_custom_names.random_string_suffix}"
-      cost_export_prefix          = "focus-daily-cost-export"
+
       private_endpoints = {
-        storage_blob    = "pe-storage-cost-export"
-        storage_queue   = "pe-storage-queue-cost-export"
-        deployment_blob = "pe-storage-cost-export-deployment"
-        function_app    = "pe-func-cost-export"
+        storage_blob    = "pe-storage-cost-export-${run.without_custom_names.random_string_suffix}"
+        storage_queue   = "pe-storage-queue-cost-export-${run.without_custom_names.random_string_suffix}"
+        deployment_blob = "pe-storage-cost-export-deployment-${run.without_custom_names.random_string_suffix}"
+        function_app    = "pe-func-cost-export-${run.without_custom_names.random_string_suffix}"
       }
       private_service_connections = {
-        storage_blob    = "psc-storage-cost-export"
-        storage_queue   = "psc-storage-queue-cost-export"
-        deployment_blob = "psc-storage-cost-export-deployment"
-        function_app    = "psc-func-cost-export"
+        storage_blob    = "psc-storage-cost-export-${run.without_custom_names.random_string_suffix}"
+        storage_queue   = "psc-storage-queue-cost-export-${run.without_custom_names.random_string_suffix}"
+        deployment_blob = "psc-storage-cost-export-deployment-${run.without_custom_names.random_string_suffix}"
+        function_app    = "psc-func-cost-export-${run.without_custom_names.random_string_suffix}"
       }
     }
   }

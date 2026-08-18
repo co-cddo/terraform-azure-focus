@@ -27,7 +27,7 @@ override_resource {
 # override_during here). The log_analytics_workspace_id and existing_entra_application_client_id variables
 # prune the workspace and Entra app subtrees so their IDs need no overrides.
 override_resource {
-  target = azurerm_resource_group.cost_export
+  target = azurerm_resource_group.cost_export[0]
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test"
   }
@@ -143,10 +143,17 @@ override_data {
     object_id = "00000000-0000-0000-0000-000000000002"
   }
 }
+# Resolved by a directory read once the module manages the app role binding.
+override_data {
+  target = data.azuread_service_principal.existing_aws_app
+  values = {
+    object_id    = "22222222-2222-2222-2222-222222222222"
+    app_role_ids = { AssumeRoleWithWebIdentity = "33333333-3333-3333-3333-333333333333" }
+  }
+}
 #endregion
 
 variables {
-  resource_group_name                 = "rg-focus-test"
   virtual_network_name                = "vnet-test"
   virtual_network_resource_group_name = "rg-network-test"
   subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
@@ -160,7 +167,7 @@ variables {
   # mock-generated IDs would otherwise need overriding but are irrelevant to this check.
   log_analytics_workspace_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.OperationalInsights/workspaces/log-focus-test"
   existing_entra_application_client_id = "00000000-0000-0000-0000-0000000000bb"
-  manage_entra_app_role_assignment     = false
+  manage_entra_app_role_assignment     = true
 
   # Skip the function-code publish step: its provisioner shells out to the Azure CLI, which is
   # unavailable (and meaningless against mocked infrastructure) under terraform test.
