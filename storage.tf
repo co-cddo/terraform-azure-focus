@@ -9,8 +9,8 @@ resource "azurerm_storage_account" "cost_export" {
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
   # checkov:skip=CKV2_AZURE_33:Private endpoint is configured via azurerm_private_endpoint.storage[0]; Checkov cannot trace the relationship through count-indexed resources
   name                     = local.names.storage_account_cost_export
-  resource_group_name      = azurerm_resource_group.cost_export.name
-  location                 = azurerm_resource_group.cost_export.location
+  resource_group_name      = local.resource_group_name
+  location                 = local.resource_group_location
   account_tier             = "Standard"
   account_replication_type = "LRS"
   is_hns_enabled           = true
@@ -71,8 +71,8 @@ resource "azurerm_storage_account" "deployment" {
   # checkov:skip=CKV_AZURE_59:Public access is conditionally enabled only when BYO DNS zones are not linked to the VNet and function code publishing is required
 
   name                     = local.names.storage_account_deployment
-  resource_group_name      = azurerm_resource_group.cost_export.name
-  location                 = azurerm_resource_group.cost_export.location
+  resource_group_name      = local.resource_group_name
+  location                 = local.resource_group_location
   account_tier             = "Standard"
   account_replication_type = "LRS"
   is_hns_enabled           = true
@@ -119,7 +119,7 @@ resource "azapi_resource" "deployment" {
 resource "azurerm_monitor_diagnostic_setting" "cost_export_blob" {
   count = var.enable_focus_exports ? 1 : 0
 
-  name                       = "diag-blob"
+  name                       = local.names.diag_cost_export_blob
   target_resource_id         = "${azurerm_storage_account.cost_export[0].id}/blobServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
@@ -137,7 +137,7 @@ resource "azurerm_monitor_diagnostic_setting" "cost_export_blob" {
 resource "azurerm_monitor_diagnostic_setting" "cost_export_queue" {
   count = var.enable_focus_exports ? 1 : 0
 
-  name                       = "diag-queue"
+  name                       = local.names.diag_cost_export_queue
   target_resource_id         = "${azurerm_storage_account.cost_export[0].id}/queueServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
@@ -153,7 +153,7 @@ resource "azurerm_monitor_diagnostic_setting" "cost_export_queue" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "deployment_blob" {
-  name                       = "diag-blob"
+  name                       = local.names.diag_deployment_blob
   target_resource_id         = "${azurerm_storage_account.deployment.id}/blobServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
@@ -173,7 +173,7 @@ resource "azurerm_monitor_diagnostic_setting" "deployment_blob" {
 # issues (e.g. why a timer didn't fire). Blob (host singleton leases/locks) is already
 # covered by deployment_blob above; table and file services are not in use on this account.
 resource "azurerm_monitor_diagnostic_setting" "deployment_queue" {
-  name                       = "diag-queue"
+  name                       = local.names.diag_deployment_queue
   target_resource_id         = "${azurerm_storage_account.deployment.id}/queueServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 

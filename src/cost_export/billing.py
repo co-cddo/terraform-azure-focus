@@ -154,29 +154,26 @@ def extract_billing_account_from_blob_path(blob_name):
     try:
         path_parts = blob_name.split('/')
 
+        # Both names end with the index (daily) or index-year-month (backfill), so read backwards
+        # from the end. Reading forwards breaks as soon as cost_mgmt_suffix is set, because the
+        # suffix shifts the index along and the parse silently returns None.
         for part in path_parts:
-            # Look for focus export names that end with a numeric index
             if part.startswith("focus-daily-cost-export-") or part.startswith("focus-backfill-"):
-                # Extract the index number from the export name
-                if "-" in part:
-                    parts = part.split("-")
-                    if len(parts) >= 4:  # focus-daily-cost-export-N or focus-backfill-N-YYYY-MM
-                        try:
-                            # For daily exports: focus-daily-cost-export-0
-                            if part.startswith("focus-daily-cost-export-"):
-                                export_index = int(parts[-1])
-                                return export_index
-                            # For backfill exports: focus-backfill-0-2024-01
-                            elif part.startswith("focus-backfill-") and len(parts) >= 5:
-                                export_index = int(parts[2])  # Third part after focus-backfill-
-                                return export_index
-                        except (ValueError, IndexError) as e:
-                            logging.debug(f"Failed to parse blob path part '{part}': {str(e)}")
-                            continue
+                parts = part.split("-")
+                try:
+                    # Daily: focus-daily-cost-export<suffix>-N
+                    if part.startswith("focus-daily-cost-export-"):
+                        return int(parts[-1])
+                    # Backfill: focus-backfill<suffix>-N-YYYY-MM
+                    if len(parts) >= 5:
+                        return int(parts[-3])
+                except (ValueError, IndexError) as e:
+                    logger.debug(f"Failed to parse blob path part '{part}': {str(e)}")
+                    continue
 
         logger.warning(f"Could not extract billing account index from blob path: {blob_name}")
         return None
 
     except Exception as e:
-        logging.exception(f"Error extracting billing account from blob path: {str(e)}")
+        logger.exception(f"Error extracting billing account from blob path: {str(e)}")
         return None

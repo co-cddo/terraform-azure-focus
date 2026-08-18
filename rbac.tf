@@ -33,7 +33,7 @@ resource "azuread_application" "aws_app" {
   app_role {
     id                   = random_uuid.app_uuid[0].id
     allowed_member_types = ["User", "Application"]
-    description          = "My role description"
+    description          = "Allows the cost-export managed identity to assume an AWS role via OIDC federation."
     display_name         = "AssumeRole"
     value                = "AssumeRoleWithWebIdentity"
   }
@@ -71,7 +71,7 @@ resource "azuread_app_role_assignment" "aws_app" {
 # propagate before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
   count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_resource_group.cost_export.id
+  scope                = local.resource_group_id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = var.current_principal_type
@@ -79,7 +79,7 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
 
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
   count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_resource_group.cost_export.id
+  scope                = local.resource_group_id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = var.current_principal_type

@@ -2,8 +2,8 @@ resource "azurerm_eventgrid_system_topic" "storage_events" {
   count = var.enable_focus_exports ? 1 : 0
 
   name                = local.names.event_grid_system_topic
-  resource_group_name = azurerm_resource_group.cost_export.name
-  location            = azurerm_resource_group.cost_export.location
+  resource_group_name = local.resource_group_name
+  location            = local.resource_group_location
   source_resource_id  = azurerm_storage_account.cost_export[0].id
   topic_type          = "Microsoft.Storage.StorageAccounts"
 
@@ -17,7 +17,7 @@ resource "azurerm_eventgrid_system_topic" "storage_events" {
 resource "azurerm_monitor_diagnostic_setting" "storage_events" {
   count = var.enable_focus_exports ? 1 : 0
 
-  name                       = "diag-eventgrid"
+  name                       = local.names.diag_event_grid
   target_resource_id         = azurerm_eventgrid_system_topic.storage_events[0].id
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 

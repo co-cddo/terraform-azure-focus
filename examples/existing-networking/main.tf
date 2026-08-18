@@ -18,8 +18,6 @@ module "example" {
   virtual_network_name                = "<existing vnet name>"
   virtual_network_resource_group_name = "<existing vnet resource group name>"
 
-  resource_group_name = "rg-cost-export"
-
   # Setting to false or omitting this argument assumes that you have private GitHub runners configured in the existing virtual network. It is not recommended to set this to true in production
   deploy_from_external_network = false
 

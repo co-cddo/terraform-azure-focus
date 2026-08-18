@@ -18,8 +18,6 @@ module "example" {
   virtual_network_name                = "<existing vnet name>"
   virtual_network_resource_group_name = "<existing vnet resource group name>"
 
-  resource_group_name = "rg-cost-export"
-
   # Comment out the following line if running in the security context of a user principal.
   current_principal_type = "ServicePrincipal"
 
@@ -54,7 +52,6 @@ module "example" {
     event_grid_system_topic     = "evgt-focus-storage-mjw"
     event_grid_subscription     = "evgs-focus-blob-mjw"
     entra_application           = "app-focus-cost-mjw"
-    cost_export_prefix          = "focus-daily-export-mjw"
 
     private_endpoints = {
       storage_blob    = "pe-focus-st-blob"

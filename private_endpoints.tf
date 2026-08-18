@@ -2,8 +2,8 @@ resource "azurerm_private_endpoint" "storage" {
   count = var.enable_focus_exports ? 1 : 0
 
   name                = local.names.pe_storage_blob
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
   subnet_id           = var.subnet_id
   tags                = var.tags
 
@@ -27,8 +27,8 @@ resource "azurerm_private_endpoint" "storage_queue" {
   count = var.enable_focus_exports ? 1 : 0
 
   name                = local.names.pe_storage_queue
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
   subnet_id           = var.subnet_id
   tags                = var.tags
 
@@ -50,8 +50,8 @@ resource "azurerm_private_endpoint" "storage_queue" {
 
 resource "azurerm_private_endpoint" "deployment" {
   name                = local.names.pe_deployment_blob
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
   subnet_id           = var.subnet_id
 
   private_service_connection {
@@ -72,8 +72,8 @@ resource "azurerm_private_endpoint" "deployment" {
 
 resource "azurerm_private_endpoint" "function_app" {
   name                = local.names.pe_function_app
-  location            = azurerm_resource_group.cost_export.location
-  resource_group_name = azurerm_resource_group.cost_export.name
+  location            = local.resource_group_location
+  resource_group_name = local.resource_group_name
   subnet_id           = var.subnet_id
   tags                = var.tags
 

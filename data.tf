@@ -1,5 +1,10 @@
 data "azurerm_client_config" "current" {}
 
+data "azurerm_resource_group" "existing" {
+  count = var.existing_resource_group_name != null ? 1 : 0
+  name  = var.existing_resource_group_name
+}
+
 data "azurerm_virtual_network" "existing" {
   name                = var.virtual_network_name
   resource_group_name = var.virtual_network_resource_group_name

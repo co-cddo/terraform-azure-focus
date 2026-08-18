@@ -86,15 +86,15 @@ run "focus_exports_disabled_keeps_function_app" {
     error_message = "Function app should still be created when enable_focus_exports is false"
   }
   assert {
-    condition     = azurerm_service_plan.cost_export.name == "asp-cost-export"
+    condition     = azurerm_service_plan.cost_export.name == "asp-cost-export-test1234"
     error_message = "Service plan should still be created when enable_focus_exports is false"
   }
   assert {
-    condition     = azurerm_private_endpoint.deployment.name == "pe-storage-cost-export-deployment"
+    condition     = azurerm_private_endpoint.deployment.name == "pe-storage-cost-export-deployment-test1234"
     error_message = "Deployment storage private endpoint should still be created when enable_focus_exports is false"
   }
   assert {
-    condition     = azurerm_private_endpoint.function_app.name == "pe-func-cost-export"
+    condition     = azurerm_private_endpoint.function_app.name == "pe-func-cost-export-test1234"
     error_message = "Function app private endpoint should still be created when enable_focus_exports is false"
   }
 }

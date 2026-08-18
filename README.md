@@ -170,14 +170,17 @@ administration, your Entra team can pre-create the app registration out-of-band
 and you point the module at it - the deploying principal then needs no
 directory-write privilege.
 
-**What the Entra team pre-creates:**
+**Configuring the existing app registration:**
 
-- An app registration exposing an app role with value `AssumeRoleWithWebIdentity`
-  (member types `User` and `Application`).
-- The identifier URI `api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost_mgmt_suffix>`.
-  The module derives `ENTRA_APP_URN` (the AWS OIDC token audience) from this same
-  convention, and the AWS side relies on it too, so the pre-created app must use it
-  exactly.
+In both modes below, your Entra team must run
+`scripts/ConfigureExistingAppRegistration.ps1` (bundled with this module) to
+ensure the app role, identifier URI, and app role assignment are configured. The
+script is idempotent — safe to re-run at any time. If you set `cost_mgmt_suffix`
+in your module configuration, pass `-CostManagementSuffix` to the script as well.
+
+The `entra_app_role_assignment_manual_action_required`
+[output](#output_entra_app_role_assignment_manual_action_required) prints the
+exact command after apply.
 
 **Module inputs:**
 
@@ -194,14 +197,12 @@ function managed identity, so it cannot be fully pre-created):
   binding. With a bring-your-own app it resolves the app's service principal via a
   directory **read** (`data.azuread_service_principal`), so the deploying principal
   needs `AppRoleAssignment.ReadWrite.All` or ownership of that one service principal -
-  a far narrower grant than tenant-wide app management.
+  a far narrower grant than tenant-wide app management. The script must still be run
+  beforehand to ensure the app role and identifier URI exist.
 - `manage_entra_app_role_assignment = false` (strict separation): the module performs
-  **no** Entra writes or reads at all. After apply, the
-  `entra_app_role_assignment_manual_action_required`
-  [output](#output_entra_app_role_assignment_manual_action_required) prints the
-  function identity's principal ID and the app role to assign, for your Entra team to
-  create the binding out-of-band. The function cannot authenticate to AWS until this
-  is done.
+  **no** Entra writes or reads at all. The script handles everything — app role,
+  identifier URI, and the app role assignment. The function cannot authenticate to
+  AWS until this is done.
 
 ## Security Features
 
@@ -552,8 +553,9 @@ be explicitly set.
 Backfill runs create one-off Cost Management export jobs (named
 `focus-backfill-<int>-<YYYY>-<MM>`) per billing-account scope at
 runtime. These are created by the function app, **not** by Terraform, so they are
-**not** removed when the module is destroyed. Left behind, they count against the
-per-scope Cost Management export quota.
+**not** removed when the module is destroyed. Left behind, they still point at the
+storage account this destroy just removed, so they are broken rather than merely
+unused.
 
 Terraform cannot delete them for you, but `terraform destroy` prints a reminder
 (via the `null_resource.backfill_exports_cleanup_warning` resource). When running
@@ -565,6 +567,26 @@ To clean them up after a destroy:
 - Select the `Exports` tab on the `Cost Management + Billing` blade in the Azure portal
 - Search `focus-backfill-`
 - Multi-select exports and delete in small batches
+
+#### Redeploying into a tenant that has been deployed before
+
+Leftover exports no longer block a redeployment: the function app PUTs every month's
+export task on each scheduling run, which is an upsert, so a task left behind by a
+previous deployment is repointed at the new storage account rather than left delivering
+to the deleted one.
+
+The backfill locks are a different matter. They live in the **S3 bucket**, not in Azure,
+at `<bucket>/<tenant-id>/<root-folder>-cost-backfill-schedule.lock` and
+`-cost-backfill-run.lock`, and they are keyed by tenant rather than by deployment. A
+destroy does not remove them, so a fresh deployment into the same tenant and bucket sees
+the previous deployment's locks and **skips backfill entirely** - both the scheduling and
+the running phase, before any export is even looked at.
+
+> [!IMPORTANT]
+> If you need a redeployment to backfill again, delete those two `.lock` objects from the
+> S3 bucket first. The HTTP `cost-export-backfill` endpoint will not override them: it
+> goes through the same lock check. Leave the exported cost data itself in place unless
+> you want it re-exported, since each month is skipped when its data is already present.
 
 ### Updating Python Dependencies
 
@@ -650,13 +672,13 @@ pre-commit hook.
 
 | Name | Version |
 |------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.0 |
-| <a name="provider_azapi"></a> [azapi](#provider\_azapi) | >= 2.0 |
-| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | > 2.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.79.0 |
-| <a name="provider_null"></a> [null](#provider\_null) | >= 3.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | >= 3.0 |
-| <a name="provider_time"></a> [time](#provider\_time) | >= 0.7.0 |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | ~> 2.0 |
+| <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~> 2.0 |
+| <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.9 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 4.79 |
+| <a name="provider_null"></a> [null](#provider\_null) | ~> 3.0 |
+| <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
+| <a name="provider_time"></a> [time](#provider\_time) | = 0.14.0 |
 
 ## Inputs
 
@@ -666,7 +688,6 @@ pre-commit hook.
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | n/a | yes |
 | <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
-| <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Name of the new resource group | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the existing resource group where the virtual network is located | `string` | n/a | yes |
@@ -675,11 +696,12 @@ pre-commit hook.
 | <a name="input_cost_export_daily_schedule_to_years"></a> [cost\_export\_daily\_schedule\_to\_years](#input\_cost\_export\_daily\_schedule\_to\_years) | The number of years from initial deployment to set the end date of the daily schedule for cost export | `number` | `15` | no |
 | <a name="input_cost_mgmt_suffix"></a> [cost\_mgmt\_suffix](#input\_cost\_mgmt\_suffix) | [optional] suffix to add to cost mgmt export tasks - to allow multiple deployments of this module in one tenant | `string` | `""` | no |
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
-| <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/>    cost_export_prefix          = optional(string)<br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
+| <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    resource_group              = optional(string)<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/><br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    diagnostic_settings = optional(object({<br/>      cost_export_blob  = optional(string)<br/>      cost_export_queue = optional(string)<br/>      deployment_blob   = optional(string)<br/>      deployment_queue  = optional(string)<br/>      event_grid        = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
 | <a name="input_enable_focus_exports"></a> [enable\_focus\_exports](#input\_enable\_focus\_exports) | Whether to create the FOCUS cost export infrastructure (storage account, Event Grid, daily export schedule, billing role assignments). Set to false for secondary tenant deployments that share a billing account with a primary deployment — FOCUS exports are scoped at the billing account level, so only one deployment per billing account should create them. | `bool` | `true` | no |
 | <a name="input_existing_entra_application_client_id"></a> [existing\_entra\_application\_client\_id](#input\_existing\_entra\_application\_client\_id) | [optional] Client (application) ID of a pre-existing Entra app registration to use for AWS OIDC federation. Set this for separation of duties: when supplied, the module does NOT create the app registration, service principal, or app role (all of which require directory-write privileges) and consumes this client ID instead. The pre-created app must expose an 'AssumeRoleWithWebIdentity' app role and the identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost\_mgmt\_suffix>' (the AWS OIDC token audience). Leave null to have the module create the app registration as before. | `string` | `null` | no |
 | <a name="input_existing_private_dns_zone_ids"></a> [existing\_private\_dns\_zone\_ids](#input\_existing\_private\_dns\_zone\_ids) | Map of existing private DNS zone IDs keyed by blob, queue, and sites.<br/><br/>Example:<br/>{<br/>  blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"<br/>  queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"<br/>  sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"<br/>} | `map(string)` | `{}` | no |
+| <a name="input_existing_resource_group_name"></a> [existing\_resource\_group\_name](#input\_existing\_resource\_group\_name) | [optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Use when manage\_role\_assignments is false and the resource group (with its role assignments) must exist before the first apply. Leave null to have the module create the resource group. | `string` | `null` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_is_enterprise_customer"></a> [is\_enterprise\_customer](#input\_is\_enterprise\_customer) | Set to true if you are an Enterprise Agreement customer | `bool` | `false` | no |
 | <a name="input_link_existing_private_dns_zones_to_vnet"></a> [link\_existing\_private\_dns\_zones\_to\_vnet](#input\_link\_existing\_private\_dns\_zones\_to\_vnet) | When use\_existing\_private\_dns\_zones is true, whether to create virtual network links from the existing private DNS zones to the module virtual network. Leave as false when your DNS zones are centrally managed (e.g. via a Private DNS Resolver hub) and already linked to the VNet. | `bool` | `false` | no |
@@ -688,7 +710,7 @@ pre-commit hook.
 | <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
 | <a name="input_manage_entra_app_role_assignment"></a> [manage\_entra\_app\_role\_assignment](#input\_manage\_entra\_app\_role\_assignment) | Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Only takes effect when bringing your own app registration (existing\_entra\_application\_client\_id set); when the module creates the app registration it already holds the privileges to create the binding, so this is forced true. Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra\_app\_role\_assignment\_manual\_action\_required' output prints the details for your Entra team to create it out-of-band. | `bool` | `true` | no |
 | <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage\_entra\_app\_role\_assignment. | `bool` | `true` | no |
-| <a name="input_management_group_id"></a> [management\_group\_id](#input\_management\_group\_id) | [optional] ID of the management group that scopes the carbon emissions and Azure Advisor feeds: both the two role assignments created for the function identity and the set of subscriptions those exporters enumerate. This is the value in the portal's 'ID' column (e.g. 'alz'), NOT the display name in its 'Name' column, and not the full '/providers/Microsoft.Management/managementGroups/...' resource ID. Defaults to null, meaning the Tenant Root management group, whose ID is the tenant ID. Set this to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover. FOCUS cost exports are scoped by billing account and are not affected. | `string` | `null` | no |
+| <a name="input_management_group_id"></a> [management\_group\_id](#input\_management\_group\_id) | [optional] ID of the management group scoping the carbon emissions and Azure Advisor feeds. It sets the scope of the function identity's 'Carbon Optimization Reader' and 'Advisor Recommendations Contributor' role assignments, and the set of subscriptions the CarbonEmissionsExporter and AdvisorRecommendationsExporter enumerate. Defaults to null, meaning the Tenant Root management group, whose ID is the tenant ID. Set it to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover; FOCUS cost exports are scoped by billing account and are unaffected, so narrowing this makes carbon and Advisor data cover a subset of the subscriptions the cost data covers. Supply the ID shown in the portal's 'ID' column (e.g. 'alz'), not the display name in its 'Name' column and not a full resource ID - note that the azurerm\_management\_group data source confusingly calls this field 'name'. | `string` | `null` | no |
 | <a name="input_private_endpoints_manage_dns_zone_group"></a> [private\_endpoints\_manage\_dns\_zone\_group](#input\_private\_endpoints\_manage\_dns\_zone\_group) | Whether to manage private DNS integration for private endpoints with this module. If set to false, private DNS zone groups and records must be managed externally, for example by Azure Policy. | `bool` | `true` | no |
 | <a name="input_publish_function_code"></a> [publish\_function\_code](#input\_publish\_function\_code) | Whether the module publishes the function app code via the bundled 'az functionapp deployment source config-zip' step. Set to false when the function code is deployed out-of-band (for example by a separate CI pipeline), which also avoids the Azure CLI dependency in environments where it is unavailable such as 'terraform test'. | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to apply to all resources | `map(string)` | `{}` | no |
@@ -713,7 +735,7 @@ pre-commit hook.
 | <a name="output_deployment_storage_account_name"></a> [deployment\_storage\_account\_name](#output\_deployment\_storage\_account\_name) | The name of the deployment storage account |
 | <a name="output_deployment_storage_private_endpoint_ip"></a> [deployment\_storage\_private\_endpoint\_ip](#output\_deployment\_storage\_private\_endpoint\_ip) | The private IP address of the deployment storage blob private endpoint |
 | <a name="output_ea_billing_role_definition_ids"></a> [ea\_billing\_role\_definition\_ids](#output\_ea\_billing\_role\_definition\_ids) | The set of roleDefinitionId - use each of these as input to the Enrollment Reader JSON body - must match the billing id in the URL |
-| <a name="output_entra_app_role_assignment_manual_action_required"></a> [entra\_app\_role\_assignment\_manual\_action\_required](#output\_entra\_app\_role\_assignment\_manual\_action\_required) | Populated only when bringing your own app registration (existing\_entra\_application\_client\_id) with manage\_entra\_app\_role\_assignment = false, for strict separation of duties: the 'AssumeRoleWithWebIdentity' app role must be assigned to the function app's managed identity MANUALLY by your Entra team. Empty when the module manages the binding. |
+| <a name="output_entra_app_role_assignment_manual_action_required"></a> [entra\_app\_role\_assignment\_manual\_action\_required](#output\_entra\_app\_role\_assignment\_manual\_action\_required) | Populated when bringing your own app registration (existing\_entra\_application\_client\_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. The script is idempotent. Empty when the module creates the app registration itself. |
 | <a name="output_event_grid_subscription_name"></a> [event\_grid\_subscription\_name](#output\_event\_grid\_subscription\_name) | The name of the Event Grid subscription for blob created events |
 | <a name="output_event_grid_system_topic_name"></a> [event\_grid\_system\_topic\_name](#output\_event\_grid\_system\_topic\_name) | The name of the Event Grid system topic for storage events |
 | <a name="output_focus_container_name"></a> [focus\_container\_name](#output\_focus\_container\_name) | The storage container name for FOCUS cost data |
