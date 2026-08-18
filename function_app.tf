@@ -107,7 +107,10 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "STORAGE_CONTAINER"                         = azapi_resource.cost_export[0].name
     "ROOT_FOLDER_PATH"                          = local.focus_directory_name
     "COST_MGMT_SUFFIX"                          = local.cost_mgmt_suffix
-  } : {})
+    } : {
+    "AzureWebJobs.CostExportProcessor.Disabled" = "1"
+    "AzureWebJobs.CostExportBackfill.Disabled"  = "1"
+  })
 
   lifecycle {
     # public_network_access_enabled is the create-time state only (open when deploy_from_external_network
