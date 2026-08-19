@@ -105,7 +105,7 @@ output "entra_app_role_assignment_manual_action_required" {
     "",
     "If you set the cost_mgmt_suffix variable in your module configuration, append the respective PowerShell script parameter to the command above:",
     "",
-    "  -CostManagementSuffix '<your-suffix>'",
+    "  -CostManagementSuffix '<cost_mgmt_suffix value>'",
     "",
     "###############################################################################################################################################################################",
     ""
