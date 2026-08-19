@@ -694,7 +694,10 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
     logger.info(f'Exporter backfill trigger at: {utc_timestamp}')
 
     try:
-        # get the backfill start date from ENV VAR on the function
+        if not Config.backfill_start_date:
+            logger.info("BACKFILL_START_DATE not configured, skipping backfill.")
+            return
+
         logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
 
         start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
