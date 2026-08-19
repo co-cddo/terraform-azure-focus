@@ -92,17 +92,23 @@ output "billing_role_assignment_manual_action_required" {
 output "entra_app_role_assignment_manual_action_required" {
   description = "Populated when bringing your own app registration (existing_entra_application_client_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. The script is idempotent. Empty when the module creates the app registration itself."
   value = local.create_entra_app ? "" : join("\n", [
-    "Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All + Application.ReadWrite.All.",
+    "",
+    "###############################################################################################################################################################################",
     "",
     "Run scripts/ConfigureExistingAppRegistration.ps1 (bundled with this module) — it is idempotent and ensures:",
+    "",
     "  - The 'AssumeRoleWithWebIdentity' app role exists on the app registration",
     "  - The app role is assigned to the function app's managed identity",
     "  - The identifier URI is set correctly",
     "",
     "  ./scripts/ConfigureExistingAppRegistration.ps1 -ManagedIdentityClientID '${azurerm_user_assigned_identity.cost_export.client_id}' -AppRegistrationClientID '${local.entra_app_client_id}'",
     "",
-    "If you set the cost_mgmt_suffix variable in your module configuration, pass it here too:",
+    "If you set the cost_mgmt_suffix variable in your module configuration, append the respective PowerShell script parameter to the command above:",
+    "",
     "  -CostManagementSuffix '<your-suffix>'",
+    "",
+    "###############################################################################################################################################################################",
+    ""
   ])
 }
 

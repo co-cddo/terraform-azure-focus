@@ -65,6 +65,7 @@ resource "azuread_app_role_assignment" "aws_app" {
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
+
 # Apply-time data-plane access for the deployer: the cost_export storage account disables shared
 # keys, so the provider reads blob + queue properties over Entra ID during create/refresh and needs
 # both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
