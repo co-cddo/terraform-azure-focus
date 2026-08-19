@@ -70,19 +70,40 @@ output "billing_role_assignment_manual_action_required" {
   description = "Populated when the function app's managed identity is missing a billing role assignment. For EA customers this always requires manual action; for MCA customers it appears only when the billing_reader_assignments check detects a gap."
   value = !var.enable_focus_exports ? "" : var.is_enterprise_customer ? join("\n", concat(
     [
-      "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
+      "",
+      "###############################################################################################################################################################################",
+      "",
+      "Assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
+      "",
       "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
       "Have an Enterprise Administrator run scripts/NewBillingRoleAssignment.ps1 (bundled with this module), once per billing account; the -IsEnterpriseAgreement switch is required:",
+      "",
     ],
     [for v in var.billing_account_ids : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"],
-    ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
+    [
+      "",
+      "See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals",
+      "",
+      "###############################################################################################################################################################################",
+      "",
+    ],
     )) : length(local.billing_accounts_missing_reader) > 0 ? join("\n", concat(
     [
-      "ACTION REQUIRED (Microsoft Customer Agreement customer): the function app's managed identity is missing a billing role assignment on the following billing account(s).",
+      "",
+      "###############################################################################################################################################################################",
+      "",
+      "The function app's managed identity is missing a billing role assignment on the following billing account(s).",
+      "",
       "This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire (see the module README for details).",
       "Run scripts/NewBillingRoleAssignment.ps1 (bundled with this module) for each:",
+      "",
     ],
     [for v in local.billing_accounts_missing_reader : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '50000000-aaaa-bbbb-cccc-100000000002'"],
+    [
+      "",
+      "###############################################################################################################################################################################",
+      "",
+    ],
   )) : ""
 }
 
