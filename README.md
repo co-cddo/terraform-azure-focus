@@ -678,7 +678,7 @@ pre-commit hook.
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 4.79 |
 | <a name="provider_null"></a> [null](#provider\_null) | ~> 3.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
-| <a name="provider_time"></a> [time](#provider\_time) | = 0.14.0 |
+| <a name="provider_time"></a> [time](#provider\_time) | 0.14.1 |
 
 ## Inputs
 
