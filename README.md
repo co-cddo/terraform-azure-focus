@@ -307,9 +307,9 @@ module "example" {
 
 ## Multiple Azure Tenants
 
-When deploying this module to multiple Azure tenants that share the same billing account, FOCUS cost exports should only be created once per billing account. The daily export is scoped at the billing account level — deploying it from more than one tenant would produce duplicate data exports and consume additional export quota.
+If multiple instances of the solution are required across different Azure tenants associated with the same billing account; FOCUS/cost exports should only be enabled in the primary tenant. Cost exports are scoped at the billing account level, so creating them in more than one tenant in this scenario would produce duplicate data.
 
-Set `enable_focus_exports = false` on all secondary tenant deployments. The function app, carbon emissions, and Azure Advisor pipelines will still be deployed and operate normally; only the FOCUS cost export infrastructure (storage account, Event Grid, daily schedule, billing role assignments, and backfill) is skipped.
+Set `enable_focus_exports = false` on all secondary tenant deployments. The Function App, Carbon Emissions Data, and Azure Advisor Recommendations pipelines will still be deployed and operate normally; only the FOCUS/cost export infrastructure (storage account, Event Grid, daily schedule, billing role assignments, and backfill) are skipped. CostExportProcessor and CostExportBackfill functions will still be published but in a disabled state.
 
 ### Example: Primary tenant (creates exports)
 
