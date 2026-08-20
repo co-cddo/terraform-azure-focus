@@ -529,25 +529,6 @@ schedule.
 The backfill start date (`backfill_start_date`) module terraform variable must
 be explicitly set.
 
-> [!WARNING]
-> **Do not test `BackfillTrigger` (or any long-running function) with the portal
-> "Run" button / Code + Test pane.** On the Flex Consumption plan, a manual
-> invocation (logged as `Reason=This function was programmatically called via the
-> host APIs`) makes the scale controller treat the instance as idle and **scale it
-> in (`DrainMode`) roughly two minutes in**, terminating the invocation before it
-> finishes. There is **no exception** in the logs because the worker process is
-> killed, not faulted. `BackfillTrigger` takes ~8 minutes to build a full
-> schedule, so a manual run never completes and leaves the schedule lock unwritten.
->
-> **Timer-fired (scheduled) runs are not affected** - they run to completion. To
-> exercise the backfill on demand, temporarily change the cron schedule so the
-> timer itself fires, rather than clicking Run.
->
-> Observe runs via **`FunctionAppLogs` in the Log Analytics workspace** (host-side,
-> survives the kill: look for `Executing`/`Executed Functions.BackfillTrigger` and
-> `DrainMode`), not the Code + Test live stream - that stream also stops after ~2
-> minutes and will make a healthy scheduled run *look* like it died.
-
 ### Cleaning Up Backfill Exports on Destroy
 
 Backfill runs create one-off Cost Management export jobs (named
@@ -660,6 +641,17 @@ cd examples/greenfield
 az login
 terraform init
 terraform plan
+```
+
+## Troubleshooting
+
+Query Application Insights to view recent function invocations:
+
+```kql
+traces
+| where operation_Name has_any ('CarbonEmissionsExporter', 'BackfillTrigger', 'AdvisorRecommendationsExporter', 'CostExportBackfill')
+| where timestamp >= ago(7d)
+| order by timestamp desc
 ```
 
 ## Terraform Documentation
