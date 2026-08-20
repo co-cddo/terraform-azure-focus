@@ -368,7 +368,9 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
 def carbon_emissions_backfill_imp(start_date: datetime, skip_existing: bool = True, force_overwrite: bool = False, write_empty_object: bool = True) -> Dict[int, int]:
     try:
         # Azure only allows up to 12 months of carbon data (thirteen months minus now)
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
         if (now - start_date).days > 400:  # 366 (leap year) days plus 31 (largest month) plus a few
             logger.info(f"Carbon Export Start date {start_date} is more than 1 year old. Setting start date to just over 1 year.")
             start_date = (now - timedelta(days=400)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)

@@ -48,6 +48,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - name: Calculate Next Version
         id: version
@@ -143,6 +144,7 @@ jobs:
         run: |
           GENERATED_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
             -f tag_name=${{ env.NEW_TAG }} \
+            -f target_commitish=${{ github.sha }} \
             ${PREVIOUS_TAG:+-f previous_tag_name=$PREVIOUS_TAG} \
             --jq .body)
 
@@ -154,11 +156,13 @@ jobs:
 
           if [ "${{ inputs.pre_release }}" = "true" ]; then
             gh release create ${{ env.NEW_TAG }} \
+              --target ${{ github.sha }} \
               --title "${{ env.NEW_TAG }}" \
               --notes-file release_notes.md \
               --prerelease
           else
             gh release create ${{ env.NEW_TAG }} \
+              --target ${{ github.sha }} \
               --title "${{ env.NEW_TAG }}" \
               --notes-file release_notes.md \
               --latest

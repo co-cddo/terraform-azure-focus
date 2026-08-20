@@ -42,19 +42,19 @@ class Config:
     arn = _get_required_env("AWS_ROLE_ARN")  # Example: "arn:aws:iam::000000000000:role/aad_s3"
     s3_focus_path = _get_required_env("S3_FOCUS_PATH")  # Example: "s3://s3bucketname/test/"
     aws_region = _get_required_env("AWS_REGION")  # Example: "eu-west-2"
-    storage_account_blob_endpoint = _get_required_env("STORAGE_ACCOUNT_BLOB_ENDPOINT")
-    container_name = _get_required_env("CONTAINER_NAME")
-    s3_cost_directory_name = _get_required_env("ROOT_FOLDER_PATH")
+    storage_account_blob_endpoint = os.environ.get("STORAGE_ACCOUNT_BLOB_ENDPOINT")
+    container_name = os.environ.get("CONTAINER_NAME")
+    s3_cost_directory_name = os.environ.get("ROOT_FOLDER_PATH")
     s3_utilization_path = _get_required_env("S3_UTILIZATION_PATH")
     s3_recommendations_path = _get_required_env("S3_RECOMMENDATIONS_PATH")
     s3_carbon_path = _get_required_env("S3_CARBON_PATH")
     carbon_directory_name = _get_required_env("CARBON_DIRECTORY_NAME")
 
     # backfill
-    backfill_start_date = _get_required_env("BACKFILL_START_DATE")
-    cost_mgmt_export_container = _get_required_env("STORAGE_CONTAINER")
-    cost_mgmt_export_destination_id = _get_required_env("STORAGE_RESOURCE_ID")
-    cost_mgmt_export_task_suffix = _get_required_env_empty("COST_MGMT_SUFFIX")   # can be empty -do not throw error if empty
+    backfill_start_date = os.environ.get("BACKFILL_START_DATE")
+    cost_mgmt_export_container = os.environ.get("STORAGE_CONTAINER")
+    cost_mgmt_export_destination_id = os.environ.get("STORAGE_RESOURCE_ID")
+    cost_mgmt_export_task_suffix = os.environ.get("COST_MGMT_SUFFIX", "")
 
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")

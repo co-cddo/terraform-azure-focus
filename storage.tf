@@ -1,11 +1,13 @@
 # trivy:ignore:AVD-AZU-0057 Request logging is handled via azurerm_monitor_diagnostic_setting (Log Analytics) below, not the legacy Storage Analytics queue_properties block.
 # trivy:ignore:AZU-0058 LRS is sufficient for now
 resource "azurerm_storage_account" "cost_export" {
+  count = var.enable_focus_exports ? 1 : 0
   # checkov:skip=CKV_AZURE_206:LRS is sufficient for now - this is a temporary storage location
   # checkov:skip=CKV_AZURE_33:Table and file storage services are not in use on this account
   # checkov:skip=CKV2_AZURE_38:We don't need soft delete since this account is neither source nor destination for cost data
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
+  # checkov:skip=CKV2_AZURE_33:Private endpoint is configured via azurerm_private_endpoint.storage[0]; Checkov cannot trace the relationship through count-indexed resources
   name                     = local.names.storage_account_cost_export
   resource_group_name      = local.resource_group_name
   location                 = local.resource_group_location
@@ -37,9 +39,11 @@ resource "azurerm_storage_account" "cost_export" {
 }
 
 resource "azapi_resource" "cost_export" {
+  count = var.enable_focus_exports ? 1 : 0
+
   type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01"
   name      = "cost-exports"
-  parent_id = "${azurerm_storage_account.cost_export.id}/blobServices/default"
+  parent_id = "${azurerm_storage_account.cost_export[0].id}/blobServices/default"
   body = {
     properties = {
       metadata     = {}
@@ -49,9 +53,11 @@ resource "azapi_resource" "cost_export" {
 }
 
 resource "azapi_resource" "cost_data_queue" {
+  count = var.enable_focus_exports ? 1 : 0
+
   type      = "Microsoft.Storage/storageAccounts/queueServices/queues@2022-09-01"
   name      = "costdata"
-  parent_id = "${azurerm_storage_account.cost_export.id}/queueServices/default"
+  parent_id = "${azurerm_storage_account.cost_export[0].id}/queueServices/default"
 }
 
 # trivy:ignore:AVD-AZU-0057 Request logging is handled via azurerm_monitor_diagnostic_setting (Log Analytics) below, not the legacy Storage Analytics queue_properties block.
@@ -111,8 +117,10 @@ resource "azapi_resource" "deployment" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "cost_export_blob" {
+  count = var.enable_focus_exports ? 1 : 0
+
   name                       = local.names.diag_cost_export_blob
-  target_resource_id         = "${azurerm_storage_account.cost_export.id}/blobServices/default"
+  target_resource_id         = "${azurerm_storage_account.cost_export[0].id}/blobServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
   enabled_log {
@@ -127,8 +135,10 @@ resource "azurerm_monitor_diagnostic_setting" "cost_export_blob" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "cost_export_queue" {
+  count = var.enable_focus_exports ? 1 : 0
+
   name                       = local.names.diag_cost_export_queue
-  target_resource_id         = "${azurerm_storage_account.cost_export.id}/queueServices/default"
+  target_resource_id         = "${azurerm_storage_account.cost_export[0].id}/queueServices/default"
   log_analytics_workspace_id = local.effective_log_analytics_workspace_id
 
   enabled_log {

@@ -1,4 +1,6 @@
 resource "azurerm_private_endpoint" "storage" {
+  count = var.enable_focus_exports ? 1 : 0
+
   name                = local.names.pe_storage_blob
   location            = local.resource_group_location
   resource_group_name = local.resource_group_name
@@ -7,7 +9,7 @@ resource "azurerm_private_endpoint" "storage" {
 
   private_service_connection {
     name                           = local.names.psc_storage_blob
-    private_connection_resource_id = azurerm_storage_account.cost_export.id
+    private_connection_resource_id = azurerm_storage_account.cost_export[0].id
     subresource_names              = ["blob"]
     is_manual_connection           = false
   }
@@ -22,6 +24,8 @@ resource "azurerm_private_endpoint" "storage" {
 }
 
 resource "azurerm_private_endpoint" "storage_queue" {
+  count = var.enable_focus_exports ? 1 : 0
+
   name                = local.names.pe_storage_queue
   location            = local.resource_group_location
   resource_group_name = local.resource_group_name
@@ -30,7 +34,7 @@ resource "azurerm_private_endpoint" "storage_queue" {
 
   private_service_connection {
     name                           = local.names.psc_storage_queue
-    private_connection_resource_id = azurerm_storage_account.cost_export.id
+    private_connection_resource_id = azurerm_storage_account.cost_export[0].id
     subresource_names              = ["queue"]
     is_manual_connection           = false
   }

@@ -65,6 +65,7 @@ resource "azuread_app_role_assignment" "aws_app" {
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
 }
 
+
 # Apply-time data-plane access for the deployer: the cost_export storage account disables shared
 # keys, so the provider reads blob + queue properties over Entra ID during create/refresh and needs
 # both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
@@ -96,8 +97,8 @@ resource "time_sleep" "wait_for_deployer_rbac" {
 }
 
 resource "azurerm_role_assignment" "grant_func_queue_contributor" {
-  count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_storage_account.cost_export.id
+  count                = var.manage_role_assignments && var.enable_focus_exports ? 1 : 0
+  scope                = azurerm_storage_account.cost_export[0].id
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
@@ -129,10 +130,10 @@ resource "time_sleep" "wait_for_function_deployment_rbac" {
 }
 
 resource "azurerm_role_assignment" "event_grid_queue_sender" {
-  count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_storage_account.cost_export.id
+  count                = var.manage_role_assignments && var.enable_focus_exports ? 1 : 0
+  scope                = azurerm_storage_account.cost_export[0].id
   role_definition_name = "Storage Queue Data Message Sender"
-  principal_id         = azurerm_eventgrid_system_topic.storage_events.identity[0].principal_id
+  principal_id         = azurerm_eventgrid_system_topic.storage_events[0].identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
@@ -158,7 +159,7 @@ resource "azurerm_role_assignment" "advisor_recommendations_contributor" {
 
 # this only works for MCA customers
 resource "azapi_resource_action" "add_role_assignment" {
-  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+  for_each = var.manage_role_assignments && var.enable_focus_exports && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
   type                   = "Microsoft.Billing/billingAccounts@2019-10-01-preview"
   resource_id            = "/providers/Microsoft.Billing/billingAccounts/${each.value}"
@@ -185,7 +186,7 @@ resource "azapi_resource_action" "add_role_assignment" {
 # documented as idempotent (204 when the assignment is already gone), so a manually removed
 # assignment cannot block destroy.
 resource "azapi_resource_action" "remove_role_assignment" {
-  for_each = var.manage_role_assignments && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
+  for_each = var.manage_role_assignments && var.enable_focus_exports && !var.is_enterprise_customer ? toset(var.billing_account_ids) : toset([])
 
   type        = "Microsoft.Billing/billingAccounts/billingRoleAssignments@2024-04-01"
   resource_id = azapi_resource_action.add_role_assignment[each.key].output.id
@@ -202,7 +203,7 @@ resource "azapi_resource_action" "remove_role_assignment" {
 # role is missing.
 check "billing_reader_assignments" {
   assert {
-    condition = length(local.billing_accounts_missing_reader) == 0
+    condition = !var.enable_focus_exports || length(local.billing_accounts_missing_reader) == 0
 
     error_message = "The function app's managed identity is missing a billing role assignment on at least one billing account. This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire. See the billing_role_assignment_manual_action_required output for the remediation script and the module README for details."
   }
@@ -210,8 +211,8 @@ check "billing_reader_assignments" {
 
 # Function writes export output and creates export tasks that deliver to this storage account.
 resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
-  count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_storage_account.cost_export.id
+  count                = var.manage_role_assignments && var.enable_focus_exports ? 1 : 0
+  scope                = azurerm_storage_account.cost_export[0].id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"
@@ -223,8 +224,8 @@ resource "azurerm_role_assignment" "grant_func_storage_blob_contributor" {
 # condition below restricts the function to assigning/removing ONLY that role on this account
 # (no privilege escalation via roleAssignments/write). Full rationale in README "Privileges".
 resource "azurerm_role_assignment" "grant_func_storage_account_owner_constrained" {
-  count                = var.manage_role_assignments ? 1 : 0
-  scope                = azurerm_storage_account.cost_export.id
+  count                = var.manage_role_assignments && var.enable_focus_exports ? 1 : 0
+  scope                = azurerm_storage_account.cost_export[0].id
   role_definition_name = "Owner"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
   principal_type       = "ServicePrincipal"

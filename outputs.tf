@@ -5,7 +5,7 @@ output "aws_app_client_id" {
 
 output "focus_container_name" {
   description = "The storage container name for FOCUS cost data"
-  value       = azapi_resource.cost_export.name
+  value       = var.enable_focus_exports ? azapi_resource.cost_export[0].name : null
 }
 
 output "recommendations_export_name" {
@@ -68,21 +68,42 @@ output "ea_billing_role_definition_ids" {
 # when the check block in rbac.tf detects a missing assignment.
 output "billing_role_assignment_manual_action_required" {
   description = "Populated when the function app's managed identity is missing a billing role assignment. For EA customers this always requires manual action; for MCA customers it appears only when the billing_reader_assignments check detects a gap."
-  value = var.is_enterprise_customer ? join("\n", concat(
+  value = !var.enable_focus_exports ? "" : var.is_enterprise_customer ? join("\n", concat(
     [
-      "ACTION REQUIRED (Enterprise Agreement customer): assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
+      "",
+      "###############################################################################################################################################################################",
+      "",
+      "Assign the 'EnrollmentReader' billing role to the cost-export function app's managed identity MANUALLY.",
+      "",
       "Terraform and the deploying service principal cannot do this - it requires Enterprise Administrator privileges.",
       "Have an Enterprise Administrator run scripts/NewBillingRoleAssignment.ps1 (bundled with this module), once per billing account; the -IsEnterpriseAgreement switch is required:",
+      "",
     ],
     [for v in var.billing_account_ids : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"],
-    ["See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals"],
+    [
+      "",
+      "See https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals",
+      "",
+      "###############################################################################################################################################################################",
+      "",
+    ],
     )) : length(local.billing_accounts_missing_reader) > 0 ? join("\n", concat(
     [
-      "ACTION REQUIRED (Microsoft Customer Agreement customer): the function app's managed identity is missing a billing role assignment on the following billing account(s).",
+      "",
+      "###############################################################################################################################################################################",
+      "",
+      "The function app's managed identity is missing a billing role assignment on the following billing account(s).",
+      "",
       "This can happen when an assignment is removed out-of-band or when the managed identity is rebuilt and the one-shot grant does not re-fire (see the module README for details).",
       "Run scripts/NewBillingRoleAssignment.ps1 (bundled with this module) for each:",
+      "",
     ],
     [for v in local.billing_accounts_missing_reader : "  ./scripts/NewBillingRoleAssignment.ps1 -BillingAccountID '${v}' -ServicePrincipalObjectID '${azurerm_user_assigned_identity.cost_export.principal_id}' -RoleDefinitionID '50000000-aaaa-bbbb-cccc-100000000002'"],
+    [
+      "",
+      "###############################################################################################################################################################################",
+      "",
+    ],
   )) : ""
 }
 
@@ -92,17 +113,23 @@ output "billing_role_assignment_manual_action_required" {
 output "entra_app_role_assignment_manual_action_required" {
   description = "Populated when bringing your own app registration (existing_entra_application_client_id). Instructs your Entra team to run ConfigureExistingAppRegistration.ps1 to ensure the app role, identifier URI, and app role assignment are configured. The script is idempotent. Empty when the module creates the app registration itself."
   value = local.create_entra_app ? "" : join("\n", [
-    "Requires an Entra admin with Directory.Read.All + AppRoleAssignment.ReadWrite.All + Application.ReadWrite.All.",
+    "",
+    "###############################################################################################################################################################################",
     "",
     "Run scripts/ConfigureExistingAppRegistration.ps1 (bundled with this module) — it is idempotent and ensures:",
+    "",
     "  - The 'AssumeRoleWithWebIdentity' app role exists on the app registration",
     "  - The app role is assigned to the function app's managed identity",
     "  - The identifier URI is set correctly",
     "",
     "  ./scripts/ConfigureExistingAppRegistration.ps1 -ManagedIdentityClientID '${azurerm_user_assigned_identity.cost_export.client_id}' -AppRegistrationClientID '${local.entra_app_client_id}'",
     "",
-    "If you set the cost_mgmt_suffix variable in your module configuration, pass it here too:",
-    "  -CostManagementSuffix '<your-suffix>'",
+    "If you set the cost_mgmt_suffix variable in your module configuration, append the respective PowerShell script parameter to the command above:",
+    "",
+    "  -CostManagementSuffix '<cost_mgmt_suffix value>'",
+    "",
+    "###############################################################################################################################################################################",
+    ""
   ])
 }
 
@@ -123,7 +150,7 @@ output "resource_names" {
 
 output "cost_export_storage_account_name" {
   description = "The name of the cost export storage account"
-  value       = azurerm_storage_account.cost_export.name
+  value       = var.enable_focus_exports ? azurerm_storage_account.cost_export[0].name : null
 }
 
 output "deployment_storage_account_name" {
@@ -138,17 +165,17 @@ output "function_app_name" {
 
 output "event_grid_system_topic_name" {
   description = "The name of the Event Grid system topic for storage events"
-  value       = azurerm_eventgrid_system_topic.storage_events.name
+  value       = var.enable_focus_exports ? azurerm_eventgrid_system_topic.storage_events[0].name : null
 }
 
 output "event_grid_subscription_name" {
   description = "The name of the Event Grid subscription for blob created events"
-  value       = azurerm_eventgrid_event_subscription.focus_blob_created.name
+  value       = var.enable_focus_exports ? azurerm_eventgrid_event_subscription.focus_blob_created[0].name : null
 }
 
 output "cost_export_storage_account_id" {
   description = "The resource id of the cost export storage account"
-  value       = azurerm_storage_account.cost_export.id
+  value       = var.enable_focus_exports ? azurerm_storage_account.cost_export[0].id : null
 }
 
 output "deployment_storage_account_id" {
@@ -163,12 +190,12 @@ output "function_app_id" {
 
 output "storage_private_endpoint_ip" {
   description = "The private IP address of the cost export storage blob private endpoint"
-  value       = azurerm_private_endpoint.storage.private_service_connection[0].private_ip_address
+  value       = var.enable_focus_exports ? azurerm_private_endpoint.storage[0].private_service_connection[0].private_ip_address : null
 }
 
 output "storage_queue_private_endpoint_ip" {
   description = "The private IP address of the cost export storage queue private endpoint"
-  value       = azurerm_private_endpoint.storage_queue.private_service_connection[0].private_ip_address
+  value       = var.enable_focus_exports ? azurerm_private_endpoint.storage_queue[0].private_service_connection[0].private_ip_address : null
 }
 
 output "deployment_storage_private_endpoint_ip" {

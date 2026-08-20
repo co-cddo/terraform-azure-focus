@@ -694,18 +694,20 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
     logger.info(f'Exporter backfill trigger at: {utc_timestamp}')
 
     try:
-        # get the backfill start date from ENV VAR on the function
-        logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
+        if Config.backfill_start_date:
+            logging.debug(f"Backfill start date from ENV VAR: {Config.backfill_start_date}")
+            start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
+            cost_export_backfill_impl(
+                start_date=start_date,
+                force_overwrite=False,
+                skip_existing=True,
+            )
+        else:
+            logger.info("BACKFILL_START_DATE not configured, skipping cost export backfill.")
 
-        start_date = datetime.strptime(Config.backfill_start_date, '%Y-%m-%d')
-        cost_export_backfill_impl(
-            start_date=start_date,
-            force_overwrite=False,
-            skip_existing=True,
-        )
-
+        carbon_start_date, _ = get_carbon_api_date_range()
         processed_months, skipped_months = carbon_emissions_backfill_imp(
-            start_date=start_date,
+            start_date=carbon_start_date,
             skip_existing=True,
             force_overwrite=False,
             write_empty_object=True,
