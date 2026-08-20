@@ -144,6 +144,7 @@ jobs:
         run: |
           GENERATED_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
             -f tag_name=${{ env.NEW_TAG }} \
+            -f target_commitish=${{ github.sha }} \
             ${PREVIOUS_TAG:+-f previous_tag_name=$PREVIOUS_TAG} \
             --jq .body)
 
