@@ -28,8 +28,7 @@ jobs:
         with:
           working-dir: .
           fail-on-diff: false
-      - run: git diff
-      - run: git status
+      - run: cat README.md
 
   module-validation:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-validation.yml@main
