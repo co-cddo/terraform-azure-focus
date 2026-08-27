@@ -30,16 +30,16 @@ variable "enable_focus_exports" {
   default     = true
 }
 
-variable "enable_advisor_exports" {
-  description = "Whether to enable the Azure Advisor cost recommendations export. Set to false to disable the AdvisorRecommendationsExporter function and its RBAC role assignment."
-  type        = bool
-  default     = true
-}
-
 variable "enable_carbon_exports" {
   description = "Whether to enable the carbon emissions export. Set to false to disable the CarbonEmissionsExporter, CarbonEmissionsBackfill, and CarbonApiDateRangeInfo functions and the Carbon Optimization Reader RBAC role assignment."
   type        = bool
   default     = true
+}
+
+variable "enable_advisor_exports" {
+  description = "Whether to enable the Azure Advisor cost recommendations export. Set to false to disable the AdvisorRecommendationsExporter function and its RBAC role assignment."
+  type        = bool
+  default     = false
 }
 
 variable "billing_account_ids" {
