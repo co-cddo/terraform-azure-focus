@@ -110,6 +110,12 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     } : {
     "AzureWebJobs.CostExportProcessor.Disabled" = "1"
     "AzureWebJobs.CostExportBackfill.Disabled"  = "1"
+    }, var.enable_advisor_exports ? {} : {
+    "AzureWebJobs.AdvisorRecommendationsExporter.Disabled" = "1"
+    }, var.enable_carbon_exports ? {} : {
+    "AzureWebJobs.CarbonEmissionsExporter.Disabled" = "1"
+    "AzureWebJobs.CarbonEmissionsBackfill.Disabled" = "1"
+    "AzureWebJobs.CarbonApiDateRangeInfo.Disabled"  = "1"
   })
 
   lifecycle {
