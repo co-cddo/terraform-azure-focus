@@ -705,14 +705,17 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
         else:
             logger.info("BACKFILL_START_DATE not configured, skipping cost export backfill.")
 
-        carbon_start_date, _ = get_carbon_api_date_range()
-        processed_months, skipped_months = carbon_emissions_backfill_imp(
-            start_date=carbon_start_date,
-            skip_existing=True,
-            force_overwrite=False,
-            write_empty_object=True,
-        )
-        logger.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
+        if Config.enable_carbon_exports:
+            carbon_start_date, _ = get_carbon_api_date_range()
+            processed_months, skipped_months = carbon_emissions_backfill_imp(
+                start_date=carbon_start_date,
+                skip_existing=True,
+                force_overwrite=False,
+                write_empty_object=True,
+            )
+            logger.info(f"Carbon backfill completed. Processed {processed_months} months, skipped {skipped_months} existing months.")
+        else:
+            logger.info("Carbon exports disabled, skipping carbon backfill.")
 
     except Exception as e:
         error_msg = f"Error in backfill_trigger: {str(e)}"

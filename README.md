@@ -32,28 +32,24 @@ data flow and component architecture for all three export types:
 
 - An existing virtual network with two subnets, one of which has a delegation
   for `Microsoft.App.environments` (`function_app_subnet_id`).
-- [Deployment privileges](#a-deployment-privileges-prerequisite-must-be-granted-outside-this-module), granted to the principal that runs
-  `terraform apply`. **These are assumed to be in place before the module runs -
-  the module does not create them.**
 - [PowerShell 7 (`pwsh`)](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
-  on the machine that runs `terraform apply`/`terraform destroy`. The module uses
-  `local-exec` provisioners that invoke `pwsh` to publish the function code and to
-  print the backfill-export cleanup warning on destroy, so `pwsh` must be on `PATH`. Note that all GitHub runner images include the current LTS release by default.
+  on the machine that runs `terraform apply`/`terraform destroy`. Note that all GitHub runner images include the current LTS release by default.
+- [Deployment privileges](#a-deployment-privileges), granted to the principal that runs
+  `terraform apply`.
 
-## Privileges
+<a name="privileges"></a>
+## RBAC
 
-This section describes every privilege involved, split into what the deploying
-principal must already hold (a) and what the module grants at apply time (b).
-Least privilege is a primary goal - the grants below are intentionally as
-narrow as the Azure platform allows.
+This section is split into a) what the deploying
+principal must already hold and b) what roles the module assigns at apply time.
+Permissions are least-privilege by design, scoped as narrowly as Azure allows.
 
-### a) Deployment privileges (prerequisite, must be granted outside this module)
+### a) Deployment privileges
 
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
 storage **data-plane** roles it needs during apply (see (b)), so those are *not*
-prerequisites - unless `manage_role_assignments = false`, in which case they are
-(see the note in (b)).
+prerequisites - unless `manage_role_assignments = false`.
 
 | Scope | Role | Why it is needed |
 |---|---|---|

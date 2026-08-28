@@ -56,6 +56,9 @@ class Config:
     cost_mgmt_export_destination_id = os.environ.get("STORAGE_RESOURCE_ID")
     cost_mgmt_export_task_suffix = os.environ.get("COST_MGMT_SUFFIX", "")
 
+    # Feature toggles
+    enable_carbon_exports = os.environ.get("ENABLE_CARBON_EXPORTS", "true").lower() == "true"
+
     # Carbon Optimization API settings
     carbon_tenant_id = os.environ.get("CARBON_API_TENANT_ID")
     billing_scope = os.environ.get("BILLING_SCOPE")
