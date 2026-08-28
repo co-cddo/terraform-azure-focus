@@ -43,6 +43,7 @@ variables {
   # assignments. EA prunes the billing role lookups instead, which keeps check
   # "billing_reader_assignments" evaluable at plan.
   is_enterprise_customer = true
+  enable_advisor_exports = true
 }
 
 run "defaults_to_tenant_root" {

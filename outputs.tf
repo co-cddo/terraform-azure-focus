@@ -10,12 +10,12 @@ output "focus_container_name" {
 
 output "recommendations_export_name" {
   description = "The name of the Azure Advisor recommendations export (timer-triggered function)"
-  value       = "AdvisorRecommendationsExporter"
+  value       = var.enable_advisor_exports ? "AdvisorRecommendationsExporter" : null
 }
 
 output "carbon_export_name" {
   description = "The name of the carbon optimization export (timer-triggered function)"
-  value       = "CarbonEmissionsExporter"
+  value       = var.enable_carbon_exports ? "CarbonEmissionsExporter" : null
 }
 
 output "carbon_container_name" {

@@ -94,6 +94,7 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "CARBON_API_TENANT_ID"       = data.azurerm_client_config.current.tenant_id
     "BILLING_SCOPE"              = local.management_group_scope
     "BILLING_AZURE_LOCATION"     = var.location
+    "ENABLE_CARBON_EXPORTS"      = tostring(var.enable_carbon_exports)
     "LOGGING_LEVEL"              = var.logging_level
     }, var.enable_focus_exports ? {
     "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export[0].primary_blob_endpoint
@@ -110,6 +111,12 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     } : {
     "AzureWebJobs.CostExportProcessor.Disabled" = "1"
     "AzureWebJobs.CostExportBackfill.Disabled"  = "1"
+    }, var.enable_advisor_exports ? {} : {
+    "AzureWebJobs.AdvisorRecommendationsExporter.Disabled" = "1"
+    }, var.enable_carbon_exports ? {} : {
+    "AzureWebJobs.CarbonEmissionsExporter.Disabled" = "1"
+    "AzureWebJobs.CarbonEmissionsBackfill.Disabled" = "1"
+    "AzureWebJobs.CarbonApiDateRangeInfo.Disabled"  = "1"
   })
 
   lifecycle {

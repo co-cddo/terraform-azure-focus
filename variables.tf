@@ -30,6 +30,18 @@ variable "enable_focus_exports" {
   default     = true
 }
 
+variable "enable_carbon_exports" {
+  description = "Whether to enable the carbon emissions export. Set to false to disable the CarbonEmissionsExporter, CarbonEmissionsBackfill, and CarbonApiDateRangeInfo functions and the Carbon Optimization Reader RBAC role assignment."
+  type        = bool
+  default     = true
+}
+
+variable "enable_advisor_exports" {
+  description = "Whether to enable the Azure Advisor cost recommendations export. Set to false to disable the AdvisorRecommendationsExporter function and its RBAC role assignment."
+  type        = bool
+  default     = false
+}
+
 variable "billing_account_ids" {
   description = "List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant_id). Can be empty when enable_focus_exports is false."
   type        = list(string)

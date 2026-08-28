@@ -138,7 +138,7 @@ resource "azurerm_role_assignment" "event_grid_queue_sender" {
 }
 
 resource "azurerm_role_assignment" "carbon_optimization_reader" {
-  count                = var.manage_role_assignments ? 1 : 0
+  count                = var.manage_role_assignments && var.enable_carbon_exports ? 1 : 0
   scope                = local.management_group_scope
   role_definition_name = "Carbon Optimization Reader"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id
@@ -150,7 +150,7 @@ resource "azurerm_role_assignment" "carbon_optimization_reader" {
 # Contributor" is the least-privilege built-in role granting Microsoft.Advisor/recommendations/read
 # - there is no read-only Advisor recommendations built-in. See README "Privileges".
 resource "azurerm_role_assignment" "advisor_recommendations_contributor" {
-  count                = var.manage_role_assignments ? 1 : 0
+  count                = var.manage_role_assignments && var.enable_advisor_exports ? 1 : 0
   scope                = local.management_group_scope
   role_definition_name = "Advisor Recommendations Contributor"
   principal_id         = azurerm_user_assigned_identity.cost_export.principal_id

@@ -32,28 +32,24 @@ data flow and component architecture for all three export types:
 
 - An existing virtual network with two subnets, one of which has a delegation
   for `Microsoft.App.environments` (`function_app_subnet_id`).
-- [Deployment privileges](#a-deployment-privileges-prerequisite-must-be-granted-outside-this-module), granted to the principal that runs
-  `terraform apply`. **These are assumed to be in place before the module runs -
-  the module does not create them.**
 - [PowerShell 7 (`pwsh`)](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
-  on the machine that runs `terraform apply`/`terraform destroy`. The module uses
-  `local-exec` provisioners that invoke `pwsh` to publish the function code and to
-  print the backfill-export cleanup warning on destroy, so `pwsh` must be on `PATH`. Note that all GitHub runner images include the current LTS release by default.
+  on the machine that runs `terraform apply`/`terraform destroy`. Note that all GitHub runner images include the current LTS release by default.
+- [Deployment privileges](#a-deployment-privileges), granted to the principal that runs
+  `terraform apply`.
 
-## Privileges
+<a name="privileges"></a>
+## RBAC
 
-This section describes every privilege involved, split into what the deploying
-principal must already hold (a) and what the module grants at apply time (b).
-Least privilege is a primary goal - the grants below are intentionally as
-narrow as the Azure platform allows.
+This section is split into a) what the deploying
+principal must already hold and b) what roles the module assigns at apply time.
+Permissions are least-privilege by design, scoped as narrowly as Azure allows.
 
-### a) Deployment privileges (prerequisite, must be granted outside this module)
+### a) Deployment privileges
 
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
-storage **data-plane** roles it needs during apply (see (b)), so those are *not*
-prerequisites - unless `manage_role_assignments = false`, in which case they are
-(see the note in (b)).
+data plane roles it needs during apply (see (b)), so those are *not*
+prerequisites - unless `manage_role_assignments = false`.
 
 | Scope | Role | Why it is needed |
 |---|---|---|
@@ -690,6 +686,8 @@ pre-commit hook.
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
 | <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    resource_group              = optional(string)<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/><br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    diagnostic_settings = optional(object({<br/>      cost_export_blob  = optional(string)<br/>      cost_export_queue = optional(string)<br/>      deployment_blob   = optional(string)<br/>      deployment_queue  = optional(string)<br/>      event_grid        = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
+| <a name="input_enable_advisor_exports"></a> [enable\_advisor\_exports](#input\_enable\_advisor\_exports) | Whether to enable the Azure Advisor cost recommendations export. Set to false to disable the AdvisorRecommendationsExporter function and its RBAC role assignment. | `bool` | `false` | no |
+| <a name="input_enable_carbon_exports"></a> [enable\_carbon\_exports](#input\_enable\_carbon\_exports) | Whether to enable the carbon emissions export. Set to false to disable the CarbonEmissionsExporter, CarbonEmissionsBackfill, and CarbonApiDateRangeInfo functions and the Carbon Optimization Reader RBAC role assignment. | `bool` | `true` | no |
 | <a name="input_enable_focus_exports"></a> [enable\_focus\_exports](#input\_enable\_focus\_exports) | Whether to create the FOCUS cost export infrastructure (storage account, Event Grid, daily export schedule, billing role assignments). Set to false for secondary tenant deployments that share a billing account with a primary deployment — FOCUS exports are scoped at the billing account level, so only one deployment per billing account should create them. | `bool` | `true` | no |
 | <a name="input_existing_entra_application_client_id"></a> [existing\_entra\_application\_client\_id](#input\_existing\_entra\_application\_client\_id) | [optional] Client (application) ID of a pre-existing Entra app registration to use for AWS OIDC federation. Set this for separation of duties: when supplied, the module does NOT create the app registration, service principal, or app role (all of which require directory-write privileges) and consumes this client ID instead. The pre-created app must expose an 'AssumeRoleWithWebIdentity' app role and the identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost\_mgmt\_suffix>' (the AWS OIDC token audience). Leave null to have the module create the app registration as before. | `string` | `null` | no |
 | <a name="input_existing_private_dns_zone_ids"></a> [existing\_private\_dns\_zone\_ids](#input\_existing\_private\_dns\_zone\_ids) | Map of existing private DNS zone IDs keyed by blob, queue, and sites.<br/><br/>Example:<br/>{<br/>  blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"<br/>  queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"<br/>  sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"<br/>} | `map(string)` | `{}` | no |
