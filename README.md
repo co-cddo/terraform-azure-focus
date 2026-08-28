@@ -48,7 +48,7 @@ Permissions are least-privilege by design, scoped as narrowly as Azure allows.
 
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
-storage **data-plane** roles it needs during apply (see (b)), so those are *not*
+data plane roles it needs during apply (see (b)), so those are *not*
 prerequisites - unless `manage_role_assignments = false`.
 
 | Scope | Role | Why it is needed |
