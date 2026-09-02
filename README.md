@@ -237,7 +237,7 @@ module "cost_forwarding" {
   virtual_network_resource_group_name = "<name of the existing resource group containing the virtual network above>"
 
   ## Set to false if you do not have Enterprise Agreement (EA) billing account(s) (i.e. you have Microsoft Customer Agreement (MCA) billing account(s))
-  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on EA account(s) following deployment - see the [important alert](#ea-billing-role-script) above
+  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on EA account(s) following deployment - see scripts/NewBillingRoleAssignment.ps1
   is_enterprise_customer             = true
 
   ## Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
