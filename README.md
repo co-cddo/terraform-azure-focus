@@ -62,7 +62,6 @@ prerequisites - unless `manage_role_assignments = false`.
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
-| Entra ID (tenant) | **Cloud Application Administrator** | Create the AWS-federation Entra app registration and its service principal. Not required when using `existing_entra_application_client_id` - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
