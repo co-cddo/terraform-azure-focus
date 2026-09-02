@@ -20,6 +20,9 @@ This Terraform module exports Azure cost data and writes it to a configured AWS 
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint
   metrics across Scope 1 and Scope 3 emissions
 
+For a full inventory of deployed resources and pricing considerations, see the
+[Bill of Materials](BILL_OF_MATERIALS.md).
+
 ## Architecture
 
 This module creates a fully integrated solution for exporting multiple cost-related
@@ -38,6 +41,7 @@ data flow and component architecture for all three export types:
   `terraform apply`.
 
 <a name="privileges"></a>
+
 ## RBAC
 
 This section is split into a) what the deploying
@@ -222,27 +226,22 @@ provider "azurerm" {
 }
 
 module "cost_forwarding" {
-  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=c93817064d43433c66d17459a5ebbbac114d9b18" # v3.1.0
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=0ea5860ee95c00717e908562a0ec5fe6fb6822cd" # v4.0.0
 
   aws_s3_bucket_name                  = "<aws s3 bucket name>"
   aws_account_id                      = "<aws account id>"
-  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+  billing_account_ids                 = ["<billing account id>"] # List of billing account IDs (applicable to FOCUS cost data only)
   subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
   function_app_subnet_id              = "<resource id for existing subnet to be used for function app vnet integration>"
   virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
   virtual_network_resource_group_name = "<name of the existing resource group containing the virtual network above>"
-  resource_group_name                 = "<name for the new resource group where the function app and related resources will be created>"
 
-  ## It is not recommended to set this to true in production
-  # deploy_from_external_network = true
+  ## Set to false if you do not have Enterprise Agreement (EA) billing account(s) (i.e. you have Microsoft Customer Agreement (MCA) billing account(s))
+  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on EA account(s) following deployment - see scripts/NewBillingRoleAssignment.ps1
+  is_enterprise_customer             = true
 
   ## Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
   # current_principal_type = "ServicePrincipal"
-
-  ## Set to true if the billing account is an Enterprise Agreement (EA)
-  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on the EA account following deployment
-  ## See: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#assign-a-role-to-the-service-principal
-  # is_enterprise_customer             = true
 }
 ```
 

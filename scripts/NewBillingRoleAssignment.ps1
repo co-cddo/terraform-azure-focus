@@ -1,8 +1,14 @@
 #requires -Modules Az.Accounts
 
 <#
+.SYNOPSIS
+Creates a billing account role assignment. Typically used by Enterprise Agreement (EA) customers to give the function app user-assigned managed identity the required EnrollmentReader privileges on the billing account(s) following module deployment
+
+.EXAMPLE
+./NewBillingRoleAssignment.ps1 -BillingAccountID <billing account id> -ServicePrincipalObjectID <object id of function app managed identity> -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement
+
 .DESCRIPTION
-Grants a billing role assignment directly against the Billing API, outside Terraform. Only use
+Creates a billing role assignment directly against the Billing API, outside Terraform. Only use
 this when the module does not manage the assignment itself: Enterprise Agreement billing
 accounts (always manual, since creation requires Enterprise Administrator privileges; pass
 -IsEnterpriseAgreement), and/or deployments with manage_role_assignments = false. For MCA
