@@ -20,6 +20,9 @@ This Terraform module exports Azure cost data and writes it to a configured AWS 
 - **Carbon Emissions Data**: Monthly JSON reports with carbon footprint
   metrics across Scope 1 and Scope 3 emissions
 
+For a full inventory of deployed resources and pricing considerations, see the
+[Bill of Materials](BILL_OF_MATERIALS.md).
+
 ## Architecture
 
 This module creates a fully integrated solution for exporting multiple cost-related
@@ -38,6 +41,7 @@ data flow and component architecture for all three export types:
   `terraform apply`.
 
 <a name="privileges"></a>
+
 ## RBAC
 
 This section is split into a) what the deploying
@@ -52,12 +56,13 @@ data plane roles it needs during apply (see (b)), so those are *not*
 prerequisites - unless `manage_role_assignments = false`.
 
 | Scope | Role | Why it is needed |
-|---|---|---|
+| --- | --- | --- |
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
+| Entra ID (tenant) | **Cloud Application Administrator** | Create the AWS-federation Entra app registration and its service principal. Not required when using `existing_entra_application_client_id` - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
@@ -93,7 +98,7 @@ system topic and for each Cost Management export.
 > [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration) below.
 
 | Principal | Role | Scope | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Deploying principal | Storage Blob Data Contributor | cost-export resource group | Apply-time only: the azurerm provider reads the storage account's blob properties over Entra ID. |
 | Deploying principal | Storage Queue Data Contributor | cost-export resource group | Apply-time only: the provider also reads queue properties. |
 | Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
@@ -181,7 +186,7 @@ exact command after apply.
 **Module inputs:**
 
 | Variable | Effect |
-|---|---|
+| --- | --- |
 | `existing_entra_application_client_id` | Client (application) ID of the pre-created app. When set, the module does **not** create the app / service principal / app role and consumes this ID instead. |
 | `manage_entra_app_role_assignment` | Whether the module creates the app-role binding (function identity → `AssumeRoleWithWebIdentity`). Default `true`. **Only takes effect when `existing_entra_application_client_id` is set**; when the module creates the app registration it already holds directory-write, so this is forced `true` and the binding is always created. |
 
@@ -222,27 +227,22 @@ provider "azurerm" {
 }
 
 module "cost_forwarding" {
-  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=c93817064d43433c66d17459a5ebbbac114d9b18" # v3.1.0
+  source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=0ea5860ee95c00717e908562a0ec5fe6fb6822cd" # v4.0.0
 
   aws_s3_bucket_name                  = "<aws s3 bucket name>"
   aws_account_id                      = "<aws account id>"
-  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+  billing_account_ids                 = ["<billing account id>"] # List of billing account IDs (applicable to FOCUS cost data only)
   subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
   function_app_subnet_id              = "<resource id for existing subnet to be used for function app vnet integration>"
   virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
   virtual_network_resource_group_name = "<name of the existing resource group containing the virtual network above>"
-  resource_group_name                 = "<name for the new resource group where the function app and related resources will be created>"
 
-  ## It is not recommended to set this to true in production
-  # deploy_from_external_network = true
+  ## Set to false if you do not have Enterprise Agreement (EA) billing account(s) (i.e. you have Microsoft Customer Agreement (MCA) billing account(s))
+  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on EA account(s) following deployment - see the [important alert](#ea-billing-role-script) above
+  is_enterprise_customer             = true
 
   ## Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
   # current_principal_type = "ServicePrincipal"
-
-  ## Set to true if the billing account is an Enterprise Agreement (EA)
-  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on the EA account following deployment
-  ## See: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#assign-a-role-to-the-service-principal
-  # is_enterprise_customer             = true
 }
 ```
 
@@ -570,7 +570,7 @@ the running phase, before any export is even looked at.
 Python dependencies are managed using a two-file approach:
 
 | File | Purpose | Edit manually? |
-|---|---|---|
+| --- | --- | --- |
 | `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** - this is the source of truth |
 | `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** - always machine-generated |
 
@@ -659,7 +659,7 @@ pre-commit hook.
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ------ | --------- |
 | <a name="provider_archive"></a> [archive](#provider\_archive) | ~> 2.0 |
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~> 2.0 |
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.9 |
@@ -671,7 +671,7 @@ pre-commit hook.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ------ | ------------- | ------ | --------- | :--------: |
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | n/a | yes |
 | <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
@@ -709,7 +709,7 @@ pre-commit hook.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ------ | ------------- |
 | <a name="output_aws_app_client_id"></a> [aws\_app\_client\_id](#output\_aws\_app\_client\_id) | The aws app client id |
 | <a name="output_azapi_resource_action_add_role_assignment_output"></a> [azapi\_resource\_action\_add\_role\_assignment\_output](#output\_azapi\_resource\_action\_add\_role\_assignment\_output) | The billing account role assignment outputs from azapi\_resource\_action, keyed by billing account ID |
 | <a name="output_billing_account_ids"></a> [billing\_account\_ids](#output\_billing\_account\_ids) | Billing account IDs configured for cost reporting |
