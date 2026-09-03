@@ -178,8 +178,13 @@ def cost_export_backfill_impl(start_date: datetime, force_overwrite: bool = Fals
   else:
     logger.info("Cost export backfill schedule lock exists. Skipping backfill schedule.")
 
-  # now having the schedule available, try running the backfills schedule
-  if not cost_export_backfill_run_lock_exists():
+  # only attempt the run phase once all export tasks have been scheduled (the schedule lock
+  #  exists); without the tasks in place, run_cost_export_backfill finds nothing to execute for
+  #  months missing data and returns 0 jobs, which would falsely stamp the run lock.
+  if not cost_export_backfill_schedule_lock_exists():
+    logger.info("Cost export backfill schedule lock does not yet exist. Skipping backfill run until scheduling completes.")
+
+  elif not cost_export_backfill_run_lock_exists():
     total_jobs_running = 0
     for idx, account_id in Config.billing_account_mapping.items():
       logger.info(f"Run backfill for Billing Account ({idx}): {account_id}")

@@ -241,6 +241,20 @@ class CostExportBackfillRunLockTest(unittest.TestCase):
         self.assertEqual(self.mocks["create_tasks"].call_count, 2)
         self.mocks["schedule_lock_create"].assert_not_called()
 
+    def test_run_phase_skipped_when_schedule_lock_missing(self):
+        """When scheduling fails and the schedule lock is not stamped, the run phase must not
+        execute. Without this guard, months with no data AND no export task return 0 jobs (nothing
+        to run), which falsely stamps the run lock as though backfill is complete."""
+        self.mocks["schedule_lock_exists"].return_value = False
+        self.mocks["run_lock_exists"].return_value = False
+
+        self.mocks["create_tasks"].side_effect = [True, False]  # second account fails
+
+        costExport.cost_export_backfill_impl(start_date=self.start_date)
+
+        self.mocks["run_lock_create"].assert_not_called()
+        self.mocks["export_run"].assert_not_called()
+
 
 class RunCostExportBackfillReturnValueTest(unittest.TestCase):
     """run_cost_export_backfill must report its job count instead of creating the global lock."""
