@@ -632,12 +632,8 @@ Backfill runs create one-off Cost Management export jobs (named
 runtime. These are created by the function app, **not** by Terraform, so they are
 **not** removed when the module is destroyed. Left behind, they still point at the
 storage account this destroy just removed, so they are broken rather than merely
-unused.
-
-Terraform cannot delete them for you, but `terraform destroy` prints a reminder
-(via the `null_resource.backfill_exports_cleanup_warning` resource). When running
-in GitHub Actions the same reminder is appended to the job summary so it does not
-scroll off in the destroy log.
+unused. These don't cause any harm, and the function app will update any
+orphaned exports it needs to with the new storage account in future should you redeploy the module (but you may want to clear them up anyway).
 
 To clean them up after a destroy:
 
