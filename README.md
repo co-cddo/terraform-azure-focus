@@ -66,7 +66,7 @@ Pass the ID(s) as the `billing_account_ids` input and set `is_enterprise_custome
 
 ### Microsoft Customer Agreement (MCA)
 
-The deploying service principal needs **Billing account owner** on the billing account (see [a)](#a-deployment-privileges)). With that role in place, the module:
+The deployment principal needs **Billing account owner** on the billing account (see [a)](#a-deployment-privileges)). With that role in place, the module:
 
 1. Creates the _daily_ cost/FOCUS export at billing-account scope.
 2. Assigns `Billing account reader` to the function app's managed identity. This allows it can create the _backfill_ cost/FOCUS exports during the next invocation of the BackFillTrigger timer trigger function.
