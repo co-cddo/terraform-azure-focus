@@ -62,7 +62,7 @@ The format differs by agreement type:
 Pass the ID(s) as the `billing_account_ids` input and set `is_enterprise_customer = true` if you are on EA.
 
 > [!TIP]
-> **Who owns the billing account?** Billing account administrators are often in a different team from the platform/infrastructure team running Terraform - typically Finance, FinOps, or a central IT cost-management team. Identify this person early: the deploying service principal needs billing account permissions to create the daily cost export during `terraform apply`, and the function app's managed identity needs them to run exports and backfill after deployment. Without the right billing permissions, `terraform apply` itself will fail - not just the post-deploy function behaviour.
+> **Who owns the billing account?** Billing account administrators are often in a different team from the platform/infrastructure team running Terraform - typically Finance, FinOps, or a central IT cost-management team. Identify this person early.
 
 ### Microsoft Customer Agreement (MCA)
 
@@ -78,7 +78,7 @@ No manual post-deploy step is required for MCA.
 > [!CAUTION]
 > **EA customers: a manual step is required after `terraform apply` - the function app cannot create or run exports in Cost Management + Billing to backfill cost/FOCUS data until it is complete.**
 >
-> The module cannot perform this step itself, and must be completed by a user with the **Enterprise Administrator** role assignment at the scope of the billing account(s) using the script provided. Note that billing IAM is distinct from Entra ID roles and Azure RBAC. See [Step 2 - Assign EnrollmentReader to the function identity](#step-2---assign-enrollmentreader-to-the-function-identity) for details.
+> The module cannot perform this step itself, and must be completed by a user with the **Enterprise Administrator** role assignment at the scope of the billing account(s) using the script provided. Note that billing IAM is distinct from Entra ID roles and Azure RBAC. See [Step 2 - Assign EnrollmentReader to the function identity](#step-2---assign-enrollmentreader-to-the-function-identity) for details. Check if the billing account owner is likely to need support running the script - we are happy to assist if needed.
 
 #### Step 1 - `terraform apply`
 
