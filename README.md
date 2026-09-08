@@ -633,7 +633,7 @@ runtime. These are created by the function app, **not** by Terraform, so they ar
 **not** removed when the module is destroyed. Left behind, they still point at the
 storage account this destroy just removed, so they are broken rather than merely
 unused. These don't cause any harm, and the function app will update any
-orphaned exports it needs to with the new storage account in future should you redeploy the module (but you may want to clear them up anyway).
+orphaned exports it needs to, with the new storage account in future should you redeploy (but you may want to clear them up anyway).
 
 To clean them up after a destroy:
 
