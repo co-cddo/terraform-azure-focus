@@ -66,7 +66,7 @@ Pass the ID(s) as the `billing_account_ids` input and set `is_enterprise_custome
 
 ### Microsoft Customer Agreement (MCA)
 
-The deployment principal needs **Billing account owner** on the billing account (see [a)](#a-deployment-privileges)). With that role in place, the module:
+The deployment principal needs **Billing account owner** on the billing account (see [Deployment privileges](#a-deployment-privileges)). With that role in place, the module:
 
 1. Creates the _daily_ cost/FOCUS export at billing account scope(s).
 2. Assigns `Billing account reader` to the function app's managed identity. This allows it can create the _backfill_ cost/FOCUS exports during the next invocation of the BackFillTrigger timer trigger function.
@@ -82,7 +82,7 @@ No manual post-deploy step is required for MCA.
 
 #### Step 1 - `terraform apply`
 
-The deploying principal needs **EnrollmentReader** on the EA billing account (see [a) Deployment privileges](#a-deployment-privileges)). This is sufficient to create the FOCUS export daily schedule, but the function app's managed identity still cannot create exports to backfill cost/FOCUS data yet.
+The deploying principal needs **EnrollmentReader** on the EA billing account (see [Deployment privileges](#a-deployment-privileges)). This is sufficient to create the FOCUS export daily schedule, but the function app's managed identity still cannot create exports to backfill cost/FOCUS data yet.
 
 #### Step 2 - Assign EnrollmentReader to the function identity
 
