@@ -182,7 +182,7 @@ system topic and for each Cost Management export.
 <a id="ea-billing-role-script"></a>
 
 > [!CAUTION]
-> **EA customers: a manual post-deploy step is required.** See [Billing Account Setup - EA](#enterprise-agreement-ea) for the full instructions and the `NewBillingRoleAssignment.ps1` script. Without this step the function app cannot create or run _backfill_ cost/FOCUS exports (different to the _daily_ cost/FOCUS exports that are created by the deployment principal).
+> **EA customers: a manual post-deploy step is required.** See [Billing Account Setup - EA](#enterprise-agreement-ea) for the full instructions and the `NewBillingRoleAssignment.ps1` script. Without this step, the function app cannot create or run _backfill_ cost/FOCUS exports (different to the _daily_ cost/FOCUS exports that are created by the deployment principal).
 
 #### Why these specific grants
 
@@ -634,8 +634,8 @@ Backfill runs create one-off Cost Management export jobs (named
 runtime. These are created by the function app, **not** by Terraform, so they are
 **not** removed when the module is destroyed. Left behind, they still point at the
 storage account this destroy just removed, so they are broken rather than merely
-unused. These don't cause any harm, and the function app will update any
-orphaned exports it needs to with the new storage account should you redeploy (but you may want to clear them up anyway).
+unused. These don't cause any harm and should you redeploy, the function app will update any
+orphaned exports it needs to with the new storage account ID (but you may want to clear them up anyway).
 
 To clean them up after a destroy:
 
