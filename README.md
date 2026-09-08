@@ -76,17 +76,17 @@ No manual post-deploy step is required for MCA.
 ### Enterprise Agreement (EA)
 
 > [!CAUTION]
-> **EA customers: a manual step is required after every `terraform apply` - the function app cannot create or run backfill exports until it is done.**
+> **EA customers: a manual step is required after `terraform apply` - the function app cannot create or run exports in Cost Management + Billing to backfill cost/FOCUS data until it is complete.**
 >
-> The module cannot perform this step itself: assigning billing roles for EA requires **Enterprise Administrator** privileges in the Azure EA portal, which are entirely separate from Azure RBAC. Role assignments for service principals may not appear in the Azure portal.
+> The module cannot perform this step itself, and must be completed by a user with the **Enterprise Administrator** role assignment at the scope of the billing account(s) using the script provided. Note that billing IAM is distinct from Entra ID roles and Azure RBAC. See [Step 2 - Assign EnrollmentReader to the function identity](#step-2---assign-enrollmentreader-to-the-function-identity) for details.
 
 #### Step 1 - `terraform apply`
 
-The deploying principal needs **EnrollmentReader** on the EA billing account (see [a) Deployment privileges](#a-deployment-privileges)). This is sufficient to create the FOCUS export schedule, but the function app's managed identity still cannot run the exports yet.
+The deploying principal needs **EnrollmentReader** on the EA billing account (see [a) Deployment privileges](#a-deployment-privileges)). This is sufficient to create the FOCUS export daily schedule, but the function app's managed identity still cannot create exports to backfill cost/FOCUS data yet.
 
 #### Step 2 - Assign EnrollmentReader to the function identity
 
-After every `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
+After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
 
 ```pwsh
 # Run once per billing account after every terraform apply.
@@ -102,9 +102,9 @@ After every `terraform apply`, an Enterprise Administrator must run [`scripts/Ne
 
 **Why is this step easy to miss?**
 
-- The script must be re-run any time the function app's managed identity is recreated (e.g. after a `terraform destroy` / re-deploy).
-- The assignment may not appear in the Azure portal
-- Without it, the function app's `CostExportBackfill` and `CostExportProcessor` functions will fail.
+- The script must be re-run if the function app's managed identity is ever recreated (e.g. after a `terraform destroy` / re-deploy).
+- The script must be re-run if a new EA billing account is introduced, or if the role assignment is mistakenly revoked. (Should you move to MCA, you will not need to perform this manual role assignment, though you will need to reconfigure the module accordingly).
+- Without the manual role assignment, the function app's `CostExportBackfill` functions will throw errors (see the [Troubleshooting](#troubleshooting) section for an Application Insights Kusto query which will reveal 401 errors, should this issue be present).
 
 See the [Backfill](#backfill) section for what to expect once this step is complete.
 
