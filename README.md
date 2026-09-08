@@ -82,7 +82,7 @@ No manual post-deploy step is required for MCA.
 
 #### Step 1 - `terraform apply`
 
-The deploying principal needs **EnrollmentReader** on the EA billing account (see [a)](#a-deployment-privileges)). This is sufficient to create the FOCUS export schedule, but the function app's managed identity still cannot run the exports yet.
+The deploying principal needs **EnrollmentReader** on the EA billing account (see [a) Deployment privileges](#a-deployment-privileges)). This is sufficient to create the FOCUS export schedule, but the function app's managed identity still cannot run the exports yet.
 
 #### Step 2 - Assign EnrollmentReader to the function identity
 
