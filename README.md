@@ -286,6 +286,8 @@ Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.
 
 > [!NOTE]
 > The two storage data-plane reader roles are only required after the **first** `terraform apply` - before that the storage account does not exist and there is nothing to refresh. They become necessary from the second plan run onwards.
+> [!IMPORTANT]
+> The plan service principal will not have permissions to register required resource providers (e.g. `Microsoft.CostManagementExports`, `Microsoft.App`). These should be registered via your Azure Landing Zone bootstrap (if available) or out-of-band manually before the first plan run.
 
 #### Apply principal - minimum roles
 
@@ -633,7 +635,7 @@ runtime. These are created by the function app, **not** by Terraform, so they ar
 **not** removed when the module is destroyed. Left behind, they still point at the
 storage account this destroy just removed, so they are broken rather than merely
 unused. These don't cause any harm, and the function app will update any
-orphaned exports it needs to, with the new storage account in future should you redeploy (but you may want to clear them up anyway).
+orphaned exports it needs to with the new storage account should you redeploy (but you may want to clear them up anyway).
 
 To clean them up after a destroy:
 
