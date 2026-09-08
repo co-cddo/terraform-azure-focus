@@ -76,7 +76,7 @@ No manual post-deploy step is required for MCA.
 ### Enterprise Agreement (EA)
 
 > [!CAUTION]
-> **EA customers: a manual step is required after `terraform apply` - the function app cannot create or run exports in Cost Management + Billing to backfill cost/FOCUS data until it is complete.**
+> **EA customers: a manual step is required after `terraform apply` - the function app cannot create or run the _backfill_ exports in Cost Management + Billing until it is complete.**
 >
 > The module cannot perform this step itself, and must be completed by a user with the **Enterprise Administrator** role assignment at the scope of the billing account(s) using the script provided. Note that billing IAM is distinct from Entra ID roles and Azure RBAC. See [Step 2 - Assign EnrollmentReader to the function identity](#step-2---assign-enrollmentreader-to-the-function-identity) for details. Check if the billing account owner is likely to need support running the script - we are happy to assist if needed.
 
