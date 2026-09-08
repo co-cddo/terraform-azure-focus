@@ -182,7 +182,7 @@ system topic and for each Cost Management export.
 <a id="ea-billing-role-script"></a>
 
 > [!CAUTION]
-> **EA customers: a manual post-deploy step is required.** See [Billing Account Setup - EA](#enterprise-agreement-ea) for the full instructions and the `NewBillingRoleAssignment.ps1` script. Without this step the function app cannot create or run backfill exports.
+> **EA customers: a manual post-deploy step is required.** See [Billing Account Setup - EA](#enterprise-agreement-ea) for the full instructions and the `NewBillingRoleAssignment.ps1` script. Without this step the function app cannot create or run _backfill_ cost/FOCUS exports (different to the _daily_ cost/FOCUS exports that are created by the deployment principal).
 
 #### Why these specific grants
 
