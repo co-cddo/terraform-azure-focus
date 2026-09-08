@@ -68,7 +68,7 @@ Pass the ID(s) as the `billing_account_ids` input and set `is_enterprise_custome
 
 The deployment principal needs **Billing account owner** on the billing account (see [a)](#a-deployment-privileges)). With that role in place, the module:
 
-1. Creates the _daily_ cost/FOCUS export at billing-account scope.
+1. Creates the _daily_ cost/FOCUS export at billing account scope(s).
 2. Assigns `Billing account reader` to the function app's managed identity. This allows it can create the _backfill_ cost/FOCUS exports during the next invocation of the BackFillTrigger timer trigger function.
 
 No manual post-deploy step is required for MCA.
@@ -128,7 +128,7 @@ prerequisites - unless `manage_role_assignments = false`.
 | Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. |
 | Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
-| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
+| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
 
 > [!TIP]
@@ -628,7 +628,7 @@ be explicitly set.
 ### Cleaning Up Backfill Exports on Destroy
 
 Backfill runs create one-off Cost Management export jobs (named
-`focus-backfill-<int>-<YYYY>-<MM>`) per billing-account scope at
+`focus-backfill-<int>-<YYYY>-<MM>`) per billing account scope at
 runtime. These are created by the function app, **not** by Terraform, so they are
 **not** removed when the module is destroyed. Left behind, they still point at the
 storage account this destroy just removed, so they are broken rather than merely
