@@ -43,6 +43,7 @@ repos:
     rev: c5755e272a13da06be38d74052658af46c1ee447 # frozen: v0.9.35
     hooks:
       - id: pymarkdown
+        exclude: ^\.github/PULL_REQUEST_TEMPLATE\.md$
         args:
           - --config=.pymarkdown.yaml
           - scan
