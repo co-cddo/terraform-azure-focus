@@ -61,7 +61,7 @@ The format differs by agreement type:
 
 Pass the ID(s) as the `billing_account_ids` input and set `is_enterprise_customer = true` if you are on EA.
 
-> [!TIP]
+> [!IMPORTANT]
 > **Who owns the billing account?** Billing account administrators are often in a different team from the platform/infrastructure team running Terraform - typically Finance, FinOps, or a central IT cost-management team. Identify this person early.
 
 ### Microsoft Customer Agreement (MCA)
