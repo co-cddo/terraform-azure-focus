@@ -39,6 +39,74 @@ data flow and component architecture for all three export types:
   on the machine that runs `terraform apply`/`terraform destroy`. Note that all GitHub runner images include the current LTS release by default.
 - [Deployment privileges](#a-deployment-privileges), granted to the principal that runs
   `terraform apply`.
+- [Billing account access](#billing-account-setup) - read the billing account section before deploying, especially for EA customers.
+
+<a name="billing-account-setup"></a>
+
+## Billing Account Setup
+
+> [!IMPORTANT]
+> Billing account configuration is the most common source of deployment and backfill failures. Read this section in full before running `terraform apply`.
+
+### Finding your billing account ID
+
+Billing account IDs are found in the [Azure portal](https://portal.azure.com) under **Cost Management + Billing → Billing scopes**. They are not the same as subscription or tenant IDs.
+
+The format differs by agreement type:
+
+| Agreement type | ID format example |
+| --- | --- |
+| Microsoft Customer Agreement (MCA) | `<billing-account-guid>:<billing-profile-guid>_YYYY-MM-DD` |
+| Enterprise Agreement (EA) | `<enrollment-number>` (numeric) |
+
+Pass the ID(s) as the `billing_account_ids` input and set `is_enterprise_customer = true` if you are on EA.
+
+> [!IMPORTANT]
+> **Who owns the billing account?** Billing account administrators are often in a different team from the platform/infrastructure team running Terraform - typically Finance, FinOps, or a central IT cost-management team. Identify this person early.
+
+### Microsoft Customer Agreement (MCA)
+
+The deployment principal needs **Billing account owner** on the billing account (see [Deployment privileges](#a-deployment-privileges)). With that role in place, the module:
+
+1. Creates the _daily_ cost/FOCUS export at billing account scope(s).
+2. Assigns `Billing account reader` to the Function App's managed identity. This allows it can create the _backfill_ cost/FOCUS exports during the next invocation of the BackFillTrigger timer trigger function.
+
+No manual post-deploy step is required for MCA.
+
+### Enterprise Agreement (EA)
+
+> [!CAUTION]
+> **EA customers: a manual step is required after `terraform apply` - the Function App cannot create or run the _backfill_ cost/FOCUS exports in Cost Management + Billing until it is complete.**
+>
+> The module cannot perform this step itself, and must be completed by a user with the **Enterprise Administrator** role assignment at the scope of the billing account(s) using the script provided. Note that billing IAM is distinct from Entra ID roles and Azure RBAC. See [Step 2 - Assign EnrollmentReader to the function identity](#step-2---assign-enrollmentreader-to-the-function-identity) for details. Check if the billing account owner is likely to need support running the script - we are happy to assist if needed.
+
+#### Step 1 - `terraform apply`
+
+The deploying principal needs **EnrollmentReader** on the EA billing account (see [Deployment privileges](#a-deployment-privileges)). This is sufficient to create the FOCUS export daily schedule, but the Function App's managed identity still cannot create exports to backfill cost/FOCUS data yet.
+
+#### Step 2 - Assign EnrollmentReader to the function identity
+
+After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
+
+```pwsh
+# Run once per billing account after every terraform apply.
+# Values come from the terraform output:
+#   cost_export_app_principal_id  → ServicePrincipalObjectID
+#   tenant_id                     → (used to find billing account)
+./scripts/NewBillingRoleAssignment.ps1 `
+  -BillingAccountID        <billing account id> `
+  -ServicePrincipalObjectID <object id from cost_export_app_principal_id output> `
+  -RoleDefinitionID        '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' `
+  -IsEnterpriseAgreement
+```
+
+**Why is this step easy to miss?**
+
+- The script must be re-run if the Function App's managed identity is ever recreated (e.g. after a `terraform destroy` / re-deploy).
+- The script must be re-run if a new EA billing account is introduced, or if the role assignment is mistakenly revoked. (Should you move to MCA, you will not need to perform this manual role assignment, though you will need to reconfigure the module accordingly).
+- Without the manual role assignment, the Function App's `CostExportBackfill` functions will throw errors (see the [Troubleshooting](#troubleshooting) section for an Application Insights Kusto query which will reveal 401 errors, should this issue be present).
+
+See the [Backfill](#backfill) section for what to expect once this step is complete.
 
 <a name="privileges"></a>
 
@@ -52,15 +120,15 @@ Permissions are least-privilege by design, scoped as narrowly as Azure allows.
 
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
-data plane roles it needs during apply (see (b)), so those are *not*
+data plane roles it needs during apply (see [Privileges assigned by the module](#b-privileges-assigned-by-the-module)), so those are _not_
 prerequisites - unless `manage_role_assignments = false`.
 
 | Scope | Role | Why it is needed |
-|---|---|---|
-| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: resource group, storage accounts, function app, Event Grid, private endpoints, private DNS, Log Analytics Workspace and the user-assigned identity. |
-| Subscription | **User Access Administrator** | Create the resource-group / storage-account-scoped role assignments the module defines, including the ABAC-constrained `Owner` grant. |
+| --- | --- | --- |
+| Subscription (where resources are created) | **Contributor** | To create all, or a subset of the following resources: Resource Group, Storage Accounts, Function App, Event Grid, Private Endpoints, Private DNS Zones, Log Analytics Workspace and the user-assigned managed identity. |
+| Subscription | **User Access Administrator** | Create the Resource Group/Storage Account-scoped role assignments the module defines, including the ABAC-constrained `Owner` role assignment. |
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
-| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing-account scope **and** assign the `Billing account reader` billing role to the function identity. |
+| Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
 
 > [!TIP]
@@ -81,7 +149,7 @@ prerequisites - unless `manage_role_assignments = false`.
 
 ### b) Privileges assigned by the module
 
-The module uses a **user-assigned managed identity** for the function app ('function identity' below) and **system-assigned** identities for the Event Grid
+The module uses a **user-assigned managed identity** for the Function App ('function identity' below) and **system-assigned** identities for the Event Grid
 system topic and for each Cost Management export.
 
 > [!NOTE]
@@ -97,7 +165,7 @@ system topic and for each Cost Management export.
 > [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration) below.
 
 | Principal | Role | Scope | Purpose |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Deploying principal | Storage Blob Data Contributor | cost-export resource group | Apply-time only: the azurerm provider reads the storage account's blob properties over Entra ID. |
 | Deploying principal | Storage Queue Data Contributor | cost-export resource group | Apply-time only: the provider also reads queue properties. |
 | Function identity | Storage Blob Data Contributor | cost-export storage account | Write export output and create export tasks that deliver to this account. |
@@ -112,17 +180,9 @@ system topic and for each Cost Management export.
 | Function identity | `AssumeRoleWithWebIdentity` app role | AWS-federation Entra application | OIDC federation to assume the AWS IAM role (no long-lived AWS credentials). |
 
 <a id="ea-billing-role-script"></a>
-> [!IMPORTANT]
-> **Enterprise Agreement (EA) customers** must manually add [EnrollmentReader](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal) role assignment(s) after `terraform apply`.
-> It requires Enterprise Administrator privileges so the module cannot do it.
-> Until this step is completed, the function will be unable to create backfill exports in Cost Management + Billing.
-> Run [NewBillingRoleAssignment.ps1](https://github.com/co-cddo/terraform-azure-focus/blob/main/scripts/NewBillingRoleAssignment.ps1) to complete this task for each EA billing account (often just one).
-> Note that billing account role assignments for service principals do not appear in the portal.
 
-```pwsh
-# NewBillingRoleAssignment.ps1 usage example
-./NewBillingRoleAssignment.ps1 -BillingAccountID <billing account id> -ServicePrincipalObjectID <object id of function app managed identity> -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement
-```
+> [!CAUTION]
+> **EA customers: a manual post-deploy step is required.** See [Billing Account Setup - EA](#enterprise-agreement-ea) for the full instructions and the `NewBillingRoleAssignment.ps1` script. Without this step, the Function App cannot create or run _backfill_ cost/FOCUS exports (different to the _daily_ cost/FOCUS exports that are created by the deployment principal).
 
 #### Why these specific grants
 
@@ -175,7 +235,7 @@ directory-write privilege.
 In both modes below, your Entra team must run
 `scripts/ConfigureExistingAppRegistration.ps1` (bundled with this module) to
 ensure the app role, identifier URI, and app role assignment are configured. The
-script is idempotent — safe to re-run at any time. If you set `cost_mgmt_suffix`
+script is idempotent - safe to re-run at any time. If you set `cost_mgmt_suffix`
 in your module configuration, pass `-CostManagementSuffix` to the script as well.
 
 The `entra_app_role_assignment_manual_action_required`
@@ -185,7 +245,7 @@ exact command after apply.
 **Module inputs:**
 
 | Variable | Effect |
-|---|---|
+| --- | --- |
 | `existing_entra_application_client_id` | Client (application) ID of the pre-created app. When set, the module does **not** create the app / service principal / app role and consumes this ID instead. |
 | `manage_entra_app_role_assignment` | Whether the module creates the app-role binding (function identity → `AssumeRoleWithWebIdentity`). Default `true`. **Only takes effect when `existing_entra_application_client_id` is set**; when the module creates the app registration it already holds directory-write, so this is forced `true` and the binding is always created. |
 
@@ -200,9 +260,49 @@ function managed identity, so it cannot be fully pre-created):
   a far narrower grant than tenant-wide app management. The script must still be run
   beforehand to ensure the app role and identifier URI exist.
 - `manage_entra_app_role_assignment = false` (strict separation): the module performs
-  **no** Entra writes or reads at all. The script handles everything — app role,
+  **no** Entra writes or reads at all. The script handles everything - app role,
   identifier URI, and the app role assignment. The function cannot authenticate to
   AWS until this is done.
+
+### d) CI/CD: separate plan and apply service principals
+
+Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.github.io/Azure-Landing-Zones/accelerator/) use two distinct service principals (or user-assigned managed identities with workload identity federation) so that `terraform plan` can run automatically on every pull request without granting write permissions to that workflow:
+
+- **Plan principal** - read-only; runs on every PR to produce a plan for review.
+- **Apply principal** - write-capable; runs only on merge to the protected branch, ideally behind a manual approval gate.
+
+#### Plan principal - minimum roles
+
+`terraform plan` reads existing state (refresh pass) and resolves data sources but creates nothing and assigns no roles. The roles below are the read-only counterparts of the apply principal's requirements from [Deployment privileges](#a-deployment-privileges).
+
+| Scope | Role | Why it is needed |
+| --- | --- | --- |
+| Subscription (where resources are created) | **Reader** | Refresh all existing resources (Resource Group, Storage Accounts, Function App, Event Grid, Private Endpoints, Private DNS, Log Analytics Workspace, user-assigned identity). |
+| Cost-export resource group | **Storage Blob Data Reader** | The `azurerm` provider authenticates to the cost-export storage account over Entra ID during state refresh - same underlying reason the apply principal needs `Storage Blob Data Contributor` (see [why these specific grants](#why-these-specific-grants)). |
+| Cost-export resource group | **Storage Queue Data Reader** | Provider reads queue service properties on refresh. Without it the read fails with a misleading `KeyBasedAuthenticationNotPermitted` (403). |
+| Tenant Root management group, or `management_group_id` | **Reader** | Resolves the `azurerm_management_group` data source used to scope the carbon and Advisor feeds. |
+| Billing account - **MCA** | **Billing account reader** | Reads the billing account and export configuration. |
+| Billing account - **EA** | **EnrollmentReader** | Same for EA customers. |
+
+> [!NOTE]
+> The two storage data-plane reader roles are only required after the **first** `terraform apply` - before that the storage account does not exist and there is nothing to refresh. They become necessary from the second plan run onwards.
+> [!IMPORTANT]
+> The plan service principal will not have permissions to register required resource providers (e.g. `Microsoft.CostManagementExports`, `Microsoft.App`). These should be registered via your Azure Landing Zone bootstrap (if available) or out-of-band manually before the first plan run.
+
+#### Apply principal - minimum roles
+
+Use the full set from [Deployment privileges](#a-deployment-privileges). The module automatically grants the apply principal `Storage Blob Data Contributor` and `Storage Queue Data Contributor` at apply time, so those are not prerequisites unless `manage_role_assignments = false`.
+
+#### Terraform state backend
+
+Both principals need access to the remote state. If your state is stored in Azure Blob Storage the typical grants are:
+
+| Principal | Role | Scope |
+| --- | --- | --- |
+| Plan principal | **Storage Blob Data Reader** | State container (if using `terraform plan -lock=false`) **or** `Storage Blob Data Contributor` to acquire a state lock |
+| Apply principal | **Storage Blob Data Contributor** | State container |
+
+Using `-lock=false` on the plan job and `Storage Blob Data Reader` is the least-privilege option; it does carry a small risk of a stale plan if state changes between plan and apply.
 
 ## Security Features
 
@@ -232,12 +332,12 @@ module "cost_forwarding" {
   aws_account_id                      = "<aws account id>"
   billing_account_ids                 = ["<billing account id>"] # List of billing account IDs (applicable to FOCUS cost data only)
   subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
-  function_app_subnet_id              = "<resource id for existing subnet to be used for function app vnet integration>"
+  function_app_subnet_id              = "<resource id for existing subnet to be used for Function App VNet integration>"
   virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
   virtual_network_resource_group_name = "<name of the existing resource group containing the virtual network above>"
 
   ## Set to false if you do not have Enterprise Agreement (EA) billing account(s) (i.e. you have Microsoft Customer Agreement (MCA) billing account(s))
-  ## You must also manually grant the managed identity for the function app 'Enrolment Reader' on EA account(s) following deployment - see scripts/NewBillingRoleAssignment.ps1
+  ## You must also manually grant the user-assigned managed identity for the Function App the 'EnrollmentReader' role assignment at the scope of EA billing account(s) following deployment - see scripts/NewBillingRoleAssignment.ps1
   is_enterprise_customer             = true
 
   ## Uncomment when running in CI/CD with a service principal (e.g., GitHub Actions)
@@ -259,7 +359,7 @@ This module supports three private DNS modes for private endpoints:
 1. Module-managed DNS (default)
    - `private_endpoints_manage_dns_zone_group = true`
    - `use_existing_private_dns_zones = false`
-   - Module creates and manages private DNS zones, links, and A records.
+   - Module creates and manages Private DNS Zones, links, and A records.
 2. Bring-your-own zones (BYOD)
    - `private_endpoints_manage_dns_zone_group = true`
    - `use_existing_private_dns_zones = true`
@@ -267,7 +367,7 @@ This module supports three private DNS modes for private endpoints:
    - Best suited when DNS zones are in the same subscription context as the module provider.
 3. External DNS management (for example Azure Policy)
    - `private_endpoints_manage_dns_zone_group = false`
-   - Module creates private endpoints but does not manage private DNS zones, links, or A records.
+   - Module creates private endpoints but does not manage Private DNS Zones, links, or A records.
    - Recommended for ALZ-style cross-subscription DNS architectures.
 
 ### BYOD Example
@@ -298,7 +398,7 @@ module "example" {
 ```
 
 > [!NOTE]
-> This module no longer manages `azurerm_private_dns_a_record` resources; when `private_endpoints_manage_dns_zone_group = true` DNS records are created automatically via the private DNS zone group on each private endpoint.
+> This module no longer manages `azurerm_private_dns_a_record` resources; when `private_endpoints_manage_dns_zone_group = true` DNS records are created automatically via the Private DNS Zone group on each private endpoint.
 
 ## Multiple Azure Tenants
 
@@ -427,6 +527,9 @@ intelligent batching:
 
 ## Backfill
 
+> [!NOTE]
+> **EA customers:** the Function App cannot create or run any backfill exports until the post-deploy `EnrollmentReader` assignment has been made. See [Billing Account Setup - EA](#enterprise-agreement-ea) before troubleshooting backfill failures.
+
 ### FOCUS Cost Data
 
 **Endpoint**: `POST /api/cost-export-backfill`
@@ -527,16 +630,12 @@ be explicitly set.
 ### Cleaning Up Backfill Exports on Destroy
 
 Backfill runs create one-off Cost Management export jobs (named
-`focus-backfill-<int>-<YYYY>-<MM>`) per billing-account scope at
-runtime. These are created by the function app, **not** by Terraform, so they are
+`focus-backfill-<int>-<YYYY>-<MM>`) per billing account scope at
+runtime. These are created by the Function App, **not** by Terraform, so they are
 **not** removed when the module is destroyed. Left behind, they still point at the
 storage account this destroy just removed, so they are broken rather than merely
-unused.
-
-Terraform cannot delete them for you, but `terraform destroy` prints a reminder
-(via the `null_resource.backfill_exports_cleanup_warning` resource). When running
-in GitHub Actions the same reminder is appended to the job summary so it does not
-scroll off in the destroy log.
+unused. These don't cause any harm and should you redeploy, the Function App will update any
+orphaned exports it needs to with the new storage account ID (but you may want to clear them up anyway).
 
 To clean them up after a destroy:
 
@@ -546,7 +645,7 @@ To clean them up after a destroy:
 
 #### Redeploying into a tenant that has been deployed before
 
-Leftover exports no longer block a redeployment: the function app PUTs every month's
+Leftover exports no longer block a redeployment: the Function App PUTs every month's
 export task on each scheduling run, which is an upsert, so a task left behind by a
 previous deployment is repointed at the new storage account rather than left delivering
 to the deleted one.
@@ -569,7 +668,7 @@ the running phase, before any export is even looked at.
 Python dependencies are managed using a two-file approach:
 
 | File | Purpose | Edit manually? |
-|---|---|---|
+| --- | --- | --- |
 | `src/cost_export/requirements.in` | Direct dependencies only (7 packages) | **Yes** - this is the source of truth |
 | `src/cost_export/requirements.txt` | Fully resolved lockfile with all transitive deps, each pinned with SHA256 hashes | **No** - always machine-generated |
 
@@ -640,7 +739,7 @@ terraform plan
 
 ## Troubleshooting
 
-Query Application Insights to view recent function invocations:
+Run the following query on the Application Insights instance blade (Logs tab) to view recent function invocations:
 
 ```kql
 traces
