@@ -50,7 +50,7 @@ data flow and component architecture for all three export types:
 
 ### Finding your billing account ID
 
-Billing account IDs are found in the [Azure portal](https://portal.azure.com) under **Cost Management + Billing → Billing scopes**. They are not the same as subscription or tenant IDs.
+Billing accounts can be found in the [Azure portal](https://portal.azure.com) under **Cost Management + Billing → Billing scopes**. If you are unable to see billing scopes with a billing scope type of 'Billing account' here, then you may not be in the [primary billing tenant](https://learn.microsoft.com/en-gb/azure/cost-management-billing/manage/manage-billing-across-tenants#understand-tenant-types), or may not have the required billing account privileges. Assuming you can see the relevant billing account, select it as the current billing scope, then retrieve the billing account ID from the Properties tab.
 
 The format differs by agreement type:
 
