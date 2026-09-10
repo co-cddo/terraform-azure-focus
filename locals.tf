@@ -1,4 +1,6 @@
 locals {
+  module_source      = data.modtm_module_source.this.module_source
+  module_version     = data.modtm_module_source.this.module_version
   cost_mgmt_suffix   = length(var.cost_mgmt_suffix) > 0 ? "-${var.cost_mgmt_suffix}" : ""
   cost_export_prefix = "focus-daily-cost-export"
 

@@ -759,3 +759,39 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
             error_msg,
             status_code=500
         )
+
+# General-purpose daily automation trigger. Currently upserts the module manifest
+# to S3; extend with any future miscellaneous job automation as needed.
+@app.function_name(name="Utility")
+@app.timer_trigger(schedule="0 0 4 * * *", arg_name="timer", run_on_startup=False)
+def utility(timer: func.TimerRequest) -> None:
+    utc_timestamp = datetime.now(timezone.utc).isoformat()
+    logger.info(f"Utility triggered at: {utc_timestamp}")
+
+    if timer.past_due:
+        logger.info("The timer is past due!")
+
+    try:
+        manifest = {
+            "module_source": Config.module_source,
+            "module_version": Config.module_version,
+            "configuration": {
+                "backfill_start_date": Config.backfill_start_date,
+                "enable_focus_exports": Config.enable_focus_exports,
+                "enable_advisor_exports": Config.enable_advisor_exports,
+                "enable_carbon_exports": Config.enable_carbon_exports,
+            }
+        }
+
+        json_data = json.dumps(manifest, indent=2).encode("utf-8")
+        s3 = getS3FileSystem()
+        s3_path = f"{Config.s3_focus_path.rstrip('/')}/manifest.json"
+
+        with s3.open_output_stream(s3_path) as f:
+            f.write(json_data)
+
+        logger.info(f"Utility: module manifest upserted to {s3_path}")
+
+    except Exception as e:
+        logger.error(f"Error in utility: {str(e)}", exc_info=True)
+        raise
