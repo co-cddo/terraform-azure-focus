@@ -225,3 +225,13 @@ output "log_analytics_workspace_id" {
   description = "The resource ID of the Log Analytics workspace used for diagnostic settings"
   value       = local.effective_log_analytics_workspace_id
 }
+
+output "module_version" {
+  description = "The version of the module"
+  value       = data.modtm_module_source.this.module_version
+}
+
+output "module_source" {
+  description = "The source of the module"
+  value       = data.modtm_module_source.this.module_source
+}

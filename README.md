@@ -762,6 +762,7 @@ pre-commit hook.
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~> 2.0 |
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.9 |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 4.79 |
+| <a name="provider_modtm"></a> [modtm](#provider\_modtm) | ~> 0.4 |
 | <a name="provider_null"></a> [null](#provider\_null) | ~> 3.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | 0.14.1 |
@@ -831,6 +832,8 @@ pre-commit hook.
 | <a name="output_function_app_name"></a> [function\_app\_name](#output\_function\_app\_name) | The name of the cost export function app |
 | <a name="output_function_app_private_endpoint_ip"></a> [function\_app\_private\_endpoint\_ip](#output\_function\_app\_private\_endpoint\_ip) | The private IP address of the function app private endpoint |
 | <a name="output_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#output\_log\_analytics\_workspace\_id) | The resource ID of the Log Analytics workspace used for diagnostic settings |
+| <a name="output_module_source"></a> [module\_source](#output\_module\_source) | The source of the module |
+| <a name="output_module_version"></a> [module\_version](#output\_module\_version) | The version of the module |
 | <a name="output_private_dns_zones"></a> [private\_dns\_zones](#output\_private\_dns\_zones) | Effective private DNS zone configuration used by the module |
 | <a name="output_publish_code_command"></a> [publish\_code\_command](#output\_publish\_code\_command) | Publish code command for debugging |
 | <a name="output_random_string_suffix"></a> [random\_string\_suffix](#output\_random\_string\_suffix) | The random suffix appended to generated resource names |
