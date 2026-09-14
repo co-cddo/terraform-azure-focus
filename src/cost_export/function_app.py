@@ -287,7 +287,6 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
 
             pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
             logger.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path} (billing account: {billing_account_folder})")
-            upsert_module_manifest()
 
             # Delete source file after successful upload
             blob_client.delete_blob()
@@ -349,7 +348,6 @@ def save_recommendations_to_s3(data, file_name):
             f.write(json_data)
 
         logger.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
-        upsert_module_manifest()
 
     except Exception as e:
         logger.error(f"Error saving recommendations data to S3: {str(e)}", exc_info=True)
