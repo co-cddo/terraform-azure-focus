@@ -13,7 +13,7 @@ from common import(
   Config,
   is_uuid,
 )
-from api.s3Api import getS3FileSystem
+from api.s3Api import getS3FileSystem, upsert_module_manifest
 from carbonExport import (
   get_carbon_api_date_range,
   is_month_within_api_range,
@@ -720,6 +720,8 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
     except Exception as e:
         error_msg = f"Error in backfill_trigger: {str(e)}"
         logger.error(error_msg, exc_info=True)
+
+    upsert_module_manifest()
 
 @app.function_name(name="CostExportBackfill")
 @app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)

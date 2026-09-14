@@ -94,7 +94,12 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "CARBON_API_TENANT_ID"       = data.azurerm_client_config.current.tenant_id
     "BILLING_SCOPE"              = local.management_group_scope
     "BILLING_AZURE_LOCATION"     = var.location
+    "ENABLE_FOCUS_EXPORTS"       = tostring(var.enable_focus_exports)
+    "ENABLE_ADVISOR_EXPORTS"     = tostring(var.enable_advisor_exports)
     "ENABLE_CARBON_EXPORTS"      = tostring(var.enable_carbon_exports)
+    "BACKFILL_START_DATE"        = var.backfill_start_date
+    "MODULE_SOURCE"              = local.module_source
+    "MODULE_VERSION"             = local.module_version
     "LOGGING_LEVEL"              = var.logging_level
     }, var.enable_focus_exports ? {
     "STORAGE_ACCOUNT_BLOB_ENDPOINT"             = azurerm_storage_account.cost_export[0].primary_blob_endpoint
@@ -103,7 +108,6 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     "StorageAccountManagedIdentity__credential" = "managedidentity"
     "StorageAccountManagedIdentity__clientId"   = azurerm_user_assigned_identity.cost_export.client_id
     "BILLING_ACCOUNT_MAPPING"                   = jsonencode({ for idx, account in local.billing_accounts_map : idx => account.id })
-    "BACKFILL_START_DATE"                       = var.backfill_start_date
     "STORAGE_RESOURCE_ID"                       = azurerm_storage_account.cost_export[0].id
     "STORAGE_CONTAINER"                         = azapi_resource.cost_export[0].name
     "ROOT_FOLDER_PATH"                          = local.focus_directory_name

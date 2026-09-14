@@ -40,6 +40,8 @@ class Config:
     managed_identity_client_id = os.environ.get("MANAGED_IDENTITY_CLIENT_ID")
     urn = _get_required_env("ENTRA_APP_URN")  # Example: "api://AWS-Federation-App"
     arn = _get_required_env("AWS_ROLE_ARN")  # Example: "arn:aws:iam::000000000000:role/aad_s3"
+    module_source = os.environ.get("MODULE_SOURCE", "")
+    module_version = os.environ.get("MODULE_VERSION", "")
     s3_focus_path = _get_required_env("S3_FOCUS_PATH")  # Example: "s3://s3bucketname/test/"
     aws_region = _get_required_env("AWS_REGION")  # Example: "eu-west-2"
     storage_account_blob_endpoint = os.environ.get("STORAGE_ACCOUNT_BLOB_ENDPOINT")
@@ -57,6 +59,8 @@ class Config:
     cost_mgmt_export_task_suffix = os.environ.get("COST_MGMT_SUFFIX", "")
 
     # Feature toggles
+    enable_focus_exports = os.environ.get("ENABLE_FOCUS_EXPORTS", "true").lower() == "true"
+    enable_advisor_exports = os.environ.get("ENABLE_ADVISOR_EXPORTS", "false").lower() == "true"
     enable_carbon_exports = os.environ.get("ENABLE_CARBON_EXPORTS", "true").lower() == "true"
 
     # Carbon Optimization API settings

@@ -51,3 +51,7 @@ data "azapi_resource_list" "billing_role_assignments" {
 
   depends_on = [azapi_resource_action.add_role_assignment]
 }
+
+data "modtm_module_source" "this" {
+  module_path = path.module
+}
