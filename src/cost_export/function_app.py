@@ -13,7 +13,7 @@ from common import(
   Config,
   is_uuid,
 )
-from api.s3Api import getS3FileSystem
+from api.s3Api import getS3FileSystem, upsert_module_manifest
 from carbonExport import (
   get_carbon_api_date_range,
   is_month_within_api_range,
@@ -287,6 +287,7 @@ def cost_export_processor(msg: func.QueueMessage) -> None:
 
             pq.write_table(table, where=s3_path, filesystem=s3, compression='snappy')
             logger.info(f"Successfully uploaded {blob_name} to S3 at path: {s3_path} (billing account: {billing_account_folder})")
+            upsert_module_manifest()
 
             # Delete source file after successful upload
             blob_client.delete_blob()
@@ -348,6 +349,7 @@ def save_recommendations_to_s3(data, file_name):
             f.write(json_data)
 
         logger.info(f"Successfully uploaded recommendations data to S3: {s3_path}")
+        upsert_module_manifest()
 
     except Exception as e:
         logger.error(f"Error saving recommendations data to S3: {str(e)}", exc_info=True)
@@ -759,39 +761,3 @@ def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
             error_msg,
             status_code=500
         )
-
-# General-purpose daily automation trigger. Currently upserts the module manifest
-# to S3; extend with any future miscellaneous job automation as needed.
-@app.function_name(name="Utility")
-@app.timer_trigger(schedule="0 0 4 * * *", arg_name="timer", run_on_startup=False)
-def utility(timer: func.TimerRequest) -> None:
-    utc_timestamp = datetime.now(timezone.utc).isoformat()
-    logger.info(f"Utility triggered at: {utc_timestamp}")
-
-    if timer.past_due:
-        logger.info("The timer is past due!")
-
-    try:
-        manifest = {
-            "module_source": Config.module_source,
-            "module_version": Config.module_version,
-            "configuration": {
-                "backfill_start_date": Config.backfill_start_date,
-                "enable_focus_exports": Config.enable_focus_exports,
-                "enable_advisor_exports": Config.enable_advisor_exports,
-                "enable_carbon_exports": Config.enable_carbon_exports,
-            }
-        }
-
-        json_data = json.dumps(manifest, indent=2).encode("utf-8")
-        s3 = getS3FileSystem()
-        s3_path = f"{Config.s3_focus_path.rstrip('/')}/manifest.json"
-
-        with s3.open_output_stream(s3_path) as f:
-            f.write(json_data)
-
-        logger.info(f"Utility: module manifest upserted to {s3_path}")
-
-    except Exception as e:
-        logger.error(f"Error in utility: {str(e)}", exc_info=True)
-        raise

@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from common import Config
 from api.tokens import TokenManager
 import pyarrow.fs as fs
-from api.s3Api import getS3FileSystem
+from api.s3Api import getS3FileSystem, upsert_module_manifest
 from api.carbonS3Api import (
     carbon_export_backfill_lock_exists,
     carbon_export_backfill_lock_create,
@@ -359,6 +359,7 @@ def save_carbon_data_to_s3(data, file_name, force_overwrite=False):
 
         action = "Overwritten" if force_overwrite else "Uploaded"
         logger.info(f"Successfully {action.lower()} carbon data to S3: {s3_path}")
+        upsert_module_manifest()
         return True
 
     except Exception as e:
