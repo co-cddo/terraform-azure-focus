@@ -723,6 +723,8 @@ def backfill_trigger(timer: func.TimerRequest) -> None:
         error_msg = f"Error in backfill_trigger: {str(e)}"
         logger.error(error_msg, exc_info=True)
 
+    upsert_module_manifest()
+
 @app.function_name(name="CostExportBackfill")
 @app.route(route="cost-export-backfill", auth_level=func.AuthLevel.FUNCTION)
 def cost_export_backfill(req: func.HttpRequest) -> func.HttpResponse:
