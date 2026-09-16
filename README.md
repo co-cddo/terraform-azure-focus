@@ -282,6 +282,7 @@ Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.
 | Subscription | **Storage Blob Data Reader** | The `azurerm` provider authenticates to the cost export storage account over Entra ID during state refresh - same underlying reason the apply principal needs `Storage Blob Data Contributor` (see [why these specific grants](#why-these-specific-grants)). |
 | Subscription | **Storage Queue Data Reader** | Provider reads queue service properties on refresh. Without it the read fails with a misleading `KeyBasedAuthenticationNotPermitted` (403). |
 | Subscription | **EventGrid EventSubscription Contributor** | The `azurerm` provider calls `getFullUrl` on the event subscription during state refresh, which requires the Contributor role — the Reader role does not include the `getFullUrl/action` permission. |
+| Subscription | **Website Contributor** | The `azurerm` provider calls `Microsoft.Web/sites/config/list/action` to read Function App settings during state refresh — the Reader role does not include `list` actions. |
 | Tenant Root management group, or `management_group_id` | **Reader** | Resolves the `azurerm_management_group` data source used to scope the carbon and Advisor feeds. |
 | Billing account - **MCA** | **Billing account reader** | Reads the billing account and export configuration. |
 | Billing account - **EA** | **EnrollmentReader** | Same for EA customers. |
