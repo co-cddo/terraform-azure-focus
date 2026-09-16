@@ -33,6 +33,14 @@ locals {
   # Entra app, service principal, and app role itself (these require directory-write privileges).
   # Supplying existing_entra_application_client_id points the module at a pre-created app instead,
   # for separation of duties between Entra ID and Azure RBAC admins.
+  plan_sp_object_id  = one(data.azuread_service_principal.plan[*].object_id)
+  apply_sp_object_id = one(data.azuread_service_principal.apply[*].object_id)
+  deployer_sp_object_ids = local.apply_sp_object_id != null ? distinct([
+    local.plan_sp_object_id,
+    local.apply_sp_object_id,
+  ]) : [data.azurerm_client_config.current.object_id]
+  has_separate_apply_sp = length(local.deployer_sp_object_ids) == 2
+
   create_entra_app    = var.existing_entra_application_client_id == null
   entra_app_client_id = local.create_entra_app ? azuread_application.aws_app[0].client_id : var.existing_entra_application_client_id
 

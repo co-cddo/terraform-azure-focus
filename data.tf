@@ -1,5 +1,15 @@
 data "azurerm_client_config" "current" {}
 
+data "azuread_service_principal" "plan" {
+  count     = var.current_principal_type == "ServicePrincipal" ? 1 : 0
+  object_id = data.azurerm_client_config.current.object_id
+}
+
+data "azuread_service_principal" "apply" {
+  count        = var.current_principal_type == "ServicePrincipal" ? 1 : 0
+  display_name = replace(data.azuread_service_principal.plan[0].display_name, "plan", "apply")
+}
+
 data "azurerm_resource_group" "existing" {
   count = var.existing_resource_group_name != null ? 1 : 0
   name  = var.existing_resource_group_name
