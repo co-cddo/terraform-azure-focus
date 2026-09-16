@@ -20,8 +20,8 @@ param(
     [Parameter(Mandatory)]
     [string]$BillingAccountID,
 
-    [Parameter(Mandatory, ValueFromPipeline)]
-    [string[]]$ServicePrincipalObjectID,
+    [Parameter(Mandatory)]
+    [string]$ServicePrincipalObjectID,
 
     #EA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal | MCA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-mca-roles#billing-role-definitions
     [Parameter(Mandatory)]
@@ -35,37 +35,31 @@ param(
     [switch]$IsEnterpriseAgreement
 )
 
-begin {
-    # https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/create-by-billing-account?view=rest-billing-2019-10-01-preview&tabs=HTTP
-    $uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/createBillingRoleAssignment?api-version=2019-10-01-preview"
-    $method = 'POST'
-}
+# https://learn.microsoft.com/en-us/rest/api/billing/billing-role-assignments/create-by-billing-account?view=rest-billing-2019-10-01-preview&tabs=HTTP
+$uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/createBillingRoleAssignment?api-version=2019-10-01-preview"
+$method = 'POST'
 
-process {
-    foreach($id in $ServicePrincipalObjectID) {
-        $body = @{
-            properties = @{
-                principalId      = $id
-                # The API expects the fully qualified role definition ID; expand if given a bare GUID
-                roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleDefinitions/$RoleDefinitionID"
-            }
-        }
-
-        if ($IsEnterpriseAgreement.IsPresent) {
-            $billingRoleAssignmentID = (New-Guid).Guid
-            # https://learn.microsoft.com/en-us/rest/api/billing/role-assignments/put?view=rest-billing-2019-10-01-preview&tabs=HTTP
-            $uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleAssignments/$billingRoleAssignmentID`?api-version=2019-10-01-preview"
-            $body.properties.principalTenantId = (Get-AzContext).Tenant.Id
-            $method = 'PUT'
-        }
-
-        $body = $body | ConvertTo-Json
-        $response = Invoke-AzRestMethod -Method $method -Path $uri -Payload $body
-
-        if ($response.StatusCode -notin 200, 201) {
-            throw "Billing role assignment failed with status $($response.StatusCode): $($response.Content)"
-        }
-
-        Write-Output -InputObject $response
+$body = @{
+    properties = @{
+        principalId      = $ServicePrincipalObjectID
+        # The API expects the fully qualified role definition ID; expand if given a bare GUID
+        roleDefinitionId = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleDefinitions/$RoleDefinitionID"
     }
 }
+
+if ($IsEnterpriseAgreement.IsPresent) {
+    $billingRoleAssignmentID = (New-Guid).Guid
+    # https://learn.microsoft.com/en-us/rest/api/billing/role-assignments/put?view=rest-billing-2019-10-01-preview&tabs=HTTP
+    $uri = "/providers/Microsoft.Billing/billingAccounts/$BillingAccountID/billingRoleAssignments/$billingRoleAssignmentID`?api-version=2019-10-01-preview"
+    $body.properties.principalTenantId = (Get-AzContext).Tenant.Id
+    $method = 'PUT'
+}
+
+$body = $body | ConvertTo-Json
+$response = Invoke-AzRestMethod -Method $method -Path $uri -Payload $body
+
+if ($response.StatusCode -notin 200, 201) {
+    throw "Billing role assignment failed with status $($response.StatusCode): $($response.Content)"
+}
+
+Write-Output -InputObject $response
