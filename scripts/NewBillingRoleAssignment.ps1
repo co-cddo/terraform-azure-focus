@@ -23,8 +23,7 @@ param(
     [Parameter(Mandatory, ValueFromPipeline)]
     [string[]]$ServicePrincipalObjectID,
 
-    #EA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal
-    #MCA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-mca-roles#billing-role-definitions
+    #EA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/assign-roles-azure-service-principals#permissions-that-can-be-assigned-to-the-service-principal | MCA Roles: https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-mca-roles#billing-role-definitions
     [Parameter(Mandatory)]
     [ValidateSet(
         '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e', # EnrollmentReader
