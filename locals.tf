@@ -58,7 +58,7 @@ locals {
   )
 
   entra_app_role_id = local.create_entra_app ? random_uuid.app_uuid[0].id : (
-    local.manage_entra_app_role_assignment ? data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"] : null
+    local.manage_entra_app_role_assignment ? try(data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"], null) : null
   )
 
   focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)

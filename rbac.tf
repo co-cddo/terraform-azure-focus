@@ -63,6 +63,14 @@ resource "azuread_app_role_assignment" "aws_app" {
   principal_object_id = azurerm_user_assigned_identity.cost_export.principal_id
   resource_object_id  = local.entra_sp_object_id
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
+
+  lifecycle {
+    precondition {
+      # If an existing Entra app registration is supplied, ensure it exposes the required app role.
+      condition     = (var.existing_entra_application_client_id != null && local.entra_app_role_id != null) || var.existing_entra_application_client_id == null
+      error_message = "The pre-existing Entra app registration (existing_entra_application_client_id) does not expose an 'AssumeRoleWithWebIdentity' app role. Add the app role to the registration before running apply, or set manage_entra_app_role_assignment = false to skip the binding."
+    }
+  }
 }
 
 
