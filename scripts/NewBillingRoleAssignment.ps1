@@ -27,7 +27,8 @@ param(
     [Parameter(Mandatory)]
     [ValidateSet(
         '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e', # EnrollmentReader
-        '50000000-aaaa-bbbb-cccc-100000000002'  # Billing account reader
+        '50000000-aaaa-bbbb-cccc-100000000002', # Billing account reader
+        '50000000-aaaa-bbbb-cccc-100000000000'  # Billing account owner
     )]
     [string]$RoleDefinitionID,
 
