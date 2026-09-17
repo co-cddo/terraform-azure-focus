@@ -6,7 +6,7 @@ param(
   [string]$ServicePrincipalDisplayName,
 
   [Parameter(Mandatory)]
-  [ValidateSet('Application.ReadWrite.OwnedBy', 'Application.Read.All')]
+  [ValidateSet('Application.ReadWrite.OwnedBy', 'Application.Read.All', 'AppRoleAssignment.ReadWrite.All')]
   [string]$AppRoleName
 )
 
