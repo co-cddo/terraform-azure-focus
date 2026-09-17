@@ -48,15 +48,6 @@ resource "azuread_service_principal" "aws_app" {
   owners                       = local.deployer_sp_object_ids
 }
 
-# When bringing your own app registration and letting the module manage the app role assignment,
-# resolve the supplied app's service principal object ID and app role ID by directory READ (not
-# write). Not created in strict-separation mode (manage_entra_app_role_assignment = false), so no
-# directory access is needed there at all.
-data "azuread_service_principal" "existing_aws_app" {
-  count     = (!local.create_entra_app && local.manage_entra_app_role_assignment) ? 1 : 0
-  client_id = var.existing_entra_application_client_id
-}
-
 resource "azuread_app_role_assignment" "aws_app" {
   count               = local.manage_entra_app_role_assignment ? 1 : 0
   app_role_id         = local.entra_app_role_id
@@ -67,8 +58,14 @@ resource "azuread_app_role_assignment" "aws_app" {
   lifecycle {
     precondition {
       # If an existing Entra app registration is supplied, ensure it exposes the required app role.
-      condition     = (var.existing_entra_application_client_id != null && local.entra_app_role_id != null) || var.existing_entra_application_client_id == null
-      error_message = "The pre-existing Entra app registration (existing_entra_application_client_id) does not expose an 'AssumeRoleWithWebIdentity' app role. Add the app role to the registration before running apply, or set manage_entra_app_role_assignment = false to skip the binding."
+      condition = (var.existing_entra_application_client_id != null && local.entra_app_role_id != null) || var.existing_entra_application_client_id == null
+      error_message = join("\n", [
+        "",
+        "The pre-existing Entra app registration (existing_entra_application_client_id) does not expose an 'AssumeRoleWithWebIdentity' app role.",
+        "Add the app role before running terraform apply (see instructions below), or set manage_entra_app_role_assignment = false to skip the binding.",
+        "",
+        local.configure_existing_app_registration_instructions
+      ])
     }
   }
 }

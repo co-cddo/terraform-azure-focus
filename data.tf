@@ -65,3 +65,12 @@ data "azapi_resource_list" "billing_role_assignments" {
 data "modtm_module_source" "this" {
   module_path = path.module
 }
+
+# When bringing your own app registration and letting the module manage the app role assignment,
+# resolve the supplied app's service principal object ID and app role ID by directory READ (not
+# write). Not created in strict-separation mode (manage_entra_app_role_assignment = false), so no
+# directory access is needed there at all.
+data "azuread_service_principal" "existing_aws_app" {
+  count     = (!local.create_entra_app && local.manage_entra_app_role_assignment) ? 1 : 0
+  client_id = var.existing_entra_application_client_id
+}

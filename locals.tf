@@ -180,4 +180,24 @@ locals {
     diag_deployment_queue  = coalesce(local.diag_overrides.deployment_queue, "diag-queue-deployment-${random_string.unique.result}")
     diag_event_grid        = coalesce(local.diag_overrides.event_grid, "diag-eventgrid-${random_string.unique.result}")
   }
+
+  configure_existing_app_registration_instructions = join("\n", [
+    "",
+    "###############################################################################################################################################################################",
+    "",
+    "Run scripts/ConfigureExistingAppRegistration.ps1 (bundled with this module) — it is idempotent and ensures:",
+    "",
+    "  - The 'AssumeRoleWithWebIdentity' app role exists on the app registration",
+    "  - The app role is assigned to the function app's managed identity",
+    "  - The identifier URI is set correctly",
+    "",
+    "  ./scripts/ConfigureExistingAppRegistration.ps1 -ManagedIdentityClientID '${azurerm_user_assigned_identity.cost_export.client_id}' -AppRegistrationClientID '${local.entra_app_client_id}'",
+    "",
+    "If you set the cost_mgmt_suffix variable in your module configuration, append the respective PowerShell script parameter to the command above:",
+    "",
+    "  -CostManagementSuffix '<cost_mgmt_suffix value>'",
+    "",
+    "###############################################################################################################################################################################",
+    ""
+  ])
 }
