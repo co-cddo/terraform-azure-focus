@@ -2,10 +2,11 @@
 
 param(
 	[Parameter(Mandatory)]
-	[string]$ManagedIdentityClientID,
-
-	[Parameter(Mandatory)]
 	[string]$AppRegistrationClientID,
+
+	#Omit if you are preparing an app registration prior to module deployment - populate with the client id for the function app user-assigned managed identity if you want to manually add the required app role assignment following module deployment.
+	[Parameter()]
+	[string]$ManagedIdentityClientID,
 
 	#If you set the cost_mgmt_suffix variable in your module configuration, set it here too https://github.com/co-cddo/terraform-azure-focus#input_cost_mgmt_suffix
 	[Parameter()]
@@ -36,15 +37,14 @@ try {
 		$mgContext = Get-MgContext
 	}
 
-	$managedIdentityServicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$ManagedIdentityClientID'"
-	if (-not $managedIdentityServicePrincipal) {
-		throw "Could not find managed identity with client id: $ManagedIdentityClientID"
+	if ($ManagedIdentityClientID) {
+		$managedIdentityServicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$ManagedIdentityClientID'"
+		if (-not $managedIdentityServicePrincipal) {
+			throw "Could not find managed identity with client id: $ManagedIdentityClientID"
+		}
 	}
 
 	$appRegistration = Get-MgApplication -Filter "AppId eq '$AppRegistrationClientID'"
-
-	$servicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$AppRegistrationClientID'"
-
 	$appRole = $appRegistration |
 	Select-Object -ExpandProperty AppRoles |
 	Where-Object -FilterScript { $_.DisplayName -eq 'AssumeRole' -and $_.Value -eq 'AssumeRoleWithWebIdentity' }
@@ -74,18 +74,22 @@ try {
 		Where-Object -FilterScript { $_.DisplayName -eq 'AssumeRole' -and $_.Value -eq 'AssumeRoleWithWebIdentity' }
 	}
 
-	$params = @{
-		principalId = $managedIdentityServicePrincipal.Id
-		resourceId  = $servicePrincipal.Id
-		appRoleId   = $appRole.Id
-	}
+	if ($ManagedIdentityClientID) {
+		$servicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$AppRegistrationClientID'"
 
-	$appRoleAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -ErrorAction SilentlyContinue |
-	Where-Object -FilterScript { $_.AppRoleId -eq $appRole.Id }
+		$params = @{
+			principalId = $managedIdentityServicePrincipal.Id
+			resourceId  = $servicePrincipal.Id
+			appRoleId   = $appRole.Id
+		}
 
-	if (-not ($appRoleAssignment)) {
-		Write-Verbose -Message "Creating app role assignment for managed identity with object id: $($managedIdentityServicePrincipal.Id)..." -Verbose
-		New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -BodyParameter $params
+		$appRoleAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -ErrorAction SilentlyContinue |
+		Where-Object -FilterScript { $_.AppRoleId -eq $appRole.Id }
+
+		if (-not ($appRoleAssignment)) {
+			Write-Verbose -Message "Creating app role assignment for managed identity with object id: $($managedIdentityServicePrincipal.Id)..." -Verbose
+			New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $managedIdentityServicePrincipal.Id -BodyParameter $params
+		}
 	}
 
 	$identifierUriSuffix = ''
