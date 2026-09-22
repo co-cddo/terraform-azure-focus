@@ -86,13 +86,14 @@ The deploying principal needs **EnrollmentReader** on the EA billing account (se
 
 #### Step 2 - Assign EnrollmentReader to the function identity
 
-After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
+After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The easiest way to do this is by running the below PowerShell one-liner in Cloud Shell after the first terraform apply:
 
 ```pwsh
-# Run once per billing account following the first terraform apply
-$functionAppUserAssignedManagedIdentityObjectID = '<object id for new function app user-assigned managed identity>'
-$billingAccountID = '<EA billing account 1 ID>', '<EA billing account N ID>' # Substitute for the same value(s) you set the billing_account_ids Terraform variable to
-Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/refs/heads/feat/terraform-plan-apply-split-permissions/scripts/NewBillingRoleAssignment.ps1) } -BillingAccountID $billingAccountID -ServicePrincipalObjectID $functionAppUserAssignedManagedIdentityObjectID -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
+<#
+Substitute '<EA billing account 1 ID>', '<EA billing account N ID>' for the same value(s) you set the billing_account_ids Terraform variable to
+Substitute '<Object ID>' for the object ID of new Function App user-assigned managed identity
+#>
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/refs/heads/feat/terraform-plan-apply-split-permissions/scripts/NewBillingRoleAssignment.ps1) } -BillingAccountID '<EA billing account 1 ID>', '<EA billing account N id>' -ServicePrincipalObjectID '<Object ID>' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
 ```
 
 **Why is this step easy to miss?**
@@ -231,8 +232,9 @@ directory-write privilege.
 In both modes below, your Entra team must run
 `scripts/ConfigureExistingAppRegistration.ps1` (bundled with this module) to
 ensure the app role, identifier URI, and app role assignment are configured. The
-script is idempotent - safe to re-run at any time. If you set `cost_mgmt_suffix`
-in your module configuration, pass `-CostManagementSuffix` to the script as well.
+script is idempotent - safe to re-run at any time. If your existing deployment
+uses the deprecated `cost_mgmt_suffix` variable, pass `-CostManagementSuffix`
+to the script so the identifier URI matches.
 
 The `entra_app_role_assignment_manual_action_required`
 [output](#output_entra_app_role_assignment_manual_action_required) prints the
@@ -329,7 +331,10 @@ module "cost_forwarding" {
 
   aws_s3_bucket_name                  = "<aws s3 bucket name>"
   aws_account_id                      = "<aws account id>"
-  billing_account_ids                 = ["<billing account id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+
+  # Typically, only a single billing account ID is provided, however, if you have additional billing accounts of the same type (EA/MCA) that have been used since 2022, please specify them all here
+  billing_account_ids                 = ["<billing account id>"]
+
   subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
   function_app_subnet_id              = "<resource id for existing subnet to be used for Function App VNet integration>"
   virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
@@ -411,7 +416,7 @@ Set `enable_focus_exports = false` on all secondary tenant deployments. The Func
 module "cost_forwarding" {
   source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<release commit SHA>"
 
-  billing_account_ids = ["bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"]
+  billing_account_ids = ["a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210_2019-05-31"]
 
   # ... other required variables
 }
@@ -756,7 +761,7 @@ pre-commit hook.
 ## Providers
 
 | Name | Version |
-| ------ | --------- |
+|------|---------|
 | <a name="provider_archive"></a> [archive](#provider\_archive) | ~> 2.0 |
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~> 2.0 |
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.9 |
@@ -769,10 +774,10 @@ pre-commit hook.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ------ | ------------- | ------ | --------- | :--------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | n/a | yes |
-| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
+| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs used as the scope for FOCUS/cost exports only. Use the billing account ID format from Azure portal (e.g., '12345678' (EA) or 'a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210\_2019-05-31' (MCA)). Typically, only a single billing account ID is provided, however, if you have additional billing accounts of the same type (EA/MCA) that have been used since 2022, please specify them all here. The primary billing tenant for the billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
@@ -780,7 +785,7 @@ pre-commit hook.
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
 | <a name="input_backfill_start_date"></a> [backfill\_start\_date](#input\_backfill\_start\_date) | The year and month to start backfill - in the format 'YYYY-MM-01'; defaults to 2022-01-01 | `string` | `"2022-01-01"` | no |
 | <a name="input_cost_export_daily_schedule_to_years"></a> [cost\_export\_daily\_schedule\_to\_years](#input\_cost\_export\_daily\_schedule\_to\_years) | The number of years from initial deployment to set the end date of the daily schedule for cost export | `number` | `15` | no |
-| <a name="input_cost_mgmt_suffix"></a> [cost\_mgmt\_suffix](#input\_cost\_mgmt\_suffix) | [optional] suffix to add to cost mgmt export tasks - to allow multiple deployments of this module in one tenant | `string` | `""` | no |
+| <a name="input_cost_mgmt_suffix"></a> [cost\_mgmt\_suffix](#input\_cost\_mgmt\_suffix) | [deprecated] Suffix appended to Cost Management export names and the Entra app identifier URI. Avoid setting this for new deployments. If already set in an existing deployment, do not remove it - the identifier URI and export names must remain consistent. | `string` | `""` | no |
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
 | <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    resource_group              = optional(string)<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/><br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    diagnostic_settings = optional(object({<br/>      cost_export_blob  = optional(string)<br/>      cost_export_queue = optional(string)<br/>      deployment_blob   = optional(string)<br/>      deployment_queue  = optional(string)<br/>      event_grid        = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
@@ -807,7 +812,7 @@ pre-commit hook.
 ## Outputs
 
 | Name | Description |
-| ------ | ------------- |
+|------|-------------|
 | <a name="output_aws_app_client_id"></a> [aws\_app\_client\_id](#output\_aws\_app\_client\_id) | The aws app client id |
 | <a name="output_azapi_resource_action_add_role_assignment_output"></a> [azapi\_resource\_action\_add\_role\_assignment\_output](#output\_azapi\_resource\_action\_add\_role\_assignment\_output) | The billing account role assignment outputs from azapi\_resource\_action, keyed by billing account ID |
 | <a name="output_billing_account_ids"></a> [billing\_account\_ids](#output\_billing\_account\_ids) | Billing account IDs configured for cost reporting |

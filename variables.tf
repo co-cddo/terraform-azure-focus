@@ -43,7 +43,7 @@ variable "enable_advisor_exports" {
 }
 
 variable "billing_account_ids" {
-  description = "List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant_id). Can be empty when enable_focus_exports is false."
+  description = "List of billing account IDs used as the scope for FOCUS/cost exports only. Use the billing account ID format from Azure portal (e.g., '12345678' (EA) or 'a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210_2019-05-31' (MCA)). Typically, only a single billing account ID is provided, however, if you have additional billing accounts of the same type (EA/MCA) that have been used since 2022, please specify them all here. The primary billing tenant for the billing accounts must match the AzureRM provider configuration (tenant_id). Can be empty when enable_focus_exports is false."
   type        = list(string)
   validation {
     condition     = !var.enable_focus_exports || length(var.billing_account_ids) > 0
@@ -124,7 +124,7 @@ variable "logging_level" {
 }
 
 variable "cost_mgmt_suffix" {
-  description = "[optional] suffix to add to cost mgmt export tasks - to allow multiple deployments of this module in one tenant"
+  description = "[deprecated] Suffix appended to Cost Management export names and the Entra app identifier URI. Avoid setting this for new deployments. If already set in an existing deployment, do not remove it - the identifier URI and export names must remain consistent."
   type        = string
   default     = ""
 }
