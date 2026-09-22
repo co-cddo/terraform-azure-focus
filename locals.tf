@@ -33,6 +33,14 @@ locals {
   # Entra app, service principal, and app role itself (these require directory-write privileges).
   # Supplying existing_entra_application_client_id points the module at a pre-created app instead,
   # for separation of duties between Entra ID and Azure RBAC admins.
+  plan_sp_object_id  = one(data.azuread_service_principal.plan[*].object_id)
+  apply_sp_object_id = one(data.azuread_service_principal.apply[*].object_id)
+  deployer_sp_object_ids = local.apply_sp_object_id != null ? distinct([
+    local.plan_sp_object_id,
+    local.apply_sp_object_id,
+  ]) : [data.azurerm_client_config.current.object_id]
+  has_separate_apply_sp = length(local.deployer_sp_object_ids) == 2
+
   create_entra_app    = var.existing_entra_application_client_id == null
   entra_app_client_id = local.create_entra_app ? azuread_application.aws_app[0].client_id : var.existing_entra_application_client_id
 
@@ -50,7 +58,7 @@ locals {
   )
 
   entra_app_role_id = local.create_entra_app ? random_uuid.app_uuid[0].id : (
-    local.manage_entra_app_role_assignment ? data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"] : null
+    local.manage_entra_app_role_assignment ? try(data.azuread_service_principal.existing_aws_app[0].app_role_ids["AssumeRoleWithWebIdentity"], null) : null
   )
 
   focus_dataset_major_version = substr(var.focus_dataset_version, 0, 1)
@@ -172,4 +180,24 @@ locals {
     diag_deployment_queue  = coalesce(local.diag_overrides.deployment_queue, "diag-queue-deployment-${random_string.unique.result}")
     diag_event_grid        = coalesce(local.diag_overrides.event_grid, "diag-eventgrid-${random_string.unique.result}")
   }
+
+  configure_existing_app_registration_instructions = join("\n", [
+    "",
+    "###############################################################################################################################################################################",
+    "",
+    "Run scripts/ConfigureExistingAppRegistration.ps1 (bundled with this module) — it is idempotent and ensures:",
+    "",
+    "  - The 'AssumeRoleWithWebIdentity' app role exists on the app registration",
+    "  - The app role is assigned to the function app's managed identity",
+    "  - The identifier URI is set correctly",
+    "",
+    "  ./scripts/ConfigureExistingAppRegistration.ps1 -ManagedIdentityClientID '${azurerm_user_assigned_identity.cost_export.client_id}' -AppRegistrationClientID '${local.entra_app_client_id}'",
+    "",
+    "If you set the cost_mgmt_suffix variable in your module configuration, append the respective PowerShell script parameter to the command above:",
+    "",
+    "  -CostManagementSuffix '<cost_mgmt_suffix value>'",
+    "",
+    "###############################################################################################################################################################################",
+    ""
+  ])
 }

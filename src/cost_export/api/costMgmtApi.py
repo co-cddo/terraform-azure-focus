@@ -34,7 +34,7 @@ def get_mgmt_export_run_task_url(account_idx: int, account_id: str, month: int, 
 
 def cost_mgmt_export_exists(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
 ###
-# GET https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
+# GET https://management.azure.com/providers/Microsoft.Billing/billingAccounts/a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 ###
   export_task_name = get_export_task_name(account_idx, month, year)
   logger.debug(f"cost_mgmt_export_exists: {export_task_name}")
@@ -95,7 +95,7 @@ def get_last_day_month_date(month: int, year: int) -> int:
   return end_of_month.day
 
 def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year: int, timeout=120) -> bool:
-### Example payload to PUT https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
+### Example payload to PUT https://management.azure.com/providers/Microsoft.Billing/billingAccounts/a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 # {
 #   "location": "uksouth",
 #   "identity": {
@@ -224,7 +224,7 @@ def cost_mgmt_export_create(account_idx: int, account_id: str, month: int, year:
 
 def cost_mgmt_export_run(account_idx: int, account_id: str, month: int, year: int, timeout=30) -> bool:
 ###
-# POST https://management.azure.com/providers/Microsoft.Billing/billingAccounts/bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
+# POST https://management.azure.com/providers/Microsoft.Billing/billingAccounts/a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210_2019-05-31/providers/Microsoft.CostManagement/exports/focus-backfill-0-2025-10?api-version=2025-03-01
 # >>>> no body required
 ###
   logger.info(f"...running cost export for account id ({account_id} on {month:02d}/{year:04d}...")

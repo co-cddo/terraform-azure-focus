@@ -86,18 +86,14 @@ The deploying principal needs **EnrollmentReader** on the EA billing account (se
 
 #### Step 2 - Assign EnrollmentReader to the function identity
 
-After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
+An [Enterprise Administrator](https://learn.microsoft.com/en-us/azure/cost-management-billing/manage/understand-ea-roles#enterprise-administrator) must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The easiest way to do this is by running the below PowerShell one-liner in Cloud Shell after the first terraform apply:
 
 ```pwsh
-# Run once per billing account after every terraform apply.
-# Values come from the terraform output:
-#   cost_export_app_principal_id  → ServicePrincipalObjectID
-#   tenant_id                     → (used to find billing account)
-./scripts/NewBillingRoleAssignment.ps1 `
-  -BillingAccountID        <billing account id> `
-  -ServicePrincipalObjectID <object id from cost_export_app_principal_id output> `
-  -RoleDefinitionID        '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' `
-  -IsEnterpriseAgreement
+<#
+Substitute '<EA billing account 1 ID>', '<EA billing account N ID>' for the same value(s) you set the billing_account_ids Terraform variable to
+Substitute '<Object ID>' for the object ID of new Function App user-assigned managed identity
+#>
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/refs/heads/feat/terraform-plan-apply-split-permissions/scripts/NewBillingRoleAssignment.ps1) } -BillingAccountID '<EA billing account 1 ID>', '<EA billing account N id>' -ServicePrincipalObjectID '<Object ID>' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
 ```
 
 **Why is this step easy to miss?**
@@ -121,7 +117,7 @@ Permissions are least-privilege by design, scoped as narrowly as Azure allows.
 The principal running `terraform apply` (`current_principal_type` = `User` or
 `ServicePrincipal`) needs at least the following. Note that the module grants the deployment principal the
 data plane roles it needs during apply (see [Privileges assigned by the module](#b-privileges-assigned-by-the-module)), so those are _not_
-prerequisites - unless `manage_role_assignments = false`.
+prerequisites.
 
 | Scope | Role | Why it is needed |
 | --- | --- | --- |
@@ -130,6 +126,7 @@ prerequisites - unless `manage_role_assignments = false`.
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
+| Microsoft Graph (Entra ID) | **Application.ReadWrite.OwnedBy** | Create the AWS-federation Entra app registration and service principal. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). Use [`scripts/NewServicePrincipalAppRoleAssignment.ps1`](scripts/NewServicePrincipalAppRoleAssignment.ps1) to grant this permission. |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
@@ -153,15 +150,10 @@ The module uses a **user-assigned managed identity** for the Function App ('func
 system topic and for each Cost Management export.
 
 > [!NOTE]
-> Every grant in the table below is created only when `manage_role_assignments`
-> is `true` (the default). Set it to `false` if RBAC is owned by a separate
-> team/process: the module then creates **none** of these assignments and you
-> must pre-provision every one yourself - **including the deploying principal's
-> `Storage Blob Data Contributor` and `Storage Queue Data Contributor` roles**,
-> without which `terraform apply` fails when the provider reads the cost-export
-> storage account over Entra ID. The Entra `AssumeRoleWithWebIdentity` app-role
-> assignment is governed separately by `manage_entra_app_role_assignment` (default
-> `true`), so by default it is still created here - see
+> Every grant in the table below is created by the module (when
+> `manage_role_assignments` is `true`, the default). The Entra
+> `AssumeRoleWithWebIdentity` app-role assignment is governed separately by
+> `manage_entra_app_role_assignment` (default `true`) - see
 > [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration) below.
 
 | Principal | Role | Scope | Purpose |
@@ -235,8 +227,9 @@ directory-write privilege.
 In both modes below, your Entra team must run
 `scripts/ConfigureExistingAppRegistration.ps1` (bundled with this module) to
 ensure the app role, identifier URI, and app role assignment are configured. The
-script is idempotent - safe to re-run at any time. If you set `cost_mgmt_suffix`
-in your module configuration, pass `-CostManagementSuffix` to the script as well.
+script is idempotent - safe to re-run at any time. If your existing deployment
+uses the deprecated `cost_mgmt_suffix` variable, pass `-CostManagementSuffix`
+to the script so the identifier URI matches.
 
 The `entra_app_role_assignment_manual_action_required`
 [output](#output_entra_app_role_assignment_manual_action_required) prints the
@@ -278,11 +271,14 @@ Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.
 | Scope | Role | Why it is needed |
 | --- | --- | --- |
 | Subscription (where resources are created) | **Reader** | Refresh all existing resources (Resource Group, Storage Accounts, Function App, Event Grid, Private Endpoints, Private DNS, Log Analytics Workspace, user-assigned identity). |
-| Cost-export resource group | **Storage Blob Data Reader** | The `azurerm` provider authenticates to the cost-export storage account over Entra ID during state refresh - same underlying reason the apply principal needs `Storage Blob Data Contributor` (see [why these specific grants](#why-these-specific-grants)). |
-| Cost-export resource group | **Storage Queue Data Reader** | Provider reads queue service properties on refresh. Without it the read fails with a misleading `KeyBasedAuthenticationNotPermitted` (403). |
+| Subscription | **Storage Blob Data Reader** | The `azurerm` provider authenticates to the cost export storage account over Entra ID during state refresh - same underlying reason the apply principal needs `Storage Blob Data Contributor` (see [why these specific grants](#why-these-specific-grants)). |
+| Subscription | **Storage Queue Data Reader** | Provider reads queue service properties on refresh. Without it the read fails with a misleading `KeyBasedAuthenticationNotPermitted` (403). |
+| Subscription | **EventGrid EventSubscription Contributor** | The `azurerm` provider calls `getFullUrl` on the event subscription during state refresh, which requires the Contributor role — the Reader role does not include the `getFullUrl/action` permission. |
+| Subscription | **Website Contributor** | The `azurerm` provider calls `Microsoft.Web/sites/config/list/action` to read Function App settings during state refresh — the Reader role does not include `list` actions. |
 | Tenant Root management group, or `management_group_id` | **Reader** | Resolves the `azurerm_management_group` data source used to scope the carbon and Advisor feeds. |
 | Billing account - **MCA** | **Billing account reader** | Reads the billing account and export configuration. |
 | Billing account - **EA** | **EnrollmentReader** | Same for EA customers. |
+| Microsoft Graph (Entra ID) | **Application.Read.All** | Refresh the Entra app registration and service principal during state refresh. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). Use [`scripts/NewServicePrincipalAppRoleAssignment.ps1`](scripts/NewServicePrincipalAppRoleAssignment.ps1) to grant this permission. |
 
 > [!NOTE]
 > The two storage data-plane reader roles are only required after the **first** `terraform apply` - before that the storage account does not exist and there is nothing to refresh. They become necessary from the second plan run onwards.
@@ -291,7 +287,7 @@ Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.
 
 #### Apply principal - minimum roles
 
-Use the full set from [Deployment privileges](#a-deployment-privileges). The module automatically grants the apply principal `Storage Blob Data Contributor` and `Storage Queue Data Contributor` at apply time, so those are not prerequisites unless `manage_role_assignments = false`.
+Use the full set from [Deployment privileges](#a-deployment-privileges). The module automatically grants the apply principal `Storage Blob Data Contributor` and `Storage Queue Data Contributor` at apply time, so those are not prerequisites.
 
 #### Terraform state backend
 
@@ -330,7 +326,10 @@ module "cost_forwarding" {
 
   aws_s3_bucket_name                  = "<aws s3 bucket name>"
   aws_account_id                      = "<aws account id>"
-  billing_account_ids                 = ["<billing account id>"] # List of billing account IDs (applicable to FOCUS cost data only)
+
+  # Typically, only a single billing account ID is provided, however, if you have additional billing accounts of the same type (EA/MCA) that have been used since 2022, please specify them all here
+  billing_account_ids                 = ["<billing account id>"]
+
   subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
   function_app_subnet_id              = "<resource id for existing subnet to be used for Function App VNet integration>"
   virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
@@ -412,7 +411,7 @@ Set `enable_focus_exports = false` on all secondary tenant deployments. The Func
 module "cost_forwarding" {
   source = "git::https://github.com/co-cddo/terraform-azure-focus?ref=<release commit SHA>"
 
-  billing_account_ids = ["bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8_2019-05-31"]
+  billing_account_ids = ["a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210_2019-05-31"]
 
   # ... other required variables
 }
@@ -773,7 +772,7 @@ pre-commit hook.
 |------|-------------|------|---------|:--------:|
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account ID to use for the S3 bucket | `string` | n/a | yes |
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | n/a | yes |
-| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs to create FOCUS/cost exports for. Use the billing account ID format from Azure portal (e.g., 'bdfa614c-3bed-5e6d-313b-b4bfa3cefe1d:16e4ddda-0100-468b-a32c-abbfc29019d8\_2019-05-31'). Home tenant ID for all billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
+| <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs used as the scope for FOCUS/cost exports only. Use the billing account ID format from Azure portal (e.g., '12345678' (EA) or 'a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210\_2019-05-31' (MCA)). Typically, only a single billing account ID is provided, however, if you have additional billing accounts of the same type (EA/MCA) that have been used since 2022, please specify them all here. The primary billing tenant for the billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
 | <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
@@ -781,7 +780,7 @@ pre-commit hook.
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
 | <a name="input_backfill_start_date"></a> [backfill\_start\_date](#input\_backfill\_start\_date) | The year and month to start backfill - in the format 'YYYY-MM-01'; defaults to 2022-01-01 | `string` | `"2022-01-01"` | no |
 | <a name="input_cost_export_daily_schedule_to_years"></a> [cost\_export\_daily\_schedule\_to\_years](#input\_cost\_export\_daily\_schedule\_to\_years) | The number of years from initial deployment to set the end date of the daily schedule for cost export | `number` | `15` | no |
-| <a name="input_cost_mgmt_suffix"></a> [cost\_mgmt\_suffix](#input\_cost\_mgmt\_suffix) | [optional] suffix to add to cost mgmt export tasks - to allow multiple deployments of this module in one tenant | `string` | `""` | no |
+| <a name="input_cost_mgmt_suffix"></a> [cost\_mgmt\_suffix](#input\_cost\_mgmt\_suffix) | [deprecated] Suffix appended to Cost Management export names and the Entra app identifier URI. Avoid setting this for new deployments. If already set in an existing deployment, do not remove it - the identifier URI and export names must remain consistent. | `string` | `""` | no |
 | <a name="input_current_principal_type"></a> [current\_principal\_type](#input\_current\_principal\_type) | Type of the current principal running Terraform. Set to 'ServicePrincipal' when running in CI/CD with a service principal, 'User' for interactive usage. | `string` | `"User"` | no |
 | <a name="input_custom_resource_names"></a> [custom\_resource\_names](#input\_custom\_resource\_names) | Override the auto-generated names for resources created by this module.<br/>Every attribute is optional and defaults to null, which means the module<br/>uses its built-in name (typically a prefix plus an 8-character random suffix).<br/>Storage account names must be 3-24 characters, lowercase alphanumeric only.<br/>WARNING: Changing a resource name after initial deployment will cause Terraform<br/>to destroy and recreate that resource. | <pre>object({<br/>    resource_group              = optional(string)<br/>    storage_account_cost_export = optional(string)<br/>    storage_account_deployment  = optional(string)<br/>    service_plan                = optional(string)<br/>    user_assigned_identity      = optional(string)<br/>    function_app                = optional(string)<br/>    application_insights        = optional(string)<br/>    log_analytics_workspace     = optional(string)<br/>    event_grid_system_topic     = optional(string)<br/>    event_grid_subscription     = optional(string)<br/>    entra_application           = optional(string)<br/><br/>    private_endpoints = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    private_service_connections = optional(object({<br/>      storage_blob    = optional(string)<br/>      storage_queue   = optional(string)<br/>      deployment_blob = optional(string)<br/>      function_app    = optional(string)<br/>    }))<br/>    diagnostic_settings = optional(object({<br/>      cost_export_blob  = optional(string)<br/>      cost_export_queue = optional(string)<br/>      deployment_blob   = optional(string)<br/>      deployment_queue  = optional(string)<br/>      event_grid        = optional(string)<br/>    }))<br/>  })</pre> | `{}` | no |
 | <a name="input_deploy_from_external_network"></a> [deploy\_from\_external\_network](#input\_deploy\_from\_external\_network) | If you don't have existing GitHub runners in the same virtual network, set this to true. This will enable 'public' access to the function app during deployment. This is added for convenience and is not recommended in production environments | `bool` | `false` | no |
@@ -790,7 +789,7 @@ pre-commit hook.
 | <a name="input_enable_focus_exports"></a> [enable\_focus\_exports](#input\_enable\_focus\_exports) | Whether to create the FOCUS cost export infrastructure (storage account, Event Grid, daily export schedule, billing role assignments). Set to false for secondary tenant deployments that share a billing account with a primary deployment — FOCUS exports are scoped at the billing account level, so only one deployment per billing account should create them. | `bool` | `true` | no |
 | <a name="input_existing_entra_application_client_id"></a> [existing\_entra\_application\_client\_id](#input\_existing\_entra\_application\_client\_id) | [optional] Client (application) ID of a pre-existing Entra app registration to use for AWS OIDC federation. Set this for separation of duties: when supplied, the module does NOT create the app registration, service principal, or app role (all of which require directory-write privileges) and consumes this client ID instead. The pre-created app must expose an 'AssumeRoleWithWebIdentity' app role and the identifier URI 'api://<tenant-id>/GDS-AWS-Cost-Forwarding<cost\_mgmt\_suffix>' (the AWS OIDC token audience). Leave null to have the module create the app registration as before. | `string` | `null` | no |
 | <a name="input_existing_private_dns_zone_ids"></a> [existing\_private\_dns\_zone\_ids](#input\_existing\_private\_dns\_zone\_ids) | Map of existing private DNS zone IDs keyed by blob, queue, and sites.<br/><br/>Example:<br/>{<br/>  blob  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"<br/>  queue = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"<br/>  sites = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"<br/>} | `map(string)` | `{}` | no |
-| <a name="input_existing_resource_group_name"></a> [existing\_resource\_group\_name](#input\_existing\_resource\_group\_name) | [optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Use when manage\_role\_assignments is false and the resource group (with its role assignments) must exist before the first apply. Leave null to have the module create the resource group. | `string` | `null` | no |
+| <a name="input_existing_resource_group_name"></a> [existing\_resource\_group\_name](#input\_existing\_resource\_group\_name) | [optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Leave null to have the module create the resource group. | `string` | `null` | no |
 | <a name="input_focus_dataset_version"></a> [focus\_dataset\_version](#input\_focus\_dataset\_version) | Version of the cost and usage details (FOCUS) dataset to use | `string` | `"1.0r2"` | no |
 | <a name="input_is_enterprise_customer"></a> [is\_enterprise\_customer](#input\_is\_enterprise\_customer) | Set to true if you are an Enterprise Agreement customer | `bool` | `false` | no |
 | <a name="input_link_existing_private_dns_zones_to_vnet"></a> [link\_existing\_private\_dns\_zones\_to\_vnet](#input\_link\_existing\_private\_dns\_zones\_to\_vnet) | When use\_existing\_private\_dns\_zones is true, whether to create virtual network links from the existing private DNS zones to the module virtual network. Leave as false when your DNS zones are centrally managed (e.g. via a Private DNS Resolver hub) and already linked to the VNet. | `bool` | `false` | no |
@@ -798,7 +797,7 @@ pre-commit hook.
 | <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | Resource ID of an existing Log Analytics workspace to use for diagnostic settings. If not provided, a new workspace will be created. | `string` | `null` | no |
 | <a name="input_logging_level"></a> [logging\_level](#input\_logging\_level) | Logging level for the app; can be DEBUG or INFO (default) | `string` | `"INFO"` | no |
 | <a name="input_manage_entra_app_role_assignment"></a> [manage\_entra\_app\_role\_assignment](#input\_manage\_entra\_app\_role\_assignment) | Whether the module creates the Entra app role assignment that binds the function app's managed identity to the 'AssumeRoleWithWebIdentity' app role. Defaults to true (current behaviour). Only takes effect when bringing your own app registration (existing\_entra\_application\_client\_id set); when the module creates the app registration it already holds the privileges to create the binding, so this is forced true. Set to false for strict separation of duties when the deploying principal has no directory-write privileges: the module then skips the binding and the 'entra\_app\_role\_assignment\_manual\_action\_required' output prints the details for your Entra team to create it out-of-band. | `bool` | `true` | no |
-| <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage\_entra\_app\_role\_assignment. | `bool` | `true` | no |
+| <a name="input_manage_role_assignments"></a> [manage\_role\_assignments](#input\_manage\_role\_assignments) | Reserved for future use. Must remain true (the default). External RBAC management is not yet supported because several role assignments target principals that do not exist until after the first apply, making a single-pass deployment impossible. The Entra app role assignment for AWS federation is governed separately by manage\_entra\_app\_role\_assignment. | `bool` | `true` | no |
 | <a name="input_management_group_id"></a> [management\_group\_id](#input\_management\_group\_id) | [optional] ID of the management group scoping the carbon emissions and Azure Advisor feeds. It sets the scope of the function identity's 'Carbon Optimization Reader' and 'Advisor Recommendations Contributor' role assignments, and the set of subscriptions the CarbonEmissionsExporter and AdvisorRecommendationsExporter enumerate. Defaults to null, meaning the Tenant Root management group, whose ID is the tenant ID. Set it to a child management group when role assignments at the tenant root are not permitted, or to limit the estate these two feeds cover; FOCUS cost exports are scoped by billing account and are unaffected, so narrowing this makes carbon and Advisor data cover a subset of the subscriptions the cost data covers. Supply the ID shown in the portal's 'ID' column (e.g. 'alz'), not the display name in its 'Name' column and not a full resource ID - note that the azurerm\_management\_group data source confusingly calls this field 'name'. | `string` | `null` | no |
 | <a name="input_private_endpoints_manage_dns_zone_group"></a> [private\_endpoints\_manage\_dns\_zone\_group](#input\_private\_endpoints\_manage\_dns\_zone\_group) | Whether to manage private DNS integration for private endpoints with this module. If set to false, private DNS zone groups and records must be managed externally, for example by Azure Policy. | `bool` | `true` | no |
 | <a name="input_publish_function_code"></a> [publish\_function\_code](#input\_publish\_function\_code) | Whether the module publishes the function app code via the bundled 'az functionapp deployment source config-zip' step. Set to false when the function code is deployed out-of-band (for example by a separate CI pipeline), which also avoids the Azure CLI dependency in environments where it is unavailable such as 'terraform test'. | `bool` | `true` | no |
