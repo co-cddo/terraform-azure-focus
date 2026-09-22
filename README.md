@@ -126,7 +126,7 @@ prerequisites - unless `manage_role_assignments = false`.
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing account scope **and** assign the `Billing account reader` billing role to the function identity. |
 | Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
-| Microsoft Graph (Entra ID) | **Application.ReadWrite.OwnedBy** | Create the AWS-federation Entra app registration and service principal. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). You can use `scripts/NewServicePrincipalAppRoleAssignment.ps1` to grant this permission to the deploying service principal. |
+| Microsoft Graph (Entra ID) | **Application.ReadWrite.OwnedBy** | Create the AWS-federation Entra app registration and service principal. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). Use [`scripts/NewServicePrincipalAppRoleAssignment.ps1`](scripts/NewServicePrincipalAppRoleAssignment.ps1) to grant this permission. |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
@@ -283,7 +283,7 @@ Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.
 | Tenant Root management group, or `management_group_id` | **Reader** | Resolves the `azurerm_management_group` data source used to scope the carbon and Advisor feeds. |
 | Billing account - **MCA** | **Billing account reader** | Reads the billing account and export configuration. |
 | Billing account - **EA** | **EnrollmentReader** | Same for EA customers. |
-| Microsoft Graph (Entra ID) | **Application.Read.All** | Refresh the Entra app registration and service principal during state refresh. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). You can use `scripts/NewServicePrincipalAppRoleAssignment.ps1` to grant this permission to the plan service principal. |
+| Microsoft Graph (Entra ID) | **Application.Read.All** | Refresh the Entra app registration and service principal during state refresh. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). Use [`scripts/NewServicePrincipalAppRoleAssignment.ps1`](scripts/NewServicePrincipalAppRoleAssignment.ps1) to grant this permission. |
 
 > [!NOTE]
 > The two storage data-plane reader roles are only required after the **first** `terraform apply` - before that the storage account does not exist and there is nothing to refresh. They become necessary from the second plan run onwards.
