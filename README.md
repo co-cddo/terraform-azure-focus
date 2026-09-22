@@ -90,11 +90,9 @@ After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBilli
 
 ```pwsh
 # Run once per billing account following the first terraform apply
-./scripts/NewBillingRoleAssignment.ps1 `
-  -BillingAccountID        <billing account id> `
-  -ServicePrincipalObjectID <object id from cost_export_app_principal_id output> `
-  -RoleDefinitionID        '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' `
-  -IsEnterpriseAgreement
+$functionAppUserAssignedManagedIdentityObjectID = '<object id for new function app user-assigned managed identity>'
+$billingAccountID = '<EA billing account 1 ID>', '<EA billing account N ID>' # Substitute for the same value(s) you set the billing_account_ids Terraform variable to
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/refs/heads/feat/terraform-plan-apply-split-permissions/scripts/NewBillingRoleAssignment.ps1) } -BillingAccountID $billingAccountID -ServicePrincipalObjectID $functionAppUserAssignedManagedIdentityObjectID -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
 ```
 
 **Why is this step easy to miss?**
