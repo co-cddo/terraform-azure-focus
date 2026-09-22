@@ -1,5 +1,5 @@
 variable "existing_resource_group_name" {
-  description = "[optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Use when manage_role_assignments is false and the resource group (with its role assignments) must exist before the first apply. Leave null to have the module create the resource group."
+  description = "[optional] Name of a pre-existing resource group to deploy into. When set, the module does not create a resource group and looks up this one instead. Leave null to have the module create the resource group."
   type        = string
   default     = null
 }
@@ -147,7 +147,7 @@ variable "management_group_id" {
 }
 
 variable "manage_role_assignments" {
-  description = "Whether the module creates the role assignments it needs (section (b) of the README 'Privileges'). Set to false when RBAC is managed externally - you must then pre-provision every grant yourself, including the deploying principal's Storage Blob/Queue Data Contributor roles, or apply will fail. The Entra app role assignment for AWS federation is not governed by this variable - it is controlled separately by manage_entra_app_role_assignment."
+  description = "Reserved for future use. Must remain true (the default). External RBAC management is not yet supported because several role assignments target principals that do not exist until after the first apply, making a single-pass deployment impossible. The Entra app role assignment for AWS federation is governed separately by manage_entra_app_role_assignment."
   type        = bool
   default     = true
 }

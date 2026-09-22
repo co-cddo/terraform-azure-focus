@@ -58,7 +58,7 @@ Created by default. Set `use_existing_private_dns_zones = true` and supply zone 
 
 ## Identity & RBAC
 
-Set `manage_role_assignments = false` to handle RBAC externally. Set `existing_entra_application_client_id` to reuse an existing Entra app.
+Set `existing_entra_application_client_id` to reuse an existing Entra app.
 
 | Resource | Type | Scope | Lifecycle |
 | --- | --- | --- | --- |
