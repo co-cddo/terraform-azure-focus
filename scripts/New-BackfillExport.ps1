@@ -5,13 +5,16 @@
     Creates FOCUS cost backfill exports against an Azure billing account.
 
 .DESCRIPTION
-    Calls the Azure Cost Management REST API directly as the logged-in user,
-    so the function app's managed identity does not need the EnrollmentReader
-    role on the billing account.  The caller must have sufficient billing-scope
-    permissions (e.g. Enterprise Admin or Billing Account Contributor).
+    The caller must have sufficient billing-scope permissions (e.g. EnrollmentReader (EA) or Billing Account Contributor (MCA)).
 
-    Each export is created as an inactive, one-off task pointing at the same
-    storage account the Terraform module provisions.
+.EXAMPLE
+    $params = @{
+        BillingAccountId         = "bdfa614c-..._2019-05-31"
+        StorageAccountResourceId = "/subscriptions/.../storageAccounts/stcostexport..."
+    }
+    .\New-BackfillExport.ps1 @params
+
+    Creates 12 months of inactive exports.
 
 .PARAMETER BillingAccountId
     The billing account ID in Azure format, e.g.
@@ -60,15 +63,6 @@
 
 .PARAMETER ApiVersion
     Cost Management API version.  Defaults to "2025-03-01".
-
-.EXAMPLE
-    $params = @{
-        BillingAccountId         = "bdfa614c-..._2019-05-31"
-        StorageAccountResourceId = "/subscriptions/.../storageAccounts/stcostexport..."
-    }
-    .\New-BackfillExport.ps1 @params
-
-    Creates 12 months of inactive exports.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 [OutputType([PSCustomObject])]
@@ -135,9 +129,7 @@ function Wait-BatchInterval {
     for ($remaining = $Seconds; $remaining -gt 0; $remaining--) {
         $minutes = [int][math]::Floor($remaining / 60)
         $secs = $remaining % 60
-        Write-Progress -Activity $activity `
-            -Status ('{0:D2}:{1:D2} remaining' -f $minutes, $secs) `
-            -PercentComplete ((($Seconds - $remaining) / $Seconds) * 100)
+        Write-Progress -Activity $activity -Status ('{0:D2}:{1:D2} remaining' -f $minutes, $secs) -PercentComplete ((($Seconds - $remaining) / $Seconds) * 100)
         Start-Sleep -Seconds 1
     }
     Write-Progress -Activity $activity -Completed
