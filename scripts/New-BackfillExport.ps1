@@ -245,15 +245,15 @@ foreach ($m in $monthRange) {
 
     if ($PSCmdlet.ShouldProcess($exportName, "PUT export for $label")) {
         try {
-            Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $body -ContentType 'application/json' | Out-Null
+            Invoke-RestMethod -Uri $url -Method Put -Headers $headers -Body $body -ContentType 'application/json' -Verbose:$false | Out-Null
             Write-Verbose -Message "  [CREATE] $label  $exportName"
             $created++
             $results.Add([PSCustomObject]@{
-                Month      = $label
-                ExportName = $exportName
-                Created    = $true
-                Executed   = $false
-            })
+                    Month      = $label
+                    ExportName = $exportName
+                    Created    = $true
+                    Executed   = $false
+                })
         }
         catch {
             Write-Warning -Message "  [FAIL]   $label  $exportName -- $($_.Exception.Message)"
@@ -285,7 +285,7 @@ if ($Run -and $results.Count -gt 0) {
             $runUrl = "$baseUrl/$($export.ExportName)/run?api-version=$ApiVersion"
             if ($PSCmdlet.ShouldProcess($export.ExportName, "POST run for $($export.Month)")) {
                 try {
-                    Invoke-RestMethod -Uri $runUrl -Method Post -Headers $headers | Out-Null
+                    Invoke-RestMethod -Uri $runUrl -Method Post -Headers $headers -Verbose:$false | Out-Null
                     Write-Verbose -Message "  [RUN]    $($export.Month)  $($export.ExportName)"
                     $export.Executed = $true
                 }
