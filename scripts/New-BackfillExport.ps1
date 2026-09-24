@@ -116,9 +116,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-
 # --- helpers ----------------------------------------------------------------
-
 
 function Get-ExportName {
     param([int]$Idx, [int]$Year, [int]$Month, [string]$Sfx)
@@ -126,12 +124,10 @@ function Get-ExportName {
     'focus-backfill{0}-{1}-{2:D4}-{3:D2}' -f $sfxPart, $Idx, $Year, $Month
 }
 
-
 function Get-DaysInMonth {
     param([int]$Year, [int]$Month)
     [DateTime]::DaysInMonth($Year, $Month)
 }
-
 
 function Wait-BatchInterval {
     param([int]$Seconds, [int]$CurrentBatch, [int]$TotalBatches)
@@ -147,7 +143,6 @@ function Wait-BatchInterval {
     Write-Progress -Activity $activity -Completed
 }
 
-
 function Get-MonthRange {
     param([int]$Count)
     $cursor = (Get-Date).AddMonths(-1)
@@ -162,7 +157,6 @@ function Get-MonthRange {
     $result.Reverse()
     $result
 }
-
 
 # --- auth -------------------------------------------------------------------
 
@@ -303,4 +297,4 @@ if ($Run -and $results.Count -gt 0) {
 
 # --- output ------------------------------------------------------------------
 
-$results
+Write-Output -InputObject $results
