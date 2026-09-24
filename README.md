@@ -89,13 +89,11 @@ The deploying principal needs **EnrollmentReader** on the EA billing account (se
 After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
 
 ```pwsh
-# Run once per billing account after every terraform apply.
-# Values come from the terraform output:
-#   cost_export_app_principal_id  → ServicePrincipalObjectID
-#   tenant_id                     → (used to find billing account)
+# Run once per billing account after terraform apply.
+
 ./scripts/NewBillingRoleAssignment.ps1 `
   -BillingAccountID        <billing account id> `
-  -ServicePrincipalObjectID <object id from cost_export_app_principal_id output> `
+  -ServicePrincipalObjectID <object id for the new function app user-assigned managed identity> `
   -RoleDefinitionID        '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' `
   -IsEnterpriseAgreement
 ```
