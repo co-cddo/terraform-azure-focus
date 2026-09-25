@@ -86,16 +86,13 @@ The deploying principal needs **EnrollmentReader** on the EA billing account (se
 
 #### Step 2 - Assign EnrollmentReader to the function identity
 
-After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The `cost_export_app_principal_id` and `tenant_id` outputs provide the values you need.
+After `terraform apply`, an Enterprise Administrator must run [`scripts/NewBillingRoleAssignment.ps1`](scripts/NewBillingRoleAssignment.ps1) for each EA billing account. The command below can be ran in Cloud Shell:
 
 ```pwsh
-# Run once per billing account after terraform apply.
+# Substitute '<object id>' for the object ID of new Function App user-assigned managed identity
+# Run once for each EA billing account
 
-./scripts/NewBillingRoleAssignment.ps1 `
-  -BillingAccountID        <billing account id> `
-  -ServicePrincipalObjectID <object id for the new function app user-assigned managed identity> `
-  -RoleDefinitionID        '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' `
-  -IsEnterpriseAgreement
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/305011d1fd8a1b937817055642c9f1b00c83b416/scripts/NewBillingRoleAssignment.ps1) }  -BillingAccountID '<billing account id>' -ServicePrincipalObjectID '<object id>' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
 ```
 
 **Why is this step easy to miss?**
@@ -750,7 +747,7 @@ traces
 
 ### Function App User-Assigned Managed Identity Missing Enrollmentreader Role Assignment
 
-In a scenario where you have an EA billing account, have successfully deployed the module but are blocked on getting the second EnrollmentReader role assignment; the script below can be ran in Cloud Shell as a temporary workaround for obtaining cost/FOCUS backfill data. The storage account resource id you need is the one for the export storage account (named 'stcostexport<random string>' unless you specified a custom name).
+In a scenario where you have an EA billing account, have successfully deployed the module but are blocked on getting the second EnrollmentReader role assignment; the script below can be ran in Cloud Shell as a temporary workaround for obtaining cost/FOCUS backfill data. The storage account resource id you need is the one for the export storage account (named `'stcostexport<random string>'` unless you specified a custom name).
 You must have the `EnrollmentReader` role assignment at the scope of the billing account and the `Owner` role assignment at the scope of the export storage account:
 
 ```pwsh
