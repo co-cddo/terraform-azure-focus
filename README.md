@@ -750,7 +750,8 @@ traces
 
 ### Function App User-Assigned Managed Identity Missing Enrollmentreader Role Assignment
 
-In a scenario where you have an EA billing account, have successfully deployed the module but are blocked on getting the second EnrollmentReader role assignment; The script below can be used as a temporary workaround for obtaining cost/FOCUS backfill data. The storage account resource id you need is the one for the export storage account (named 'stcostexport<random string>' unless you specified a custom name):
+In a scenario where you have an EA billing account, have successfully deployed the module but are blocked on getting the second EnrollmentReader role assignment; The script below can be ran in Cloud Shell as a temporary workaround for obtaining cost/FOCUS backfill data. The storage account resource id you need is the one for the export storage account (named 'stcostexport<random string>' unless you specified a custom name).
+You must have the `EnrollmentReader` role assignment at the scope of the billing account and the `Owner` role assignment at the scope of the export storage account:
 
 ```pwsh
 Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/0eb01f523d7f7e33038ccbf37c0b61a606001b2e/scripts/New-BackfillExport.ps1) } -BillingAccountID '<billing account id>' -StorageAccountResourceId '<cost export storage account resource id>' -Run -Verbose"
