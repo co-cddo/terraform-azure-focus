@@ -127,7 +127,7 @@ prerequisites - unless `manage_role_assignments = false`.
 | Subscription | **User Access Administrator** | Create the Resource Group/Storage Account-scoped role assignments the module defines, including the ABAC-constrained `Owner` role assignment. |
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing account scope **and** assign the `Billing account reader` billing role to the function identity. |
-| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
+| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [alert](#ea-billing-role-script) below. |
 
 > [!TIP]
 > *The management-group `User Access Administrator` only manages RBAC for the
@@ -737,6 +737,8 @@ terraform plan
 
 ## Troubleshooting
 
+### Logs
+
 Run the following query on the Application Insights instance blade (Logs tab) to view recent function invocations:
 
 ```kql
@@ -745,6 +747,17 @@ traces
 | where timestamp >= ago(7d)
 | order by timestamp desc
 ```
+
+### Function App User-Assigned Managed Identity Missing Enrollmentreader Role Assignment
+
+In a scenario where you have an EA billing account, have successfully deployed the module but are blocked on getting the second EnrollmentReader role assignment; The script below can be used as a temporary workaround for obtaining cost/FOCUS backfill data. The storage account resource id you need is the one for the export storage account (named 'stcostexport<random string>' unless you specified a custom name):
+
+```pwsh
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/0eb01f523d7f7e33038ccbf37c0b61a606001b2e/scripts/New-BackfillExport.ps1) } -BillingAccountID '<billing account id>' -StorageAccountResourceId '<cost export storage account resource id>' -Run -Verbose"
+```
+
+> [!IMPORTANT]
+> Please ensure the second role assignment is still completed, even when using this workaround. This will allow the CCD team to truncate and load backfill data, should the need arise.
 
 ## Terraform Documentation
 
