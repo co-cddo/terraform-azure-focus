@@ -101,7 +101,7 @@ resource "azurerm_storage_account" "deployment" {
     # is toggled out-of-band around the code publish by the null_resources in function_app.tf - opened
     # before publish, closed after. Ignoring the attribute stops that toggling from showing as
     # perpetual drift (a false -> true diff re-opening access on every plan).
-    ignore_changes = [public_network_access_enabled]
+    ignore_changes = [public_network_access]
   }
 }
 
