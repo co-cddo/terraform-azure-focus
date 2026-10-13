@@ -1,4 +1,4 @@
-$tfDirs = Get-ChildItem -Path $PSScriptRoot/.. -Filter "*.tf" -Recurse |
+$tfDirs = Get-ChildItem -Path $PSScriptRoot/../.. -Filter "*.tf" -Recurse |
     Where-Object { $_.FullName -notmatch '[/\\]\.terraform[/\\]' } |
     Select-Object -ExpandProperty DirectoryName -Unique
 

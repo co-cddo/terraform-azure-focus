@@ -7,6 +7,7 @@ resource "azurerm_storage_account" "cost_export" {
   # checkov:skip=CKV2_AZURE_38:We don't need soft delete since this account is neither source nor destination for cost data
   # checkov:skip=CKV2_AZURE_1:Platform managed key is sufficient for this storage account
   # checkov:skip=CKV_AZURE_43:Name is resolved via local.names; format is enforced by the custom_resource_names variable validation
+  # checkov:skip=CKV_AZURE_59:Public access is disabled via public_network_access = "Disabled"; Checkov does not recognise the azurerm v5 attribute name (was public_network_access_enabled)
   # checkov:skip=CKV2_AZURE_33:Private endpoint is configured via azurerm_private_endpoint.storage[0]; Checkov cannot trace the relationship through count-indexed resources
   name                     = local.names.storage_account_cost_export
   resource_group_name      = local.resource_group_name
@@ -17,7 +18,7 @@ resource "azurerm_storage_account" "cost_export" {
   tags                     = var.tags
 
   allow_nested_items_to_be_public   = false
-  public_network_access_enabled     = false
+  public_network_access             = "Disabled"
   shared_access_key_enabled         = false
   local_user_enabled                = false
   min_tls_version                   = "TLS1_2"
@@ -79,7 +80,7 @@ resource "azurerm_storage_account" "deployment" {
   tags                     = var.tags
 
   allow_nested_items_to_be_public   = false
-  public_network_access_enabled     = local.deployment_storage_allow_public_access
+  public_network_access             = local.deployment_storage_allow_public_access ? "Enabled" : "Disabled"
   shared_access_key_enabled         = false
   local_user_enabled                = false
   min_tls_version                   = "TLS1_2"
@@ -100,7 +101,7 @@ resource "azurerm_storage_account" "deployment" {
     # is toggled out-of-band around the code publish by the null_resources in function_app.tf - opened
     # before publish, closed after. Ignoring the attribute stops that toggling from showing as
     # perpetual drift (a false -> true diff re-opening access on every plan).
-    ignore_changes = [public_network_access_enabled]
+    ignore_changes = [public_network_access]
   }
 }
 
