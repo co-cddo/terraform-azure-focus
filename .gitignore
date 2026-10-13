@@ -180,3 +180,5 @@ plan.ps1
 .github/**/*.md
 .claude/**/*.md
 .terraform.lock.hcl
+.devcontainer/*.crt
+.devcontainer/.gh-token
