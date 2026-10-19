@@ -12,6 +12,10 @@ updates:
       - /examples/*
     schedule:
       interval: weekly
+    groups:
+      terraform-providers:
+        patterns: ["*"]
+        group-by: dependency-name
 
   - package-ecosystem: docker
     directory: /.devcontainer
