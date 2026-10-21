@@ -1,13 +1,21 @@
 data "azurerm_client_config" "current" {}
 
+# Split plan/apply service principal detection. Only performed when the module already reads the
+# directory (it creates the Entra app, or manages the app role binding on a supplied one), so strict
+# separation (manage_entra_app_role_assignment = false) still needs no Entra access at all.
 data "azuread_service_principal" "plan" {
-  count     = var.current_principal_type == "ServicePrincipal" ? 1 : 0
+  count     = var.current_principal_type == "ServicePrincipal" && local.manage_entra_app_role_assignment ? 1 : 0
   object_id = data.azurerm_client_config.current.object_id
 }
 
-data "azuread_service_principal" "apply" {
-  count        = var.current_principal_type == "ServicePrincipal" ? 1 : 0
-  display_name = replace(data.azuread_service_principal.plan[0].display_name, "plan", "apply")
+# Looked up only when the deploying SP's display name ends in '-plan' (case-insensitive), by
+# swapping that suffix for '-apply'. ignore_missing means a '-plan' SP with no '-apply' twin falls
+# back to single-SP behaviour instead of failing. A duplicated '-apply' display name still errors,
+# since the module cannot tell which principal should receive the write grants.
+data "azuread_service_principals" "apply" {
+  count          = try(endswith(lower(data.azuread_service_principal.plan[0].display_name), "-plan"), false) ? 1 : 0
+  display_names  = ["${substr(data.azuread_service_principal.plan[0].display_name, 0, length(data.azuread_service_principal.plan[0].display_name) - 5)}-apply"]
+  ignore_missing = true
 }
 
 data "azurerm_resource_group" "existing" {

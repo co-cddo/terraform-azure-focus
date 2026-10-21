@@ -264,6 +264,11 @@ Pipelines such as the [Azure Landing Zones Terraform Accelerator](https://azure.
 - **Plan principal** - read-only; runs on every PR to produce a plan for review.
 - **Apply principal** - write-capable; runs only on merge to the protected branch, ideally behind a manual approval gate.
 
+The module detects a split pipeline automatically when `current_principal_type = "ServicePrincipal"` and the deploying service principal's display name ends in `-plan` (case-insensitive). It then looks up a service principal with the same name ending in `-apply` (for example `sp-focus-plan` and `sp-focus-apply`), adds both as owners of the Entra app registration, and grants the storage data-plane roles least privilege: Reader for the plan principal, Contributor for the apply principal. If no `-apply` service principal is found, the module behaves as a single-principal deployment. If more than one service principal has the `-apply` name, the plan fails.
+
+> [!NOTE]
+> Detection needs a Microsoft Graph directory read, so it only runs when the module already reads Entra ID: when it creates the app registration, or when it manages the app role binding on your own app registration. In strict separation mode (`manage_entra_app_role_assignment = false`) the module still performs no Entra reads, so there is no split detection. In that mode, grant the apply principal **Storage Blob Data Contributor** and **Storage Queue Data Contributor** on the resource group yourself.
+
 #### Plan principal - minimum roles
 
 `terraform plan` reads existing state (refresh pass) and resolves data sources but creates nothing and assigns no roles. The roles below are the read-only counterparts of the apply principal's requirements from [Deployment privileges](#a-deployment-privileges).

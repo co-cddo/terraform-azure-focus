@@ -29,18 +29,20 @@ locals {
   publish_code_command = "Start-Sleep -Seconds 150; for ($i = 0; $i -lt 3; $i++) { az functionapp deployment source config-zip --src ${data.archive_file.function.output_path} --name ${azurerm_function_app_flex_consumption.cost_export.name} --resource-group ${local.resource_group_name} --subscription ${local.cost_export_subscription_id}; if ($LASTEXITCODE -eq 0) { break }; if ($i -lt 2) { Start-Sleep -Seconds 30 } else { exit 1 } }"
   identifier_uri       = "api://${data.azurerm_client_config.current.tenant_id}/GDS-AWS-Cost-Forwarding${local.cost_mgmt_suffix}"
 
-  # When no existing app registration client ID is supplied, the module creates the AWS-federation
-  # Entra app, service principal, and app role itself (these require directory-write privileges).
-  # Supplying existing_entra_application_client_id points the module at a pre-created app instead,
-  # for separation of duties between Entra ID and Azure RBAC admins.
+  # Split plan/apply service principals (see data.tf). apply_sp_object_id is null when no '-apply'
+  # twin was found, in which case everything is granted to the single deploying principal.
   plan_sp_object_id  = one(data.azuread_service_principal.plan[*].object_id)
-  apply_sp_object_id = one(data.azuread_service_principal.apply[*].object_id)
+  apply_sp_object_id = one(flatten(data.azuread_service_principals.apply[*].object_ids))
   deployer_sp_object_ids = local.apply_sp_object_id != null ? distinct([
     local.plan_sp_object_id,
     local.apply_sp_object_id,
   ]) : [data.azurerm_client_config.current.object_id]
   has_separate_apply_sp = length(local.deployer_sp_object_ids) == 2
 
+  # When no existing app registration client ID is supplied, the module creates the AWS-federation
+  # Entra app, service principal, and app role itself (these require directory-write privileges).
+  # Supplying existing_entra_application_client_id points the module at a pre-created app instead,
+  # for separation of duties between Entra ID and Azure RBAC admins.
   create_entra_app    = var.existing_entra_application_client_id == null
   entra_app_client_id = local.create_entra_app ? azuread_application.aws_app[0].client_id : var.existing_entra_application_client_id
 
@@ -52,7 +54,7 @@ locals {
 
   # SP object ID and app role ID for the app role assignment. Resolved from the module-created
   # resources, or (when bringing your own app and the module manages the binding) from the
-  # data.azuread_service_principal lookup in rbac.tf. Only referenced when the binding is created.
+  # data.azuread_service_principal lookup in data.tf. Only referenced when the binding is created.
   entra_sp_object_id = local.create_entra_app ? azuread_service_principal.aws_app[0].object_id : (
     local.manage_entra_app_role_assignment ? data.azuread_service_principal.existing_aws_app[0].object_id : null
   )
