@@ -93,7 +93,7 @@ An [Enterprise Administrator](https://learn.microsoft.com/en-us/azure/cost-manag
 Substitute '<EA billing account 1 ID>', '<EA billing account N ID>' for the same value(s) you set the billing_account_ids Terraform variable to
 Substitute '<Object ID>' for the object ID of new Function App user-assigned managed identity
 #>
-Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/refs/heads/feat/terraform-plan-apply-split-permissions/scripts/NewBillingRoleAssignment.ps1) } -BillingAccountID '<EA billing account 1 ID>', '<EA billing account N id>' -ServicePrincipalObjectID '<Object ID>' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/12485fbf0bc33e4f7090d672c0b4c292ccccf452/scripts/NewBillingRoleAssignment.ps1) } -BillingAccountID '<EA billing account 1 ID>', '<EA billing account N id>' -ServicePrincipalObjectID '<Object ID>' -RoleDefinitionID '24f8edb6-1668-4659-b5e2-40bb5f3a7d7e' -IsEnterpriseAgreement"
 ```
 
 **Why is this step easy to miss?**
@@ -125,7 +125,7 @@ prerequisites.
 | Subscription | **User Access Administrator** | Create the Resource Group/Storage Account-scoped role assignments the module defines, including the ABAC-constrained `Owner` role assignment. |
 | Tenant Root management group, or `management_group_id` | **User Access Administrator*** | Assign `Carbon Optimization Reader` and `Advisor Recommendations Contributor` to the function identity. |
 | Billing account - **MCA** | **Billing account owner** | Create the daily FOCUS export at billing account scope **and** assign the `Billing account reader` billing role to the function identity. |
-| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [important alert](#ea-billing-role-script) below. |
+| Billing account - **EA** | **EnrollmentReader** | Create the daily FOCUS export. The function identity's billing role must be assigned manually - see the [alert](#ea-billing-role-script) below. |
 | Microsoft Graph (Entra ID) | **Application.ReadWrite.OwnedBy** | Create the AWS-federation Entra app registration and service principal. Not required when bringing your own app registration (`existing_entra_application_client_id`) - see [Separation of duties](#c-separation-of-duties-bring-your-own-entra-app-registration). Use [`scripts/NewServicePrincipalAppRoleAssignment.ps1`](scripts/NewServicePrincipalAppRoleAssignment.ps1) to grant this permission. |
 
 > [!TIP]
@@ -738,6 +738,8 @@ terraform plan
 
 ## Troubleshooting
 
+### Logs
+
 Run the following query on the Application Insights instance blade (Logs tab) to view recent function invocations:
 
 ```kql
@@ -746,6 +748,18 @@ traces
 | where timestamp >= ago(7d)
 | order by timestamp desc
 ```
+
+### Function App User-Assigned Managed Identity Missing Enrollmentreader Role Assignment
+
+In a scenario where you have an EA billing account, have successfully deployed the module but are blocked on getting the second EnrollmentReader role assignment; the script below can be ran in Cloud Shell as a temporary workaround for obtaining cost/FOCUS backfill data. The storage account resource id you need is the one for the export storage account (named `'stcostexport<random string>'` unless you specified a custom name).
+You must have the `EnrollmentReader` role assignment at the scope of the billing account and the `Owner` role assignment at the scope of the export storage account:
+
+```pwsh
+Invoke-Expression "& { $(Invoke-RestMethod -Uri https://raw.githubusercontent.com/co-cddo/terraform-azure-focus/0eb01f523d7f7e33038ccbf37c0b61a606001b2e/scripts/New-BackfillExport.ps1) } -BillingAccountID '<billing account id>' -StorageAccountResourceId '<cost export storage account resource id>' -Run -Verbose"
+```
+
+> [!IMPORTANT]
+> Please ensure the second role assignment is still completed, even when using this workaround. This will allow the CCD team to truncate and load backfill data, should the need arise.
 
 ## Terraform Documentation
 
@@ -760,11 +774,11 @@ pre-commit hook.
 | <a name="provider_archive"></a> [archive](#provider\_archive) | ~> 2.0 |
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~> 2.0 |
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | ~> 3.9 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 4.79 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~> 5.0 |
 | <a name="provider_modtm"></a> [modtm](#provider\_modtm) | ~> 0.4 |
 | <a name="provider_null"></a> [null](#provider\_null) | ~> 3.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
-| <a name="provider_time"></a> [time](#provider\_time) | 0.14.1 |
+| <a name="provider_time"></a> [time](#provider\_time) | 0.14.2 |
 
 ## Inputs
 

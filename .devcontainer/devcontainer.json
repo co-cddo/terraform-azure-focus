@@ -1,7 +1,11 @@
 {
   "name": "Terraform",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "options": [
+      "--secret",
+      "id=gh_token,src=${localWorkspaceFolder}/.devcontainer/.gh-token"
+    ]
   },
   "remoteUser": "vscode",
   "runArgs": [
@@ -24,7 +28,8 @@
         "timonwong.shellcheck",
         "redhat.vscode-yaml",
         "eamodio.gitlens",
-        "ms-vscode.powershell"
+        "ms-vscode.powershell",
+        "anthropic.claude-code"
       ],
       "settings": {
         "editor.formatOnSave": true,

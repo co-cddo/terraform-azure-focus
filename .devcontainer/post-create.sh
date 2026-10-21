@@ -18,6 +18,13 @@ pre-commit install --install-hooks
 
 # Download tflint plugins declared in .tflint.hcl so the tflint hook works
 # without requiring a manual "tflint --init" after container creation.
+# Pass a GitHub token to avoid unauthenticated API rate limits when fetching
+# plugin release metadata. Prefer an already-set GITHUB_TOKEN (Codespaces
+# injects one), then fall back to the same .gh-token file used by the build.
+if [ -z "${GITHUB_TOKEN:-}" ] && [ -f .devcontainer/.gh-token ]; then
+    GITHUB_TOKEN="$(cat .devcontainer/.gh-token)"
+    export GITHUB_TOKEN
+fi
 tflint --init
 
 # Install Python dependencies for cost export.

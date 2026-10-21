@@ -7,12 +7,18 @@ updates:
       interval: weekly
 
   - package-ecosystem: terraform
-    directory: /
+    directories:
+      - /
+      - /examples/*
     schedule:
       interval: weekly
+    groups:
+      terraform-providers:
+        patterns: ["*"]
+        group-by: dependency-name
 
   - package-ecosystem: docker
-    directory: /
+    directory: /.devcontainer
     schedule:
       interval: weekly
 

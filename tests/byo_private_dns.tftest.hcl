@@ -80,7 +80,7 @@ run "default_creates_private_dns_zones" {
   }
   # use_existing=false => deployment storage stays private (no need to relax public access).
   assert {
-    condition     = azurerm_storage_account.deployment.public_network_access_enabled == false
+    condition     = azurerm_storage_account.deployment.public_network_access == "Disabled"
     error_message = "deployment storage public access should remain disabled when the module manages DNS zones"
   }
 }
@@ -135,7 +135,7 @@ run "byo_resolver_creates_no_zones_or_links" {
   # With a resolver hub the module cannot reach the storage private endpoints for its apply-time
   # data-plane reads, so deployment storage public access is relaxed. This guards that coupling.
   assert {
-    condition     = azurerm_storage_account.deployment.public_network_access_enabled == true
+    condition     = azurerm_storage_account.deployment.public_network_access == "Enabled"
     error_message = "deployment storage public access should be enabled in the resolver (unlinked existing zones) scenario"
   }
 }
@@ -163,7 +163,7 @@ run "byo_existing_zones_linked_to_vnet" {
     error_message = "legacy file/table links must not be created for existing zones"
   }
   assert {
-    condition     = azurerm_storage_account.deployment.public_network_access_enabled == false
+    condition     = azurerm_storage_account.deployment.public_network_access == "Disabled"
     error_message = "deployment storage public access should stay disabled when existing zones are linked to the VNet"
   }
 }

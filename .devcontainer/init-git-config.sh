@@ -20,3 +20,6 @@ if [ -z "$GIT_NAME" ] || [ -z "$GIT_EMAIL" ]; then
 fi
 
 printf '%s\n%s\n' "$GIT_NAME" "$GIT_EMAIL" > .devcontainer/.git-env
+
+# Empty file if gh isn't logged in, so the --secret src always exists
+gh auth token 2>/dev/null > .devcontainer/.gh-token || : > .devcontainer/.gh-token

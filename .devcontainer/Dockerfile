@@ -1,5 +1,8 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
+COPY *.crt /usr/local/share/ca-certificates/
+RUN update-ca-certificates
+
 ARG AZ_ACCOUNTS_URL="https://www.powershellgallery.com/api/v2/package/Az.Accounts/5.5.1@sha256:4080c8eb93b1f65345a288a6d229776b4a1cff97b512144e66b6e65abcda6cc0"
 ARG AZURE_CLI_URL="https://packages.microsoft.com/repos/azure-cli/pool/main/a/azure-cli/azure-cli_2.73.0-1~noble_arm64.deb@sha256:6af9009a39895ba396e92d5138824091e95f9bd797422db2fe9564a0cf4a35f4"
 ARG CHECKOV_URL="https://github.com/bridgecrewio/checkov/releases/download/3.2.529/checkov_linux_arm64.zip@sha256:fff55b064eadfc14ce35da9b9744dedf82fb50c25447076149480ad92c06a6a9"
@@ -11,6 +14,9 @@ ARG TERRAFORM_DOCS_URL="https://github.com/terraform-docs/terraform-docs/release
 ARG TFLINT_URL="https://github.com/terraform-linters/tflint/releases/download/v0.61.0/tflint_linux_arm64.zip@sha256:999c25cfdb5208fe1133dec6b219e666a39fc2a7a0786a781dc9924ea5945ebf"
 ARG TRIVY_URL="https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz@sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
 ARG UV_URL="https://github.com/astral-sh/uv/releases/download/0.11.18/uv-aarch64-unknown-linux-gnu.tar.gz@sha256:0f03c6648df1c159557f4222c0f37250f84733fb88d6fc3c16770e17c177a8c9"
+
+# GitHub downloads send the optional gh_token BuildKit secret (if present) to
+# avoid unauthenticated rate limits; the token is never written to a layer
 
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,9 +34,11 @@ RUN URL="${AZURE_CLI_URL%@sha256:*}" \
     && az --version
 
 # powershell with pinned SHA256 digest (arm64 ships as tar.gz, not .deb)
-RUN URL="${POWERSHELL_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${POWERSHELL_URL%@sha256:*}" \
     && SHA="${POWERSHELL_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/powershell.tar.gz \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/powershell.tar.gz \
     && (cd /tmp && echo "${SHA}  powershell.tar.gz" | sha256sum -c) \
     && mkdir -p /opt/microsoft/powershell/7 \
     && tar -xz -C /opt/microsoft/powershell/7 -f /tmp/powershell.tar.gz \
@@ -65,9 +73,11 @@ RUN URL="${TERRAFORM_URL%@sha256:*}" \
     && terraform version
 
 # checkov binary with pinned SHA256 digest
-RUN URL="${CHECKOV_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${CHECKOV_URL%@sha256:*}" \
     && SHA="${CHECKOV_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/checkov.zip \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/checkov.zip \
     && (cd /tmp && echo "${SHA}  checkov.zip" | sha256sum -c) \
     && unzip /tmp/checkov.zip -d /usr/local/bin \
     && mv /usr/local/bin/dist/checkov /usr/local/bin/checkov \
@@ -77,17 +87,21 @@ RUN URL="${CHECKOV_URL%@sha256:*}" \
     && checkov --version
 
 # pre-commit with pinned SHA256 digest
-RUN URL="${PRE_COMMIT_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${PRE_COMMIT_URL%@sha256:*}" \
     && SHA="${PRE_COMMIT_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /usr/local/bin/pre-commit \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /usr/local/bin/pre-commit \
     && (cd /usr/local/bin && echo "${SHA}  pre-commit" | sha256sum -c) \
     && chmod +x /usr/local/bin/pre-commit \
     && pre-commit --version
 
 # shellcheck with pinned SHA256 digest
-RUN URL="${SHELLCHECK_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${SHELLCHECK_URL%@sha256:*}" \
     && SHA="${SHELLCHECK_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/shellcheck.tar.xz \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/shellcheck.tar.xz \
     && (cd /tmp && echo "${SHA}  shellcheck.tar.xz" | sha256sum -c) \
     && tar -xJ -C /tmp -f /tmp/shellcheck.tar.xz \
     && mv /tmp/shellcheck-v*/shellcheck /usr/local/bin/ \
@@ -95,27 +109,33 @@ RUN URL="${SHELLCHECK_URL%@sha256:*}" \
     && shellcheck --version
 
 # tflint with pinned SHA256 digest
-RUN URL="${TFLINT_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${TFLINT_URL%@sha256:*}" \
     && SHA="${TFLINT_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/tflint.zip \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/tflint.zip \
     && (cd /tmp && echo "${SHA}  tflint.zip" | sha256sum -c) \
     && unzip /tmp/tflint.zip tflint -d /usr/local/bin \
     && rm /tmp/tflint.zip \
     && tflint --version
 
 # trivy with pinned SHA256 digest
-RUN URL="${TRIVY_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${TRIVY_URL%@sha256:*}" \
     && SHA="${TRIVY_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/trivy.tar.gz \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/trivy.tar.gz \
     && (cd /tmp && echo "${SHA}  trivy.tar.gz" | sha256sum -c) \
     && tar -xz -C /usr/local/bin -f /tmp/trivy.tar.gz trivy \
     && rm /tmp/trivy.tar.gz \
     && trivy --version
 
 # terraform-docs with pinned SHA256 digest
-RUN URL="${TERRAFORM_DOCS_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${TERRAFORM_DOCS_URL%@sha256:*}" \
     && SHA="${TERRAFORM_DOCS_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/terraform-docs.tar.gz \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/terraform-docs.tar.gz \
     && (cd /tmp && echo "${SHA}  terraform-docs.tar.gz" | sha256sum -c) \
     && tar -xz -C /usr/local/bin -f /tmp/terraform-docs.tar.gz terraform-docs \
     && chmod +x /usr/local/bin/terraform-docs \
@@ -123,13 +143,24 @@ RUN URL="${TERRAFORM_DOCS_URL%@sha256:*}" \
     && terraform-docs --version
 
 # uv with pinned SHA256 digest
-RUN URL="${UV_URL%@sha256:*}" \
+RUN --mount=type=secret,id=gh_token \
+    URL="${UV_URL%@sha256:*}" \
     && SHA="${UV_URL##*@sha256:}" \
-    && curl -fsSL "${URL}" -o /tmp/uv.tar.gz \
+    && TOKEN="$(cat /run/secrets/gh_token 2>/dev/null || true)" \
+    && curl -fsSL ${TOKEN:+-H "Authorization: Bearer ${TOKEN}"} "${URL}" -o /tmp/uv.tar.gz \
     && (cd /tmp && echo "${SHA}  uv.tar.gz" | sha256sum -c) \
     && tar -xz -C /usr/local/bin -f /tmp/uv.tar.gz --strip-components=1 uv-aarch64-unknown-linux-gnu/uv uv-aarch64-unknown-linux-gnu/uvx \
     && rm /tmp/uv.tar.gz \
     && uv --version
+
+RUN mkdir -p -m 755 /etc/apt/keyrings \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && mkdir -p -m 755 /etc/apt/sources.list.d \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
 
 USER vscode
 
