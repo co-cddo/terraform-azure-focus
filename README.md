@@ -774,7 +774,7 @@ pre-commit hook.
 | <a name="provider_modtm"></a> [modtm](#provider\_modtm) | ~> 0.4 |
 | <a name="provider_null"></a> [null](#provider\_null) | ~> 3.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~> 3.0 |
-| <a name="provider_time"></a> [time](#provider\_time) | 0.14.1 |
+| <a name="provider_time"></a> [time](#provider\_time) | 0.14.2 |
 
 ## Inputs
 
