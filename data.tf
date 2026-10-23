@@ -1,5 +1,24 @@
 data "azurerm_client_config" "current" {}
 
+# Split plan/apply service principal detection. Only performed when the module already reads the
+# directory (it creates the Entra app, or manages the app role binding on a supplied one), so strict
+# separation (manage_entra_app_role_assignment = false) still needs no Entra access at all.
+data "azuread_service_principal" "plan" {
+  count     = var.current_principal_type == "ServicePrincipal" && local.manage_entra_app_role_assignment ? 1 : 0
+  object_id = data.azurerm_client_config.current.object_id
+}
+
+# Looked up only when the deploying SP's display name contains '-plan' as a whole hyphen-delimited
+# segment (case-insensitive), e.g. 'sp-focus-plan' or 'id-focus-plan-uksouth-001', by swapping that
+# segment for '-apply'. Names like 'sp-planning-team' are not matched. ignore_missing means a '-plan'
+# SP with no '-apply' twin falls back to single-SP behaviour instead of failing. A duplicated '-apply'
+# display name still errors, since the module cannot tell which principal should receive the write grants.
+data "azuread_service_principals" "apply" {
+  count          = try(can(regex("(?i)-plan(-|$)", data.azuread_service_principal.plan[0].display_name)), false) ? 1 : 0
+  display_names  = [replace(data.azuread_service_principal.plan[0].display_name, "/(?i)-plan(-|$)/", "-apply$1")]
+  ignore_missing = true
+}
+
 data "azurerm_resource_group" "existing" {
   count = var.existing_resource_group_name != null ? 1 : 0
   name  = var.existing_resource_group_name
@@ -54,4 +73,13 @@ data "azapi_resource_list" "billing_role_assignments" {
 
 data "modtm_module_source" "this" {
   module_path = path.module
+}
+
+# When bringing your own app registration and letting the module manage the app role assignment,
+# resolve the supplied app's service principal object ID and app role ID by directory READ (not
+# write). Not created in strict-separation mode (manage_entra_app_role_assignment = false), so no
+# directory access is needed there at all.
+data "azuread_service_principal" "existing_aws_app" {
+  count     = (!local.create_entra_app && local.manage_entra_app_role_assignment) ? 1 : 0
+  client_id = var.existing_entra_application_client_id
 }

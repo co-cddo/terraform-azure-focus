@@ -27,7 +27,7 @@ resource "random_uuid" "app_uuid" {
 resource "azuread_application" "aws_app" {
   count        = local.create_entra_app ? 1 : 0
   display_name = local.names.entra_application
-  owners       = [data.azurerm_client_config.current.object_id]
+  owners       = local.deployer_sp_object_ids
 
   #### https://aws.amazon.com/blogs/security/how-to-access-aws-resources-from-microsoft-entra-id-tenants-using-aws-security-token-service/
   app_role {
@@ -45,16 +45,7 @@ resource "azuread_service_principal" "aws_app" {
   count                        = local.create_entra_app ? 1 : 0
   client_id                    = azuread_application.aws_app[0].client_id
   app_role_assignment_required = false
-  owners                       = [data.azurerm_client_config.current.object_id]
-}
-
-# When bringing your own app registration and letting the module manage the app role assignment,
-# resolve the supplied app's service principal object ID and app role ID by directory READ (not
-# write). Not created in strict-separation mode (manage_entra_app_role_assignment = false), so no
-# directory access is needed there at all.
-data "azuread_service_principal" "existing_aws_app" {
-  count     = (!local.create_entra_app && local.manage_entra_app_role_assignment) ? 1 : 0
-  client_id = var.existing_entra_application_client_id
+  owners                       = local.deployer_sp_object_ids
 }
 
 resource "azuread_app_role_assignment" "aws_app" {
@@ -63,17 +54,33 @@ resource "azuread_app_role_assignment" "aws_app" {
   principal_object_id = azurerm_user_assigned_identity.cost_export.principal_id
   resource_object_id  = local.entra_sp_object_id
   depends_on          = [azurerm_function_app_flex_consumption.cost_export]
+
+  lifecycle {
+    precondition {
+      # If an existing Entra app registration is supplied, ensure it exposes the required app role.
+      condition = (var.existing_entra_application_client_id != null && local.entra_app_role_id != null) || var.existing_entra_application_client_id == null
+      error_message = join("\n", [
+        "",
+        "The pre-existing Entra app registration (existing_entra_application_client_id) does not expose an 'AssumeRoleWithWebIdentity' app role.",
+        "Add the app role before running terraform apply (see instructions below), or set manage_entra_app_role_assignment = false to skip the binding.",
+        "",
+        local.configure_existing_app_registration_instructions
+      ])
+    }
+  }
 }
 
 
-# Apply-time data-plane access for the deployer: the cost_export storage account disables shared
-# keys, so the provider reads blob + queue properties over Entra ID during create/refresh and needs
-# both data roles. Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to
-# propagate before the storage account is created. See the "Privileges" section in README.md.
+# Data-plane access for the deployer (plan SP in a split pipeline, or the single SP otherwise):
+# the cost_export storage account disables shared keys, so the provider reads blob + queue
+# properties over Entra ID during create/refresh. When a separate apply SP exists these are
+# scoped down to Reader; when plan and apply share one identity it keeps Contributor.
+# Scoped to the resource group; time_sleep.wait_for_deployer_rbac allows RBAC to propagate
+# before the storage account is created. See the "Privileges" section in README.md.
 resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
   count                = var.manage_role_assignments ? 1 : 0
   scope                = local.resource_group_id
-  role_definition_name = "Storage Blob Data Contributor"
+  role_definition_name = local.has_separate_apply_sp ? "Storage Blob Data Reader" : "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = var.current_principal_type
 }
@@ -81,9 +88,25 @@ resource "azurerm_role_assignment" "grant_deployer_cost_export_blob" {
 resource "azurerm_role_assignment" "grant_deployer_cost_export_queue" {
   count                = var.manage_role_assignments ? 1 : 0
   scope                = local.resource_group_id
-  role_definition_name = "Storage Queue Data Contributor"
+  role_definition_name = local.has_separate_apply_sp ? "Storage Queue Data Reader" : "Storage Queue Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
   principal_type       = var.current_principal_type
+}
+
+resource "azurerm_role_assignment" "grant_deployer_apply_cost_export_blob" {
+  count                = var.manage_role_assignments && local.has_separate_apply_sp ? 1 : 0
+  scope                = local.resource_group_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = local.apply_sp_object_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "azurerm_role_assignment" "grant_deployer_apply_cost_export_queue" {
+  count                = var.manage_role_assignments && local.has_separate_apply_sp ? 1 : 0
+  scope                = local.resource_group_id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = local.apply_sp_object_id
+  principal_type       = "ServicePrincipal"
 }
 
 resource "time_sleep" "wait_for_deployer_rbac" {
@@ -93,6 +116,8 @@ resource "time_sleep" "wait_for_deployer_rbac" {
   depends_on = [
     azurerm_role_assignment.grant_deployer_cost_export_blob,
     azurerm_role_assignment.grant_deployer_cost_export_queue,
+    azurerm_role_assignment.grant_deployer_apply_cost_export_blob,
+    azurerm_role_assignment.grant_deployer_apply_cost_export_queue,
   ]
 }
 

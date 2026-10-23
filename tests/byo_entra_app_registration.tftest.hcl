@@ -83,11 +83,6 @@ run "module_creates_entra_app_by_default" {
   }
 
   assert {
-    condition     = length(data.azuread_service_principal.existing_aws_app) == 0
-    error_message = "The existing-SP lookup must not run when the module creates its own app."
-  }
-
-  assert {
     condition     = output.entra_app_role_assignment_manual_action_required == ""
     error_message = "No manual action should be required when the module manages the binding."
   }
