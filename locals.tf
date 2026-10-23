@@ -9,6 +9,11 @@ locals {
   # rbac.tf needs the bare GUID, so take the last path segment.
   storage_blob_data_contributor_role_id = reverse(split("/", data.azurerm_role_definition.storage_blob_data_contributor.id))[0]
 
+  # A subnet ID is its virtual network's ID plus /subnets/<name>, so the VNet the private DNS zones
+  # link to is derived rather than looked up. This keeps it in step with subnet_id and keeps the
+  # subscription from the ID instead of assuming the provider's.
+  virtual_network_id = regex("^(.+)/subnets/[^/]+$", var.subnet_id)[0]
+
   effective_log_analytics_workspace_id = var.log_analytics_workspace_id != null ? var.log_analytics_workspace_id : azurerm_log_analytics_workspace.this[0].id
 
   # Scope of the carbon and Advisor feeds. The role assignments in rbac.tf and the BILLING_SCOPE app

@@ -12,14 +12,6 @@ override_resource {
   }
 }
 
-# The auto-generated mock id is not a parseable virtual network resource id.
-override_data {
-  target = data.azurerm_virtual_network.existing
-  values = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
-  }
-}
-
 # object_id / tenant_id are validated as UUIDs by the azuread provider. tenant_id doubles as the
 # Tenant Root management group ID, which the default-scope assertions below expect.
 override_data {
@@ -31,13 +23,11 @@ override_data {
 }
 
 variables {
-  virtual_network_name                = "vnet-test"
-  virtual_network_resource_group_name = "rg-network-test"
-  subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
-  function_app_subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
-  aws_account_id                      = "123456789012"
-  aws_s3_bucket_name                  = "azure-cost-data"
-  billing_account_ids                 = ["test-billing-account"]
+  subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
+  function_app_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
+  aws_account_id         = "123456789012"
+  aws_s3_bucket_name     = "azure-cost-data"
+  billing_account_ids    = ["test-billing-account"]
 
   # manage_role_assignments is left at its default because these runs assert on the role
   # assignments. EA prunes the billing role lookups instead, which keeps check

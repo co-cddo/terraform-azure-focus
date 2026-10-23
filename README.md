@@ -34,7 +34,8 @@ data flow and component architecture for all three export types:
 ## Prerequisites
 
 - An existing virtual network with two subnets, one of which has a delegation
-  for `Microsoft.App.environments` (`function_app_subnet_id`).
+  for `Microsoft.App.environments` (`function_app_subnet_id`). Both subnets must be in
+  the same virtual network.
 - [PowerShell 7 (`pwsh`)](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell)
   on the machine that runs `terraform apply`/`terraform destroy`. Note that all GitHub runner images include the current LTS release by default.
 - [Deployment privileges](#a-deployment-privileges), granted to the principal that runs
@@ -337,8 +338,6 @@ module "cost_forwarding" {
 
   subnet_id                           = "<resource id for existing subnet to be used for private endpoints>"
   function_app_subnet_id              = "<resource id for existing subnet to be used for Function App VNet integration>"
-  virtual_network_name                = "<name of the existing virtual network containing the two subnets above>"
-  virtual_network_resource_group_name = "<name of the existing resource group containing the virtual network above>"
 
   ## Set to false if you do not have Enterprise Agreement (EA) billing account(s) (i.e. you have Microsoft Customer Agreement (MCA) billing account(s))
   ## You must also manually grant the user-assigned managed identity for the Function App the 'EnrollmentReader' role assignment at the scope of EA billing account(s) following deployment - see scripts/NewBillingRoleAssignment.ps1
@@ -793,9 +792,7 @@ pre-commit hook.
 | <a name="input_aws_s3_bucket_name"></a> [aws\_s3\_bucket\_name](#input\_aws\_s3\_bucket\_name) | Name of the AWS S3 bucket to store cost data | `string` | n/a | yes |
 | <a name="input_billing_account_ids"></a> [billing\_account\_ids](#input\_billing\_account\_ids) | List of billing account IDs used as the scope for FOCUS/cost exports only. Use the billing account ID format from Azure portal (e.g., '12345678' (EA) or 'a1b2c3d4-e5f6-7890-a1b2-c3d4e5f6a7b8:f9e8d7c6-b5a4-3210-fedc-ba9876543210\_2019-05-31' (MCA)). Typically, only a single billing account ID is provided, however, if you have additional billing accounts of the same type (EA/MCA) that have been used since 2022, please specify them all here. The primary billing tenant for the billing accounts must match the AzureRM provider configuration (tenant\_id). Can be empty when enable\_focus\_exports is false. | `list(string)` | n/a | yes |
 | <a name="input_function_app_subnet_id"></a> [function\_app\_subnet\_id](#input\_function\_app\_subnet\_id) | ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints | `string` | n/a | yes |
-| <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network | `string` | n/a | yes |
-| <a name="input_virtual_network_name"></a> [virtual\_network\_name](#input\_virtual\_network\_name) | Name of the existing virtual network | `string` | n/a | yes |
-| <a name="input_virtual_network_resource_group_name"></a> [virtual\_network\_resource\_group\_name](#input\_virtual\_network\_resource\_group\_name) | Name of the existing resource group where the virtual network is located | `string` | n/a | yes |
+| <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | ID of the subnet to deploy the private endpoints to. The virtual network linked to the private DNS zones is derived from this ID | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region for the S3 bucket | `string` | `"eu-west-2"` | no |
 | <a name="input_backfill_start_date"></a> [backfill\_start\_date](#input\_backfill\_start\_date) | The year and month to start backfill - in the format 'YYYY-MM-01'; defaults to 2022-01-01 | `string` | `"2022-01-01"` | no |
 | <a name="input_cost_export_daily_schedule_to_years"></a> [cost\_export\_daily\_schedule\_to\_years](#input\_cost\_export\_daily\_schedule\_to\_years) | The number of years from initial deployment to set the end date of the daily schedule for cost export | `number` | `15` | no |

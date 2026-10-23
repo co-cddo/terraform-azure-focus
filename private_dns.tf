@@ -39,7 +39,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   count               = local.manage_private_endpoint_dns && (!var.use_existing_private_dns_zones || var.link_existing_private_dns_zones_to_vnet) ? 1 : 0
   name                = "blob-dns-link"
   private_dns_zone_id = local.effective_private_dns_zone_ids.blob
-  virtual_network_id  = data.azurerm_virtual_network.existing.id
+  virtual_network_id  = local.virtual_network_id
   tags                = var.tags
 }
 
@@ -48,7 +48,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "file" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "file-dns-link"
   private_dns_zone_id = azurerm_private_dns_zone.file[0].id
-  virtual_network_id  = data.azurerm_virtual_network.existing.id
+  virtual_network_id  = local.virtual_network_id
   tags                = var.tags
 }
 
@@ -57,7 +57,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "table" {
   count               = local.manage_private_endpoint_dns && !var.use_existing_private_dns_zones ? 1 : 0
   name                = "table-dns-link"
   private_dns_zone_id = azurerm_private_dns_zone.table[0].id
-  virtual_network_id  = data.azurerm_virtual_network.existing.id
+  virtual_network_id  = local.virtual_network_id
   tags                = var.tags
 }
 
@@ -65,7 +65,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "queue" {
   count               = local.manage_private_endpoint_dns && (!var.use_existing_private_dns_zones || var.link_existing_private_dns_zones_to_vnet) ? 1 : 0
   name                = "queue-dns-link"
   private_dns_zone_id = local.effective_private_dns_zone_ids.queue
-  virtual_network_id  = data.azurerm_virtual_network.existing.id
+  virtual_network_id  = local.virtual_network_id
   tags                = var.tags
 }
 
@@ -73,7 +73,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "sites" {
   count               = local.manage_private_endpoint_dns && (!var.use_existing_private_dns_zones || var.link_existing_private_dns_zones_to_vnet) ? 1 : 0
   name                = "sites-dns-link"
   private_dns_zone_id = local.effective_private_dns_zone_ids.sites
-  virtual_network_id  = data.azurerm_virtual_network.existing.id
+  virtual_network_id  = local.virtual_network_id
   tags                = var.tags
 }
 

@@ -29,13 +29,6 @@ override_resource {
 }
 
 override_data {
-  target = data.azurerm_virtual_network.existing
-  values = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
-  }
-}
-
-override_data {
   target = data.azurerm_client_config.current
   values = {
     tenant_id = "00000000-0000-0000-0000-000000000001"
@@ -52,13 +45,11 @@ override_data {
 }
 
 variables {
-  virtual_network_name                = "vnet-test"
-  virtual_network_resource_group_name = "rg-network-test"
-  subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
-  function_app_subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
-  aws_account_id                      = "123456789012"
-  aws_s3_bucket_name                  = "azure-cost-data"
-  current_principal_type              = "ServicePrincipal"
+  subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
+  function_app_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
+  aws_account_id         = "123456789012"
+  aws_s3_bucket_name     = "azure-cost-data"
+  current_principal_type = "ServicePrincipal"
 
   # manage_role_assignments stays at its default (true) so the deployer grants exist. FOCUS exports
   # are disabled to drop the billing reader check, which cannot be evaluated at plan time.

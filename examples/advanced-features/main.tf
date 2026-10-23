@@ -10,13 +10,11 @@ module "example" {
 
   is_enterprise_customer = true # Comment out or set to false if you do not have an Enterprise Agreement (EA) billing account(s).
 
-  aws_account_id                      = "<aws-account-id>"
-  aws_s3_bucket_name                  = "<aws-s3-bucket-name>"
-  billing_account_ids                 = ["<billing-account-id>"] # List of billing account IDs
-  subnet_id                           = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/<existing subnet name>"
-  function_app_subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/<existing function app subnet name>"
-  virtual_network_name                = "<existing vnet name>"
-  virtual_network_resource_group_name = "<existing vnet resource group name>"
+  aws_account_id         = "<aws-account-id>"
+  aws_s3_bucket_name     = "<aws-s3-bucket-name>"
+  billing_account_ids    = ["<billing-account-id>"] # List of billing account IDs
+  subnet_id              = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/<existing subnet name>"
+  function_app_subnet_id = "/subscriptions/<subscription-id>/resourceGroups/existing-infra/providers/Microsoft.Network/virtualNetworks/existing-vnet/subnets/<existing function app subnet name>"
 
   # Comment out the following line if running in the security context of a user principal.
   current_principal_type = "ServicePrincipal"
