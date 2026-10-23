@@ -82,16 +82,14 @@ resource "azurerm_subnet_network_security_group_association" "functionapp" {
 module "cost_forwarding" {
   source = "../../"
 
-  is_enterprise_customer              = true
-  aws_s3_bucket_name                  = var.aws_s3_bucket_name
-  aws_account_id                      = var.aws_account_id
-  billing_account_ids                 = var.billing_account_ids
-  subnet_id                           = azurerm_subnet.default.id
-  function_app_subnet_id              = azurerm_subnet.functionapp.id
-  virtual_network_name                = azurerm_virtual_network.this.name
-  virtual_network_resource_group_name = azurerm_resource_group.networking.name
-  location                            = var.location
-  deploy_from_external_network        = local.deploy_from_external_network
+  is_enterprise_customer       = true
+  aws_s3_bucket_name           = var.aws_s3_bucket_name
+  aws_account_id               = var.aws_account_id
+  billing_account_ids          = var.billing_account_ids
+  subnet_id                    = azurerm_subnet.default.id
+  function_app_subnet_id       = azurerm_subnet.functionapp.id
+  location                     = var.location
+  deploy_from_external_network = local.deploy_from_external_network
 
   depends_on = [azurerm_subnet.default, azurerm_subnet.functionapp]
 

@@ -4,24 +4,34 @@ variable "existing_resource_group_name" {
   default     = null
 }
 
-variable "virtual_network_name" {
-  description = "Name of the existing virtual network"
-  type        = string
-}
-
-variable "virtual_network_resource_group_name" {
-  description = "Name of the existing resource group where the virtual network is located"
-  type        = string
-}
-
 variable "subnet_id" {
-  description = "ID of the subnet to deploy the private endpoints to. Must be a subnet in the existing virtual network"
+  description = "ID of the subnet to deploy the private endpoints to."
   type        = string
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.Network/virtualNetworks/[^/]+/subnets/[^/]+$", var.subnet_id))
+    error_message = "subnet_id must be a valid subnet resource ID (/subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<subnet>)."
+  }
 }
 
 variable "function_app_subnet_id" {
   description = "ID of the subnet to connect the function app to. This subnet must have delegation configured for Microsoft.App/environments and must be in the same virtual network as the private endpoints"
   type        = string
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\\.Network/virtualNetworks/[^/]+/subnets/[^/]+$", var.function_app_subnet_id))
+    error_message = "function_app_subnet_id must be a valid subnet resource ID (/subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<subnet>)."
+  }
+
+  # Resource IDs are case-insensitive in Azure. A malformed subnet_id is reported by its own
+  # validation, so it is not treated as a mismatch here.
+  validation {
+    condition = try(
+      lower(regex("^(.+)/subnets/[^/]+$", var.function_app_subnet_id)[0]) == lower(regex("^(.+)/subnets/[^/]+$", var.subnet_id)[0]),
+      true
+    )
+    error_message = "function_app_subnet_id must be in the same virtual network as subnet_id."
+  }
 }
 
 variable "enable_focus_exports" {
