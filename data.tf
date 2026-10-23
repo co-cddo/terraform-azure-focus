@@ -24,11 +24,6 @@ data "azurerm_resource_group" "existing" {
   name  = var.existing_resource_group_name
 }
 
-data "azurerm_virtual_network" "existing" {
-  name                = var.virtual_network_name
-  resource_group_name = var.virtual_network_resource_group_name
-}
-
 data "archive_file" "function" {
   type        = "zip"
   source_dir  = "${path.module}/src/cost_export"
