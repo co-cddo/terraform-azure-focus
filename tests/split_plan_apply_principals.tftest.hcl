@@ -4,8 +4,9 @@
 #   1. Split detected       - deploying SP ends in '-plan' and an '-apply' twin exists: both own the
 #                             Entra app, plan SP gets Reader data roles, apply SP gets Contributor.
 #   2. No apply twin        - '-plan' SP but no '-apply' match: falls back to single-SP behaviour.
-#   3. Name without suffix  - 'plan' appears mid-name only: no apply lookup is attempted.
+#   3. Name without segment - 'plan' appears only inside a word: no apply lookup is attempted.
 #   4. Strict separation    - manage_entra_app_role_assignment = false: no Entra reads at all.
+#   5. Mid-name segment     - '-plan-' in the middle of the name is swapped for '-apply-'.
 
 mock_provider "azurerm" {}
 mock_provider "azuread" {}
@@ -143,7 +144,7 @@ run "no_apply_twin_falls_back" {
   }
 }
 
-# 3. 'plan' only appears mid-name, so it is not a split pipeline and no lookup is attempted.
+# 3. 'plan' only appears inside a word ('-planning-'), so it is not a split pipeline and no lookup is attempted.
 run "plan_mid_name_not_matched" {
   command = plan
 
@@ -157,7 +158,7 @@ run "plan_mid_name_not_matched" {
 
   assert {
     condition     = length(data.azuread_service_principals.apply) == 0
-    error_message = "No apply SP lookup should happen unless the name ends in '-plan'."
+    error_message = "No apply SP lookup should happen unless the name has a '-plan' segment."
   }
 
   assert {
@@ -188,5 +189,38 @@ run "strict_separation_no_entra_reads" {
   assert {
     condition     = azurerm_role_assignment.grant_deployer_cost_export_blob[0].role_definition_name == "Storage Blob Data Contributor"
     error_message = "The deploying SP should keep Storage Blob Data Contributor."
+  }
+}
+
+# 5. '-plan' as a mid-name segment (e.g. managed identities named with a region/instance suffix).
+run "plan_mid_name_segment_matched" {
+  command = plan
+
+  override_data {
+    target = data.azuread_service_principal.plan
+    values = {
+      object_id    = "00000000-0000-0000-0000-000000000002"
+      display_name = "uami-focus-prod-plan-uksouth-001"
+    }
+  }
+
+  override_data {
+    target = data.azuread_service_principals.apply
+    values = {
+      object_ids = ["00000000-0000-0000-0000-000000000003"]
+    }
+  }
+
+  assert {
+    condition     = one(data.azuread_service_principals.apply[0].display_names) == "uami-focus-prod-apply-uksouth-001"
+    error_message = "The apply SP should be looked up by swapping the '-plan-' segment for '-apply-'."
+  }
+
+  assert {
+    condition = toset(azuread_application.aws_app[0].owners) == toset([
+      "00000000-0000-0000-0000-000000000002",
+      "00000000-0000-0000-0000-000000000003",
+    ])
+    error_message = "Both plan and apply SPs should own the Entra app registration."
   }
 }

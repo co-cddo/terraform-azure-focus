@@ -8,13 +8,14 @@ data "azuread_service_principal" "plan" {
   object_id = data.azurerm_client_config.current.object_id
 }
 
-# Looked up only when the deploying SP's display name ends in '-plan' (case-insensitive), by
-# swapping that suffix for '-apply'. ignore_missing means a '-plan' SP with no '-apply' twin falls
-# back to single-SP behaviour instead of failing. A duplicated '-apply' display name still errors,
-# since the module cannot tell which principal should receive the write grants.
+# Looked up only when the deploying SP's display name contains '-plan' as a whole hyphen-delimited
+# segment (case-insensitive), e.g. 'sp-focus-plan' or 'id-focus-plan-uksouth-001', by swapping that
+# segment for '-apply'. Names like 'sp-planning-team' are not matched. ignore_missing means a '-plan'
+# SP with no '-apply' twin falls back to single-SP behaviour instead of failing. A duplicated '-apply'
+# display name still errors, since the module cannot tell which principal should receive the write grants.
 data "azuread_service_principals" "apply" {
-  count          = try(endswith(lower(data.azuread_service_principal.plan[0].display_name), "-plan"), false) ? 1 : 0
-  display_names  = ["${substr(data.azuread_service_principal.plan[0].display_name, 0, length(data.azuread_service_principal.plan[0].display_name) - 5)}-apply"]
+  count          = try(can(regex("(?i)-plan(-|$)", data.azuread_service_principal.plan[0].display_name)), false) ? 1 : 0
+  display_names  = [replace(data.azuread_service_principal.plan[0].display_name, "/(?i)-plan(-|$)/", "-apply$1")]
   ignore_missing = true
 }
 
