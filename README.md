@@ -288,6 +288,7 @@ The module detects a split pipeline automatically when `current_principal_type =
 
 > [!NOTE]
 > The two storage data-plane reader roles are only required after the **first** `terraform apply` - before that the storage account does not exist and there is nothing to refresh. They become necessary from the second plan run onwards.
+
 > [!IMPORTANT]
 > The plan service principal will not have permissions to register required resource providers (e.g. `Microsoft.CostManagementExports`, `Microsoft.App`). These should be registered via your Azure Landing Zone bootstrap (if available) or out-of-band manually before the first plan run.
 
@@ -354,6 +355,7 @@ module "cost_forwarding" {
 > refer to the example configuration [here](examples/greenfield),
 > which provisions the prerequisite baseline infrastructure before consuming
 > the module.
+
 > [!IMPORTANT]
 > **Upgrading:** `virtual_network_name` and `virtual_network_resource_group_name`
 > have been removed. The virtual network is now derived from `subnet_id`, so
