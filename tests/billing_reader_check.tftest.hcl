@@ -130,13 +130,6 @@ override_data {
 }
 
 override_data {
-  target = data.azurerm_virtual_network.existing
-  values = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
-  }
-}
-
-override_data {
   target = data.azurerm_client_config.current
   values = {
     tenant_id = "00000000-0000-0000-0000-000000000001"
@@ -154,13 +147,11 @@ override_data {
 #endregion
 
 variables {
-  virtual_network_name                = "vnet-test"
-  virtual_network_resource_group_name = "rg-network-test"
-  subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
-  function_app_subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
-  aws_account_id                      = "123456789012"
-  aws_s3_bucket_name                  = "azure-cost-data"
-  billing_account_ids                 = ["test-billing-account"]
+  subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
+  function_app_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
+  aws_account_id         = "123456789012"
+  aws_s3_bucket_name     = "azure-cost-data"
+  billing_account_ids    = ["test-billing-account"]
 
   # Use an existing workspace and a pre-created Entra app so the module skips creating the log
   # analytics workspace and the azuread app/service principal/role assignment - resources whose

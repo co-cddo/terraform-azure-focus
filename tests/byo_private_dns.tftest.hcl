@@ -16,15 +16,6 @@ override_resource {
   }
 }
 
-# The auto-generated mock id is not a parseable virtual network resource id, which the azurerm
-# provider rejects when it is used as a private DNS zone virtual-network-link target.
-override_data {
-  target = data.azurerm_virtual_network.existing
-  values = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
-  }
-}
-
 # object_id / tenant_id are validated as UUIDs by the azuread provider (Entra app owners).
 override_data {
   target = data.azurerm_client_config.current
@@ -35,14 +26,12 @@ override_data {
 }
 
 variables {
-  virtual_network_name                = "vnet-test"
-  virtual_network_resource_group_name = "rg-network-test"
-  subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
-  function_app_subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
-  aws_account_id                      = "123456789012"
-  aws_s3_bucket_name                  = "azure-cost-data"
-  billing_account_ids                 = ["test-billing-account"]
-  manage_role_assignments             = false
+  subnet_id               = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
+  function_app_subnet_id  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
+  aws_account_id          = "123456789012"
+  aws_s3_bucket_name      = "azure-cost-data"
+  billing_account_ids     = ["test-billing-account"]
+  manage_role_assignments = false
 
   # Valid existing-zone ids, inherited by the "use existing" runs below. Present (but unused) in the
   # default run, where use_existing_private_dns_zones is false.
@@ -228,4 +217,51 @@ run "byo_wrong_zone_name_fails" {
   }
 
   expect_failures = [var.existing_private_dns_zone_ids]
+}
+
+# The virtual network the DNS zones link to is derived from subnet_id, so it keeps that ID's
+# subscription even when it differs from the provider's.
+run "vnet_link_derived_from_subnet_id" {
+  command = plan
+
+  variables {
+    subnet_id              = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-hub/providers/Microsoft.Network/virtualNetworks/vnet-hub/subnets/pe"
+    function_app_subnet_id = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-hub/providers/Microsoft.Network/virtualNetworks/vnet-hub/subnets/func"
+  }
+
+  assert {
+    condition     = azurerm_private_dns_zone_virtual_network_link.blob[0].virtual_network_id == "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-hub/providers/Microsoft.Network/virtualNetworks/vnet-hub"
+    error_message = "DNS zone vnet link should target the virtual network containing subnet_id"
+  }
+}
+
+# Guardrail: subnet_id must be a subnet resource ID, since the virtual network is parsed from it.
+run "malformed_subnet_id_fails" {
+  command = plan
+
+  variables {
+    subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
+  }
+
+  expect_failures = [var.subnet_id]
+}
+
+# Guardrail: the function app subnet must sit in the same virtual network as the private endpoints.
+run "function_app_subnet_in_other_vnet_fails" {
+  command = plan
+
+  variables {
+    function_app_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-other/subnets/func"
+  }
+
+  expect_failures = [var.function_app_subnet_id]
+}
+
+# Resource IDs are case-insensitive, so differing case alone is not a different virtual network.
+run "function_app_subnet_vnet_match_ignores_case" {
+  command = plan
+
+  variables {
+    function_app_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/RG-NETWORK-TEST/providers/Microsoft.Network/virtualNetworks/VNET-TEST/subnets/func"
+  }
 }

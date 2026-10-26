@@ -14,15 +14,6 @@ override_resource {
   }
 }
 
-# The auto-generated mock id is not a parseable virtual network resource id, which the
-# azurerm provider rejects when it is used as a private DNS zone link target.
-override_data {
-  target = data.azurerm_virtual_network.existing
-  values = {
-    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test"
-  }
-}
-
 # object_id / tenant_id are validated as UUIDs by the azuread provider (Entra app owners).
 override_data {
   target = data.azurerm_client_config.current
@@ -33,14 +24,12 @@ override_data {
 }
 
 variables {
-  virtual_network_name                = "vnet-test"
-  virtual_network_resource_group_name = "rg-network-test"
-  subnet_id                           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
-  function_app_subnet_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
-  aws_account_id                      = "123456789012"
-  aws_s3_bucket_name                  = "azure-cost-data"
-  billing_account_ids                 = ["test-billing-account"]
-  manage_role_assignments             = false
+  subnet_id               = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/pe"
+  function_app_subnet_id  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network-test/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/func"
+  aws_account_id          = "123456789012"
+  aws_s3_bucket_name      = "azure-cost-data"
+  billing_account_ids     = ["test-billing-account"]
+  manage_role_assignments = false
 }
 
 # Let the module generate its own names (suffix pinned). resource_names and
