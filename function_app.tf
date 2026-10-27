@@ -117,7 +117,13 @@ resource "azurerm_function_app_flex_consumption" "cost_export" {
     # so the external runner can reach the SCM endpoint). Thereafter it is toggled out-of-band around the
     # code publish by the null_resources below - opened before publish, closed after. Ignoring it stops
     # that toggling from showing as perpetual drift on every plan.
-    ignore_changes = [public_network_access_enabled]
+    # Azure normalizes these empty workaround values to null when reading app settings.
+    # Ignore only these entries so they do not produce a perpetual plan diff.
+    ignore_changes = [
+      public_network_access_enabled,
+      app_settings["AzureWebJobsStorage"],
+      app_settings["DEPLOYMENT_STORAGE_CONNECTION_STRING"],
+    ]
   }
 }
 
