@@ -53,6 +53,7 @@ resource "azurerm_private_endpoint" "deployment" {
   location            = local.resource_group_location
   resource_group_name = local.resource_group_name
   subnet_id           = var.subnet_id
+  tags                = var.tags
 
   private_service_connection {
     name                           = local.names.psc_deployment_blob
