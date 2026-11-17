@@ -51,6 +51,10 @@ override_resource {
   target = azurerm_eventgrid_system_topic.storage_events
   values = {
     id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-focus-test/providers/Microsoft.EventGrid/systemTopics/evgt-storage-test1234"
+    identity = {
+      principal_id = "00000000-0000-0000-0000-0000000000cc"
+      tenant_id    = "00000000-0000-0000-0000-000000000001"
+    }
   }
 }
 
